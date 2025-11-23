@@ -3,8 +3,8 @@ import 'package:provider/provider.dart';
 import 'package:stelliberty/providers/content_provider.dart';
 import 'package:stelliberty/i18n/i18n.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import 'package:stelliberty/utils/logger.dart';
 
-// 导出应用行为设置页面，便于引用
 export 'behavior_settings_page.dart';
 
 class SettingsOverviewPage extends StatefulWidget {
@@ -20,6 +20,7 @@ class _SettingsOverviewPageState extends State<SettingsOverviewPage> {
   @override
   void initState() {
     super.initState();
+    Logger.info('初始化 SettingsOverviewPage');
     _loadVersion();
   }
 

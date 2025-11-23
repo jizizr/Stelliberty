@@ -5,9 +5,8 @@ import 'package:stelliberty/i18n/i18n.dart';
 import 'package:stelliberty/ui/widgets/setting/log_level_card.dart';
 import 'package:stelliberty/ui/widgets/setting/test_url_card.dart';
 import 'package:stelliberty/ui/widgets/setting/user_agent_card.dart';
+import 'package:stelliberty/utils/logger.dart';
 
-// 日志与调试页面
-// 包含：日志等级、测速链接、User-Agent
 class LogsDebugPage extends StatefulWidget {
   const LogsDebugPage({super.key});
 
@@ -17,6 +16,12 @@ class LogsDebugPage extends StatefulWidget {
 
 class _LogsDebugPageState extends State<LogsDebugPage> {
   final _scrollController = ScrollController();
+
+  @override
+  void initState() {
+    super.initState();
+    Logger.info('初始化 LogsDebugPage');
+  }
 
   @override
   void dispose() {

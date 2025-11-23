@@ -9,6 +9,7 @@ import 'package:stelliberty/ui/widgets/file_editor_dialog.dart';
 import 'package:stelliberty/ui/widgets/override/override_dialog.dart';
 import 'package:stelliberty/ui/widgets/override/override_card.dart';
 import 'package:stelliberty/ui/widgets/modern_toast.dart';
+import 'package:stelliberty/utils/logger.dart';
 
 class OverridePage extends StatefulWidget {
   const OverridePage({super.key});
@@ -18,6 +19,12 @@ class OverridePage extends StatefulWidget {
 }
 
 class _OverridePageState extends State<OverridePage> {
+  @override
+  void initState() {
+    super.initState();
+    Logger.info('初始化 OverridePage');
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(

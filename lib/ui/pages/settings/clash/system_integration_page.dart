@@ -5,9 +5,8 @@ import 'package:stelliberty/i18n/i18n.dart';
 import 'package:stelliberty/ui/widgets/setting/system_proxy_card.dart';
 import 'package:stelliberty/ui/widgets/setting/tun_config_card.dart';
 import 'package:stelliberty/ui/widgets/setting/uwp_loopback_card.dart';
+import 'package:stelliberty/utils/logger.dart';
 
-// 系统集成页面
-// 包含：系统代理配置、TUN 虚拟网卡模式
 class SystemIntegrationPage extends StatefulWidget {
   const SystemIntegrationPage({super.key});
 
@@ -17,6 +16,12 @@ class SystemIntegrationPage extends StatefulWidget {
 
 class _SystemIntegrationPageState extends State<SystemIntegrationPage> {
   final _scrollController = ScrollController();
+
+  @override
+  void initState() {
+    super.initState();
+    Logger.info('初始化 SystemIntegrationPage');
+  }
 
   @override
   void dispose() {

@@ -95,6 +95,13 @@ class _ProxyPageWidgetState extends State<ProxyPage>
       // 等待数据加载完成后再恢复滚动位置
       await Future.delayed(const Duration(milliseconds: 100));
       await _restoreScrollPosition();
+
+      // 延迟一帧触发 setState 以更新按钮状态
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          setState(() {});
+        }
+      });
     });
   }
 

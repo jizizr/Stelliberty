@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:stelliberty/providers/content_provider.dart';
 import 'package:stelliberty/ui/widgets/language_selector.dart';
 import 'package:stelliberty/i18n/i18n.dart';
+import 'package:stelliberty/utils/logger.dart';
 
 class LanguageSettingsPage extends StatefulWidget {
   const LanguageSettingsPage({super.key});
@@ -13,6 +14,12 @@ class LanguageSettingsPage extends StatefulWidget {
 
 class _LanguageSettingsPageState extends State<LanguageSettingsPage> {
   final _scrollController = ScrollController();
+
+  @override
+  void initState() {
+    super.initState();
+    Logger.info('初始化 LanguageSettingsPage');
+  }
 
   @override
   void dispose() {

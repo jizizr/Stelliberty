@@ -5,6 +5,7 @@ import 'package:stelliberty/clash/data/log_message_model.dart';
 import 'package:stelliberty/clash/providers/log_provider.dart';
 import 'package:stelliberty/i18n/i18n.dart';
 import 'package:stelliberty/ui/widgets/core_log/core_log_card.dart';
+import 'package:stelliberty/utils/logger.dart';
 
 // 日志页面 - 显示 Clash 核心的实时日志
 // 使用 Material Design 3 风格，与连接页面保持一致
@@ -25,6 +26,7 @@ class _LogPageState extends State<LogPage> {
   @override
   void initState() {
     super.initState();
+    Logger.info('初始化 LogPage');
     _scrollController.addListener(_onScroll);
 
     // 延迟加载日志列表（给顶栏先渲染的机会）

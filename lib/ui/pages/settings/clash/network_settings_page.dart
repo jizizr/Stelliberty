@@ -6,9 +6,8 @@ import 'package:stelliberty/clash/providers/clash_provider.dart';
 import 'package:stelliberty/clash/storage/preferences.dart';
 import 'package:stelliberty/ui/common/modern_feature_card.dart';
 import 'package:stelliberty/ui/common/modern_switch.dart';
+import 'package:stelliberty/utils/logger.dart';
 
-// 网络设置页面
-// 包含：统一延迟、局域网代理、IPv6、TCP 并发
 class NetworkSettingsPage extends StatefulWidget {
   const NetworkSettingsPage({super.key});
 
@@ -26,6 +25,7 @@ class _NetworkSettingsPageState extends State<NetworkSettingsPage> {
   @override
   void initState() {
     super.initState();
+    Logger.info('初始化 NetworkSettingsPage');
     _loadSettings();
   }
 

@@ -29,6 +29,7 @@ class _BehaviorSettingsPageState extends State<BehaviorSettingsPage> {
   @override
   void initState() {
     super.initState();
+    Logger.info('初始化 BehaviorSettingsPage');
     // 异步查询真实状态并更新
     _refreshStatus();
   }

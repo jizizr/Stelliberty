@@ -2,10 +2,21 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:stelliberty/providers/content_provider.dart';
 import 'package:stelliberty/i18n/i18n.dart';
+import 'package:stelliberty/utils/logger.dart';
 
-// Clash 特性设置 - 分类导航页
-class ClashFeaturesPage extends StatelessWidget {
+class ClashFeaturesPage extends StatefulWidget {
   const ClashFeaturesPage({super.key});
+
+  @override
+  State<ClashFeaturesPage> createState() => _ClashFeaturesPageState();
+}
+
+class _ClashFeaturesPageState extends State<ClashFeaturesPage> {
+  @override
+  void initState() {
+    super.initState();
+    Logger.info('初始化 ClashFeaturesPage');
+  }
 
   @override
   Widget build(BuildContext context) {

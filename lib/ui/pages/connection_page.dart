@@ -9,13 +9,22 @@ import 'package:stelliberty/ui/widgets/connection/connection_detail_dialog.dart'
 
 // 连接页面 - 显示当前活跃的连接
 // 使用 Material Design 3 风格，与代理和订阅页面保持一致
-class ConnectionPageContent extends StatelessWidget {
+class ConnectionPageContent extends StatefulWidget {
   const ConnectionPageContent({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    Logger.info('ConnectionPage 初始化');
+  State<ConnectionPageContent> createState() => _ConnectionPageContentState();
+}
 
+class _ConnectionPageContentState extends State<ConnectionPageContent> {
+  @override
+  void initState() {
+    super.initState();
+    Logger.info('初始化 ConnectionPage');
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Consumer<ConnectionProvider>(
       builder: (context, connectionProvider, child) {
         final connections = connectionProvider.connections;

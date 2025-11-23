@@ -3,9 +3,8 @@ import 'package:provider/provider.dart';
 import 'package:stelliberty/providers/content_provider.dart';
 import 'package:stelliberty/i18n/i18n.dart';
 import 'package:stelliberty/ui/widgets/setting/dns_config_card.dart';
+import 'package:stelliberty/utils/logger.dart';
 
-// DNS 配置页面
-// 包含：DNS 服务器设置
 class DnsConfigPage extends StatefulWidget {
   const DnsConfigPage({super.key});
 
@@ -15,6 +14,12 @@ class DnsConfigPage extends StatefulWidget {
 
 class _DnsConfigPageState extends State<DnsConfigPage> {
   final _scrollController = ScrollController();
+
+  @override
+  void initState() {
+    super.initState();
+    Logger.info('初始化 DnsConfigPage');
+  }
 
   @override
   void dispose() {

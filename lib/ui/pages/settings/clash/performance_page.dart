@@ -8,9 +8,8 @@ import 'package:stelliberty/ui/common/modern_feature_card.dart';
 import 'package:stelliberty/ui/common/modern_dropdown_menu.dart';
 import 'package:stelliberty/ui/common/modern_dropdown_button.dart';
 import 'package:stelliberty/ui/widgets/setting/keep_alive_card.dart';
+import 'package:stelliberty/utils/logger.dart';
 
-// 性能优化页面
-// 包含：GEO 低内存模式、查找进程、TCP 保持活动
 class PerformancePage extends StatefulWidget {
   const PerformancePage({super.key});
 
@@ -28,6 +27,7 @@ class _PerformancePageState extends State<PerformancePage> {
   @override
   void initState() {
     super.initState();
+    Logger.info('初始化 PerformancePage');
     _loadSettings();
   }
 

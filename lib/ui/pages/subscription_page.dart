@@ -15,7 +15,6 @@ import 'package:stelliberty/i18n/i18n.dart';
 import 'package:stelliberty/utils/logger.dart';
 import 'package:stelliberty/src/bindings/signals/signals.dart';
 
-// 订阅管理页面
 class SubscriptionPage extends StatefulWidget {
   const SubscriptionPage({super.key});
 
@@ -24,6 +23,12 @@ class SubscriptionPage extends StatefulWidget {
 }
 
 class _SubscriptionPageState extends State<SubscriptionPage> {
+  @override
+  void initState() {
+    super.initState();
+    Logger.info('初始化 SubscriptionPage');
+  }
+
   @override
   Widget build(BuildContext context) {
     return Column(

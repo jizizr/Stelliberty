@@ -4,9 +4,8 @@ import 'package:stelliberty/providers/content_provider.dart';
 import 'package:stelliberty/i18n/i18n.dart';
 import 'package:stelliberty/ui/widgets/setting/port_settings_card.dart';
 import 'package:stelliberty/ui/widgets/setting/external_controller_card.dart';
+import 'package:stelliberty/utils/logger.dart';
 
-// 端口与控制页面
-// 包含：端口设置、外部控制器
 class PortControlPage extends StatefulWidget {
   const PortControlPage({super.key});
 
@@ -16,6 +15,12 @@ class PortControlPage extends StatefulWidget {
 
 class _PortControlPageState extends State<PortControlPage> {
   final _scrollController = ScrollController();
+
+  @override
+  void initState() {
+    super.initState();
+    Logger.info('初始化 PortControlPage');
+  }
 
   @override
   void dispose() {

@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:stelliberty/providers/content_provider.dart';
 import 'package:stelliberty/ui/widgets/theme_selector.dart';
 import 'package:stelliberty/i18n/i18n.dart';
+import 'package:stelliberty/utils/logger.dart';
 
 class AppearanceSettingsPage extends StatefulWidget {
   const AppearanceSettingsPage({super.key});
@@ -13,6 +14,12 @@ class AppearanceSettingsPage extends StatefulWidget {
 
 class _AppearanceSettingsPageState extends State<AppearanceSettingsPage> {
   final _scrollController = ScrollController();
+
+  @override
+  void initState() {
+    super.initState();
+    Logger.info('初始化 AppearanceSettingsPage');
+  }
 
   @override
   void dispose() {

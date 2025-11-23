@@ -1,5 +1,6 @@
 name: quick_start_scripts
 description: Quick start scripts for Stelliberty project
+version: 0.0.1
 publish_to: 'none'
 
 environment:
