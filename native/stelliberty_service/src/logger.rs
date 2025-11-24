@@ -23,7 +23,14 @@ static LOG_BROADCASTER: once_cell::sync::Lazy<broadcast::Sender<String>> =
 
 // 获取最近的 N 行日志
 pub fn get_recent_logs(lines: usize) -> Vec<String> {
-    let buffer = LOG_BUFFER.lock().unwrap();
+    let buffer = match LOG_BUFFER.lock() {
+        Ok(guard) => guard,
+        Err(poisoned) => {
+            // Mutex 被污染时恢复数据
+            log::warn!("日志缓冲区锁被污染，正在恢复");
+            poisoned.into_inner()
+        }
+    };
     let start = if buffer.len() > lines {
         buffer.len() - lines
     } else {
@@ -60,7 +67,14 @@ impl log::Log for MemoryLogger {
             eprintln!("{}", log_line);
 
             // 保存到内存缓冲区
-            let mut buffer = LOG_BUFFER.lock().unwrap();
+            let mut buffer = match LOG_BUFFER.lock() {
+                Ok(guard) => guard,
+                Err(poisoned) => {
+                    // Mutex 被污染时恢复数据，避免日志系统导致程序崩溃
+                    eprintln!("[WARN] 日志缓冲区锁被污染，正在恢复");
+                    poisoned.into_inner()
+                }
+            };
             buffer.push_back(log_line.clone());
 
             // 保持缓冲区大小不超过 1000 行

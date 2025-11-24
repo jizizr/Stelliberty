@@ -1,6 +1,6 @@
 [package]
 name = "stelliberty-service"
-version = "1.0.0"
+version = "1.1.0"
 edition = "2024"
 authors = ["Stelliberty Contributors"]
 description = "Background service for Stelliberty to manage Clash core with elevated privileges"
