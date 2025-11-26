@@ -180,7 +180,7 @@ jobs:
         shell: pwsh
         run: |
           Write-Host "🏗️ 正在运行构建脚本..."
-          dart run scripts/build.dart --all-installers -all
+          dart run scripts/build.dart --all-installers --all
 
       - name: 复制构建产物到 dist
         shell: pwsh
