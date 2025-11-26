@@ -3,6 +3,7 @@
 use rinf::DartSignal;
 use tokio::spawn;
 
+pub mod app_update;
 pub mod auto_start;
 #[cfg(target_os = "windows")]
 pub mod loopback;
@@ -13,8 +14,11 @@ pub mod url_launcher;
 pub use auto_start::{get_auto_start_status, set_auto_start_status};
 #[allow(unused_imports)]
 pub use messages::{
+    // 应用更新消息
+    AppUpdateResult,
     // 自启动消息
     AutoStartStatusResult,
+    CheckAppUpdateRequest,
     GetAutoStartStatus,
     // URL 启动消息
     OpenUrl,
@@ -58,6 +62,15 @@ fn init_message_listeners() {
             dart_signal.message.handle();
         }
         log::info!("打开 URL 消息通道已关闭，退出监听器");
+    });
+
+    // 监听应用更新检查信号
+    spawn(async {
+        let receiver = CheckAppUpdateRequest::get_dart_signal_receiver();
+        while let Some(dart_signal) = receiver.recv().await {
+            dart_signal.message.handle();
+        }
+        log::info!("应用更新检查消息通道已关闭，退出监听器");
     });
 }
 

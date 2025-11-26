@@ -334,3 +334,70 @@ pub mod loopback_messages {
 
 #[cfg(target_os = "windows")]
 pub use loopback_messages::*;
+
+// ============================================================================
+// 应用更新消息协议
+// ============================================================================
+
+// 检查应用更新请求
+#[derive(Debug, Clone, Serialize, Deserialize, DartSignal)]
+pub struct CheckAppUpdateRequest {
+    pub current_version: String,
+    pub github_repo: String,
+}
+
+// 应用更新检查响应
+#[derive(Debug, Clone, Serialize, Deserialize, RustSignal)]
+pub struct AppUpdateResult {
+    pub current_version: String,
+    pub latest_version: String,
+    pub has_update: bool,
+    pub download_url: String,
+    pub release_notes: String,
+    pub html_url: String,
+    pub error: String,
+}
+
+impl CheckAppUpdateRequest {
+    pub fn handle(&self) {
+        let current_version = self.current_version.clone();
+        let github_repo = self.github_repo.clone();
+
+        tokio::spawn(async move {
+            log::info!("检查更新: {} (当前版本: {})", github_repo, current_version);
+
+            match crate::system::app_update::check_github_update(&current_version, &github_repo)
+                .await
+            {
+                Ok(result) => {
+                    log::info!("更新检查成功: 最新版本 {}", result.latest_version);
+
+                    AppUpdateResult {
+                        current_version: result.current_version,
+                        latest_version: result.latest_version,
+                        has_update: result.has_update,
+                        download_url: result.download_url.unwrap_or_default(),
+                        release_notes: result.release_notes.unwrap_or_default(),
+                        html_url: result.html_url.unwrap_or_default(),
+                        error: String::new(),
+                    }
+                    .send_signal_to_dart();
+                }
+                Err(e) => {
+                    log::error!("更新检查失败: {}", e);
+
+                    AppUpdateResult {
+                        current_version,
+                        latest_version: String::new(),
+                        has_update: false,
+                        download_url: String::new(),
+                        release_notes: String::new(),
+                        html_url: String::new(),
+                        error: e,
+                    }
+                    .send_signal_to_dart();
+                }
+            }
+        });
+    }
+}

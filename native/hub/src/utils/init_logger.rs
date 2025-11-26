@@ -34,9 +34,9 @@ static LOGGER: Lazy<()> = Lazy::new(|| {
     // Release 模式下完全禁用控制台日志输出
     // Debug 模式下：
     // - 项目代码使用 debug 级别
-    // - 第三方库（tungstenite 等）使用 warn 级别（过滤掉它们的 debug 日志）
+    // - 第三方库（tungstenite、reqwest 等）使用 warn 级别（过滤掉它们的 debug 日志）
     let default_level = if cfg!(debug_assertions) {
-        "debug,tungstenite=warn,tokio_tungstenite=warn"
+        "debug,tungstenite=warn,tokio_tungstenite=warn,reqwest=warn,hyper=warn,h2=warn"
     } else {
         "off" // Release 模式下禁用控制台日志
     };

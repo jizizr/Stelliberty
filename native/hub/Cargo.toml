@@ -44,6 +44,7 @@ stelliberty-service = { path = "../stelliberty_service" }
 anyhow = "^1.0"
 regex = "^1.12.2"
 webbrowser = "^1.0.6"
+reqwest = { version = "^0.12", features = ["json"] }
 
 [target.'cfg(unix)'.dependencies]
 nix = { version = "^0.30.1", features = ["signal", "process"] }
