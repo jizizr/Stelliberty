@@ -428,14 +428,18 @@ jobs:
             
             ### 软件工作不正常
             
-            **检查软件所处的安装目录**：
+            **路径要求**（ZIP 和 EXE 均适用）：
+            - 路径中不应包含特殊字符（空格除外）
+            - 路径中不应包含非 ASCII 字符（如中文字符）
+            - 支持空格：`D:\Program Files\Stelliberty` ✅
             
-            - ✅ 路径中不应包含特殊字符（空格除外）
-            - ✅ 路径中不应包含非 ASCII 字符（如中文字符）
-            - ✅ 支持空格：`D:\Program Files\Stelliberty` 可以正常使用
-            - ✅ 建议安装到非系统盘（如 `D:\Stelliberty`、`E:\Apps\Stelliberty`）以避免权限问题
+            **EXE 安装程序的位置限制**：
             
-            如果安装在不正确的目录，请重新安装到合适的位置。
+            如果使用 EXE 安装程序，还有额外的安装位置限制：
+            - **系统盘（C:）**：仅允许 `%LOCALAPPDATA%\Programs\*`（如 `C:\Users\用户名\AppData\Local\Programs\Stelliberty`）
+            - **其他盘（D:、E: 等）**：无限制
+            
+            > 💡 如需安装到 EXE 不允许的位置，请使用**便携版 ZIP**（无位置限制，但仍可能受系统目录权限影响）。
             
             ### 缺少运行库（Windows）
             

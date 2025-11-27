@@ -83,8 +83,26 @@ This might be one of the most detail-oriented Flutter desktop applications:
 #### Option 2: Installer (EXE)
 1. Download the `.exe` installer from the release page
 2. Run the installer and follow the setup wizard
-3. Launch the application from the desktop shortcut
-4. ✅ Includes uninstaller and desktop shortcut
+3. Choose installation location (see restrictions below)
+4. Launch the application from the desktop shortcut
+5. ✅ Includes uninstaller and desktop shortcut
+
+**Installation Directory Restrictions:**
+
+The installer enforces the following path restrictions for security and stability:
+
+- **System Drive (Usually C:)**:
+  - ✅ Allowed: `%LOCALAPPDATA%\Programs\*` (e.g., `C:\Users\YourName\AppData\Local\Programs\Stelliberty`)
+  - ❌ Prohibited: System drive root directory (e.g., `C:\`)
+  - ❌ Prohibited: All other paths on system drive
+  
+- **Other Drives (D:, E:, etc.)**:
+  - ✅ No restrictions - Install anywhere you like
+  - ✅ Root directories allowed (e.g., `D:\`, `E:\Stelliberty`)
+
+> 💡 **Recommendation**: For best experience, install to non-system drives (e.g., `D:\Stelliberty`, `E:\Apps\Stelliberty`) to avoid potential permission issues.
+
+> 📌 **Note**: The default installation path `%LOCALAPPDATA%\Programs\Stelliberty` requires no special permissions and is recommended for most users.
 
 ### Reporting Issues
 
@@ -311,14 +329,20 @@ taskkill /F /PID XXX
 
 ### Software Not Working Properly
 
-**Check your installation directory**:
+**Path Requirements** (applies to both ZIP and EXE):
 
-- ✅ Path should NOT contain special characters (except spaces)
-- ✅ Path should NOT contain non-ASCII characters (e.g., Chinese characters)
-- ✅ Spaces are supported: `D:\Program Files\Stelliberty` is OK
-- ✅ Recommended: Install to non-system drives (e.g., `D:\Stelliberty`, `E:\Apps\Stelliberty`) to avoid permission issues
+- Path should NOT contain special characters (except spaces)
+- Path should NOT contain non-ASCII characters (e.g., Chinese characters)
+- Spaces are supported: `D:\Program Files\Stelliberty` ✅
 
-If installed in an incorrect directory, reinstall to a proper location.
+**EXE Installer Location Restrictions**:
+
+If you used the EXE installer, additional location restrictions apply:
+
+- **System Drive (C:)**: Only allowed in `%LOCALAPPDATA%\Programs\*`
+- **Other Drives (D:, E:, etc.)**: No restrictions
+
+> 💡 **Tip**: Use the **portable ZIP version** if you need to install to a location not allowed by the EXE installer. The ZIP version has no location restrictions, but may still be affected by system directory permissions (e.g., installing to `C:\Windows` or `C:\Program Files` may require administrator privileges).
 
 ### Missing Runtime Libraries (Windows)
 

@@ -253,7 +253,10 @@ AppPublisher={#MyAppPublisher}
 AppCopyright=Copyright (C) 2025 {#MyAppPublisher}
 
 ; 安装目录
-DefaultDirName={autopf}\\{#MyAppName}
+; 默认使用用户本地目录（推荐，避免写入权限问题）
+; Inno Setup 安装包统一要求管理员权限（用于杀死进程和服务管理）
+; 便携式部署请使用 ZIP 打包方式
+DefaultDirName={localappdata}\\Programs\\{#MyAppName}
 DefaultGroupName={#MyAppName}
 AllowNoIcons=yes
 DisableProgramGroupPage=yes
@@ -273,9 +276,8 @@ WizardStyle=modern
 $archMode
 
 ; 权限配置
-; admin: 总是需要管理员权限（安装和卸载都需要）
-; lowest: 不需要管理员权限（如果需要会提示）
-; 使用 admin 确保卸载时有足够权限清理所有文件
+; admin: 强制要求管理员权限（用于 taskkill 杀死进程和 sc 管理服务）
+; 注意：不添加 PrivilegesRequiredOverridesAllowed，始终强制管理员权限
 PrivilegesRequired=admin
 
 ; 卸载配置
@@ -310,6 +312,131 @@ Filename: "{app}\\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChan
 Type: filesandordirs; Name: "{app}\\data"
 
 [Code]
+var
+  ResetDirButton: TButton;
+
+// 获取 Windows 系统盘符（如 C:）
+function GetSystemDrive(): String;
+var
+  WinDir: String;
+begin
+  WinDir := ExpandConstant('{sys}');  // 例如 C:\Windows\System32
+  Result := Copy(WinDir, 1, 2);       // 提取 C:
+end;
+
+// 检查是否为系统盘路径
+function IsSystemDrivePath(Path: String): Boolean;
+var
+  SystemDrive: String;
+  PathDrive: String;
+begin
+  SystemDrive := Uppercase(GetSystemDrive());  // C:
+  PathDrive := Uppercase(Copy(Path, 1, 2));    // 提取路径的盘符
+  Result := (PathDrive = SystemDrive);
+end;
+
+// 检查安装路径是否为受保护的系统目录
+function IsRestrictedPath(Path: String): Boolean;
+var
+  UpperPath: String;
+  WinDir: String;
+  LocalAppData: String;
+  AllowedPath: String;
+begin
+  Result := False;
+  UpperPath := Uppercase(Path);
+  
+  // 策略：系统盘严格限制，其他盘完全自由
+  
+  // 如果不在系统盘，允许任意路径（包括 D:\, E:\ 根目录）
+  if not IsSystemDrivePath(Path) then
+  begin
+    Result := False;  // 其他盘不做任何限制
+    Exit;
+  end;
+  
+  // 以下规则仅适用于系统盘（通常是 C:）
+  
+  // 1. 禁止安装到系统盘根目录 (C:\\)
+  if (Length(UpperPath) = 3) and (UpperPath[2] = ':') and (UpperPath[3] = '\\') then
+  begin
+    Result := True;
+    Exit;
+  end;
+  
+  // 2. 获取允许的安装目录
+  LocalAppData := Uppercase(ExpandConstant('{localappdata}'));  // C:\Users\{用户}\AppData\Local
+  
+  // 3. 检查是否在 %LOCALAPPDATA%\\Programs 下
+  AllowedPath := LocalAppData + '\\PROGRAMS';
+  if (Pos(AllowedPath, UpperPath) = 1) then
+  begin
+    Result := False;  // 允许安装到 %LOCALAPPDATA%\Programs\*
+    Exit;
+  end;
+  
+  // 4. 系统盘的其他所有路径都禁止
+  Result := True;
+end;
+
+// 重置为默认目录按钮点击事件
+procedure ResetDirButtonClick(Sender: TObject);
+begin
+  WizardForm.DirEdit.Text := ExpandConstant('{localappdata}\\Programs\\{#MyAppName}');
+end;
+
+// 初始化目录选择页面，添加重置图标按钮
+procedure InitializeWizard();
+begin
+  // 创建重置按钮（图标风格，放在浏览按钮左边）
+  ResetDirButton := TButton.Create(WizardForm);
+  ResetDirButton.Parent := WizardForm.DirBrowseButton.Parent;
+  
+  // 位置：浏览按钮左侧
+  ResetDirButton.Left := WizardForm.DirBrowseButton.Left - ScaleX(28);
+  ResetDirButton.Top := WizardForm.DirBrowseButton.Top;
+  
+  // 尺寸：小巧的方形图标按钮
+  ResetDirButton.Width := ScaleX(23);
+  ResetDirButton.Height := WizardForm.DirBrowseButton.Height;
+  
+  // 样式：重置图标 ↻ (Unicode U+21BB)
+  ResetDirButton.Caption := '↻';
+  ResetDirButton.OnClick := @ResetDirButtonClick;
+  
+  // 提示文本
+  ResetDirButton.Hint := 'Reset to default installation directory';
+  ResetDirButton.ShowHint := True;
+end;
+
+// 目录选择验证
+function NextButtonClick(CurPageID: Integer): Boolean;
+var
+  DirPath: String;
+begin
+  Result := True;
+  
+  // 在选择目录页面时验证
+  if CurPageID = wpSelectDir then
+  begin
+    DirPath := WizardDirValue;
+    
+    // 检查是否为受保护路径
+    if IsRestrictedPath(DirPath) then
+    begin
+      MsgBox('Cannot install to this location:' #13#10#13#10 +
+             DirPath + #13#10#13#10 +
+             'Installation Policy:' #13#10 +
+             '• Windows system drive: Only allowed in' #13#10 +
+             '  ' + ExpandConstant('{localappdata}') + '\\Programs' #13#10 +
+             '• Other drives: No restrictions',
+             mbError, MB_OK);
+      Result := False;
+      Exit;
+    end;
+  end;
+end;
+
 function IsProcessRunning(ProcessName: String): Boolean;
 var
   ResultCode: Integer;
@@ -403,7 +530,7 @@ begin
   
   // 使用临时文件捕获 sc qc 输出
   // 注意：Inno Setup 的 Exec 不支持直接捕获输出到变量，必须使用文件
-  TempFile := ExpandConstant('{tmp}\sc_query_stelliberty.txt');
+  TempFile := ExpandConstant('{tmp}') + '\sc_query_stelliberty.txt';
   
   // 查询服务配置
   if Exec('cmd.exe', '/c sc qc StellibertyService > "' + TempFile + '" 2>&1', '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
@@ -735,6 +862,11 @@ Future<void> main(List<String> args) async {
       help: '构建 Android App Bundle（AAB 格式，用于 Google Play）',
     )
     ..addFlag(
+      'installer',
+      negatable: false,
+      help: '只生成平台特定的安装包（Windows: EXE, macOS: DMG, Linux: DEB/AppImage）',
+    )
+    ..addFlag(
       'all-installers',
       negatable: false,
       help: '生成所有安装包格式（Windows 下同时生成 EXE 安装程序和 ZIP 压缩包）',
@@ -764,10 +896,11 @@ Future<void> main(List<String> args) async {
     log('  dart run scripts/build.dart --android             # 打包 Android APK');
     log('  dart run scripts/build.dart --appbundle           # 打包 Android AAB');
     log('  dart run scripts/build.dart --clean               # 干净构建');
+    log('  dart run scripts/build.dart --installer           # 只生成平台特定安装包');
     log(
       '  dart run scripts/build.dart --all-installers      # 生成所有安装包格式（ZIP + EXE，仅 Windows）',
     );
-    log('  dart run scripts/build.dart --all --clean          # 干净构建所有版本');
+    log('  dart run scripts/build.dart --all --clean         # 干净构建所有版本');
     log(
       '  dart run scripts/build.dart --android --all       # 构建 Android Release 和 Debug',
     );
@@ -782,11 +915,27 @@ Future<void> main(List<String> args) async {
   final buildAll = argResults['all'] as bool;
   final isAndroid = argResults['android'] as bool;
   final isAppBundle = argResults['appbundle'] as bool;
+  final installerOnly = argResults['installer'] as bool;
   final allInstallers = argResults['all-installers'] as bool;
 
-  // 打包格式：--all-installers 会生成 ZIP 和 EXE 两种格式
-  final shouldPackZip = !allInstallers || Platform.isWindows;
-  final shouldPackInstaller = allInstallers && Platform.isWindows;
+  // 参数冲突检查
+  if (installerOnly && allInstallers) {
+    log('❌ 错误: --installer 和 --all-installers 不能同时使用');
+    exit(1);
+  }
+
+  // 打包格式逻辑：
+  // 默认（无参数）：只生成 ZIP
+  // --installer：只生成 EXE（仅 Windows）
+  // --all-installers：生成 ZIP + EXE（仅 Windows）
+  final shouldPackZip = !installerOnly && !allInstallers;
+  final shouldPackInstaller =
+      (installerOnly || allInstallers) && Platform.isWindows;
+
+  if (installerOnly && !Platform.isWindows) {
+    log('❌ 错误: --installer 仅支持 Windows 平台');
+    exit(1);
+  }
 
   if (allInstallers && !Platform.isWindows) {
     log('⚠️  警告: --all-installers 仅在 Windows 平台生成 EXE 安装包');
