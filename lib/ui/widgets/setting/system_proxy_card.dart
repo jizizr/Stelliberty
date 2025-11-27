@@ -163,7 +163,6 @@ class _SystemProxyCardState extends State<SystemProxyCard> {
           helperText: context.translate.systemProxy.proxyHostHelper,
           onChanged: _viewModel.saveProxyHost,
           showDropdownIcon: true,
-  
         ),
       ),
       const SizedBox(height: 16),

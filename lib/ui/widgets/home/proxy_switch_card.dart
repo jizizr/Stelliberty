@@ -1,29 +1,40 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:stelliberty/clash/manager/manager.dart';
 import 'package:stelliberty/clash/providers/clash_provider.dart';
-import 'package:stelliberty/clash/core/service_state.dart';
-import 'package:stelliberty/ui/common/modern_switch.dart';
 import 'package:stelliberty/ui/widgets/home/base_card.dart';
 import 'package:stelliberty/i18n/i18n.dart';
 
-/// 代理控制卡片
-///
-/// 提供代理开关、TUN 模式切换功能
+// 代理控制卡片
+//
+// 提供系统代理开关功能
 class ProxySwitchCard extends StatelessWidget {
   const ProxySwitchCard({super.key});
+
+  // 获取启动按钮背景色
+  // 夜间主题时添加黑色 25% 遮罩
+  Color _getStartButtonColor(BuildContext context) {
+    final theme = Theme.of(context);
+    final primaryColor = theme.colorScheme.primary;
+    final isDark = theme.brightness == Brightness.dark;
+
+    if (isDark) {
+      // 夜间主题：在主色上叠加 25% 黑色遮罩
+      return Color.alphaBlend(
+        Colors.black.withValues(alpha: 0.25),
+        primaryColor,
+      );
+    }
+    return primaryColor;
+  }
 
   @override
   Widget build(BuildContext context) {
     final clashProvider = context.watch<ClashProvider>();
     final clashManager = context.watch<ClashManager>();
-    final serviceStateManager = context.watch<ServiceStateManager>();
     final isRunning = clashProvider.isRunning;
     final isProxyEnabled = clashManager.isSystemProxyEnabled;
     final isLoading = clashProvider.isLoading;
-    final tunEnabled = clashProvider.tunEnabled;
-    final isServiceInstalled = serviceStateManager.isInstalled;
 
     return BaseCard(
       icon: Icons.shield_outlined,
@@ -55,55 +66,7 @@ class ProxySwitchCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (!Platform.isAndroid) ...[
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              decoration: BoxDecoration(
-                color: Theme.of(
-                  context,
-                ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: Theme.of(
-                    context,
-                  ).colorScheme.outline.withValues(alpha: 0.2),
-                ),
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      context.translate.proxy.tunMode,
-                      style: Theme.of(
-                        context,
-                      ).textTheme.bodyMedium?.copyWith(fontSize: 14),
-                    ),
-                  ),
-                  ModernSwitch(
-                    value: tunEnabled,
-                    onChanged: (isLoading || !isServiceInstalled)
-                        ? null
-                        : (value) async {
-                            await clashProvider.setTunMode(value);
-                          },
-                  ),
-                ],
-              ),
-            ),
-            if (!isServiceInstalled)
-              Padding(
-                padding: const EdgeInsets.only(top: 8, left: 12),
-                child: Text(
-                  context.translate.proxy.tunRequiresService,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(context).colorScheme.error,
-                    fontSize: 11,
-                  ),
-                ),
-              ),
-            const SizedBox(height: 16),
-          ],
-
+          // 代理开关按钮
           ElevatedButton(
             onPressed: (isLoading || !isRunning)
                 ? null
@@ -121,7 +84,7 @@ class ProxySwitchCard extends StatelessWidget {
             style: ElevatedButton.styleFrom(
               backgroundColor: isProxyEnabled
                   ? Colors.red.shade400
-                  : Theme.of(context).colorScheme.primary,
+                  : _getStartButtonColor(context),
               foregroundColor: Colors.white,
               padding: const EdgeInsets.symmetric(vertical: 14),
               elevation: 0,

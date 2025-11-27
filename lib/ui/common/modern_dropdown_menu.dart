@@ -49,7 +49,9 @@ class _ModernDropdownRoute<T> extends PopupRoute<T> {
           return ValueListenableBuilder(
             valueListenable: showAboveNotifier,
             builder: (_, showAbove, child) {
-              final align = showAbove ? Alignment.bottomRight : Alignment.topRight;
+              final align = showAbove
+                  ? Alignment.bottomRight
+                  : Alignment.topRight;
               return Align(
                 alignment: Alignment.topRight,
                 child: CustomSingleChildLayout(
@@ -99,10 +101,7 @@ class _DropdownLayoutDelegate extends SingleChildLayoutDelegate {
   final Offset offset;
   final bool showAbove;
 
-  _DropdownLayoutDelegate({
-    required this.offset,
-    required this.showAbove,
-  });
+  _DropdownLayoutDelegate({required this.offset, required this.showAbove});
 
   @override
   Size getSize(BoxConstraints constraints) {
@@ -113,7 +112,7 @@ class _DropdownLayoutDelegate extends SingleChildLayoutDelegate {
   Offset getPositionForChild(Size size, Size childSize) {
     // X 坐标：offset.dx 是按钮右边缘，菜单右对齐
     double x = offset.dx - childSize.width;
-    
+
     // Y 坐标：
     // showAbove 为 true 时，offset.dy 是按钮底部，需要向上偏移菜单高度
     // showAbove 为 false 时，offset.dy 是按钮顶部，菜单从这里开始向下
@@ -229,37 +228,41 @@ class _ModernDropdownMenuState<T> extends State<ModernDropdownMenu<T>> {
     if (renderBox == null) {
       return;
     }
-    
+
     final buttonSize = renderBox.size;
     final buttonPosition = renderBox.localToGlobal(Offset.zero);
     final screenSize = MediaQuery.of(context).size;
-    
+
     // 估算菜单高度
     const itemHeight = 36.0;
     const maxVisibleItems = 6;
     const padding = 8.0;
-    final estimatedMenuHeight = (widget.items.length > maxVisibleItems
+    final estimatedMenuHeight =
+        (widget.items.length > maxVisibleItems
             ? maxVisibleItems * itemHeight
             : widget.items.length * itemHeight) +
         padding;
-    
+
     // 判断是显示在按钮上方还是下方（覆盖按钮）
     final spaceBelow = screenSize.height - buttonPosition.dy;
     final spaceAbove = buttonPosition.dy + buttonSize.height;
-    final showAbove = spaceBelow < estimatedMenuHeight && spaceAbove > spaceBelow;
-    
+    final showAbove =
+        spaceBelow < estimatedMenuHeight && spaceAbove > spaceBelow;
+
     _showAboveNotifier.value = showAbove;
-    
+
     // 设置菜单位置（覆盖按钮，右对齐）
     // X 坐标：按钮右边缘（菜单会右对齐到这里）
     // Y 坐标：
     //   - 下方显示：从按钮顶部开始
     //   - 上方显示：菜单底部对齐按钮底部
     _targetOffsetValueNotifier.value = Offset(
-      buttonPosition.dx + buttonSize.width,  // 按钮右边缘
+      buttonPosition.dx + buttonSize.width, // 按钮右边缘
       showAbove
-        ? buttonPosition.dy + buttonSize.height  // 上方显示时，这是菜单的底部位置
-        : buttonPosition.dy,  // 下方显示时，这是菜单的顶部位置
+          ? buttonPosition.dy +
+                buttonSize
+                    .height // 上方显示时，这是菜单的底部位置
+          : buttonPosition.dy, // 下方显示时，这是菜单的顶部位置
     );
   }
 
@@ -272,10 +275,7 @@ class _ModernDropdownMenuState<T> extends State<ModernDropdownMenu<T>> {
             _updateOffset();
           }
         });
-        return GestureDetector(
-          onTap: _open,
-          child: widget.child,
-        );
+        return GestureDetector(onTap: _open, child: widget.child);
       },
     );
   }
@@ -341,10 +341,7 @@ class _DropdownMenuUIState<T> extends State<_DropdownMenuUI<T>> {
   }
 
   // 构建单个菜单项（Win11 风格，左侧指示条）
-  Widget _dropdownMenuItem(
-    BuildContext context, {
-    required T item,
-  }) {
+  Widget _dropdownMenuItem(BuildContext context, {required T item}) {
     final isSelected = item == widget.selectedItem;
     final colorScheme = Theme.of(context).colorScheme;
 
@@ -362,7 +359,12 @@ class _DropdownMenuUIState<T> extends State<_DropdownMenuUI<T>> {
           hoverColor: colorScheme.onSurface.withValues(alpha: 0.05),
           child: Container(
             constraints: const BoxConstraints(minWidth: 120),
-            padding: const EdgeInsets.only(left: 6, right: 10, top: 10, bottom: 10),
+            padding: const EdgeInsets.only(
+              left: 6,
+              right: 10,
+              top: 10,
+              bottom: 10,
+            ),
             decoration: BoxDecoration(
               color: isSelected
                   ? colorScheme.onSurface.withValues(alpha: 0.08)
@@ -396,7 +398,9 @@ class _DropdownMenuUIState<T> extends State<_DropdownMenuUI<T>> {
                           ? colorScheme.primary
                           : colorScheme.onSurface,
                       fontSize: 14,
-                      fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+                      fontWeight: isSelected
+                          ? FontWeight.w600
+                          : FontWeight.w400,
                       height: 1.2,
                     ),
                     maxLines: 1,
@@ -415,7 +419,7 @@ class _DropdownMenuUIState<T> extends State<_DropdownMenuUI<T>> {
   Widget _buildPaginationButtons(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    
+
     return Padding(
       padding: const EdgeInsets.only(right: 8, bottom: 4, top: 2),
       child: Row(
@@ -433,8 +437,12 @@ class _DropdownMenuUIState<T> extends State<_DropdownMenuUI<T>> {
                 height: 28,
                 decoration: BoxDecoration(
                   color: _currentPage > 0
-                      ? colorScheme.onSurface.withValues(alpha: isDark ? 0.12 : 0.08)
-                      : colorScheme.onSurface.withValues(alpha: isDark ? 0.06 : 0.04),
+                      ? colorScheme.onSurface.withValues(
+                          alpha: isDark ? 0.12 : 0.08,
+                        )
+                      : colorScheme.onSurface.withValues(
+                          alpha: isDark ? 0.06 : 0.04,
+                        ),
                   shape: BoxShape.circle,
                 ),
                 child: Icon(
@@ -460,8 +468,12 @@ class _DropdownMenuUIState<T> extends State<_DropdownMenuUI<T>> {
                 height: 28,
                 decoration: BoxDecoration(
                   color: _currentPage < _totalPages - 1
-                      ? colorScheme.onSurface.withValues(alpha: isDark ? 0.12 : 0.08)
-                      : colorScheme.onSurface.withValues(alpha: isDark ? 0.06 : 0.04),
+                      ? colorScheme.onSurface.withValues(
+                          alpha: isDark ? 0.12 : 0.08,
+                        )
+                      : colorScheme.onSurface.withValues(
+                          alpha: isDark ? 0.06 : 0.04,
+                        ),
                   shape: BoxShape.circle,
                 ),
                 child: Icon(
@@ -490,10 +502,7 @@ class _DropdownMenuUIState<T> extends State<_DropdownMenuUI<T>> {
     return IntrinsicHeight(
       child: IntrinsicWidth(
         child: Container(
-          constraints: const BoxConstraints(
-            minWidth: 200,
-            maxWidth: 400,
-          ),
+          constraints: const BoxConstraints(minWidth: 200, maxWidth: 400),
           decoration: BoxDecoration(
             color: colorScheme.surface,
             borderRadius: BorderRadius.circular(10),

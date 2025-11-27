@@ -6,9 +6,9 @@ import 'package:stelliberty/ui/widgets/home/base_card.dart';
 import 'package:stelliberty/ui/common/empty.dart';
 import 'package:stelliberty/i18n/i18n.dart';
 
-/// 流量统计卡片
-///
-/// 显示累计上传/下载流量和实时速度波形图
+// 流量统计卡片
+//
+// 显示累计上传/下载流量和实时速度波形图
 class TrafficStatsCard extends StatefulWidget {
   const TrafficStatsCard({super.key});
 
@@ -20,6 +20,10 @@ class _TrafficStatsCardState extends State<TrafficStatsCard> {
   // 存储最近的速度历史数据（上传/下载）
   final List<double> _uploadHistory = List.generate(30, (_) => 0.0);
   final List<double> _downloadHistory = List.generate(30, (_) => 0.0);
+
+  // 累计流量统计（字节）
+  int _totalUpload = 0;
+  int _totalDownload = 0;
 
   // 降采样计数器：减少波形图重绘频率
   int _updateCounter = 0;
@@ -35,6 +39,7 @@ class _TrafficStatsCardState extends State<TrafficStatsCard> {
     return BaseCard(
       icon: Icons.data_usage,
       title: context.translate.home.trafficStats,
+      trailing: _buildTotalTrafficDisplay(context),
       child: isRunning
           ? StreamBuilder<TrafficData>(
               stream: context.read<ClashManager>().trafficStream,
@@ -48,6 +53,9 @@ class _TrafficStatsCardState extends State<TrafficStatsCard> {
                 if (shouldUpdateWave) {
                   _updateCounter = 0;
                   _updateHistory(traffic);
+                  // 累加流量统计
+                  _totalUpload += traffic.upload;
+                  _totalDownload += traffic.download;
                 }
 
                 return _buildTrafficContent(
@@ -62,6 +70,48 @@ class _TrafficStatsCardState extends State<TrafficStatsCard> {
     );
   }
 
+  // 构建右上角累计流量显示
+  Widget _buildTotalTrafficDisplay(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(
+          Icons.arrow_upward,
+          size: 12,
+          color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.7),
+        ),
+        const SizedBox(width: 2),
+        Text(
+          _formatBytes(_totalUpload),
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+            color: Theme.of(
+              context,
+            ).colorScheme.onSurface.withValues(alpha: 0.7),
+            fontSize: 11,
+            fontFeatures: [const FontFeature.tabularFigures()],
+          ),
+        ),
+        const SizedBox(width: 8),
+        Icon(
+          Icons.arrow_downward,
+          size: 12,
+          color: Colors.green.withValues(alpha: 0.7),
+        ),
+        const SizedBox(width: 2),
+        Text(
+          _formatBytes(_totalDownload),
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+            color: Theme.of(
+              context,
+            ).colorScheme.onSurface.withValues(alpha: 0.7),
+            fontSize: 11,
+            fontFeatures: [const FontFeature.tabularFigures()],
+          ),
+        ),
+      ],
+    );
+  }
+
   void _updateHistory(TrafficData traffic) {
     // 更新速度历史，移除最旧的数据，添加最新的
     _uploadHistory.removeAt(0);
@@ -71,7 +121,23 @@ class _TrafficStatsCardState extends State<TrafficStatsCard> {
     _downloadHistory.add(traffic.download / 1024.0); // KB/s
   }
 
-  /// 格式化速度显示（自动选择 B/s、KB/s、MB/s、GB/s）
+  // 格式化字节数显示（自动选择 B、KB、MB、GB）
+  String _formatBytes(int bytes) {
+    if (bytes < 1024) {
+      return '${bytes}B';
+    } else if (bytes < 1024 * 1024) {
+      final kb = bytes / 1024;
+      return '${kb.toStringAsFixed(kb < 100 ? 1 : 0)}KB';
+    } else if (bytes < 1024 * 1024 * 1024) {
+      final mb = bytes / (1024 * 1024);
+      return '${mb.toStringAsFixed(mb < 100 ? 1 : 0)}MB';
+    } else {
+      final gb = bytes / (1024 * 1024 * 1024);
+      return '${gb.toStringAsFixed(2)}GB';
+    }
+  }
+
+  // 格式化速度显示（自动选择 B/s、KB/s、MB/s、GB/s）
   String _formatSpeed(double bytesPerSecond) {
     if (bytesPerSecond < 1024) {
       // < 1 KB/s，显示 B/s
@@ -201,33 +267,17 @@ class _TrafficStatsCardState extends State<TrafficStatsCard> {
     );
   }
 
+  // 重置流量统计（无需确认对话框）
   void _resetTraffic(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(context.translate.home.resetTrafficTitle),
-        content: Text(context.translate.home.resetTrafficConfirm),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text(context.translate.common.cancel),
-          ),
-          FilledButton(
-            onPressed: () {
-              final clashManager = context.read<ClashManager>();
-              clashManager.resetTrafficStats();
-              // 清空历史数据
-              setState(() {
-                _uploadHistory.fillRange(0, _uploadHistory.length, 0);
-                _downloadHistory.fillRange(0, _downloadHistory.length, 0);
-              });
-              Navigator.pop(context);
-            },
-            child: Text(context.translate.common.ok),
-          ),
-        ],
-      ),
-    );
+    final clashManager = context.read<ClashManager>();
+    clashManager.resetTrafficStats();
+    // 清空历史数据和累计统计
+    setState(() {
+      _uploadHistory.fillRange(0, _uploadHistory.length, 0);
+      _downloadHistory.fillRange(0, _downloadHistory.length, 0);
+      _totalUpload = 0;
+      _totalDownload = 0;
+    });
   }
 }
 

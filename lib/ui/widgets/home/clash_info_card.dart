@@ -8,6 +8,7 @@ import 'package:stelliberty/clash/storage/preferences.dart';
 import 'package:stelliberty/clash/services/core_update_service.dart';
 import 'package:stelliberty/ui/widgets/modern_toast.dart';
 import 'package:stelliberty/ui/widgets/home/base_card.dart';
+import 'package:stelliberty/ui/widgets/home/info_container.dart';
 import 'package:stelliberty/utils/logger.dart';
 
 /// Clash 信息卡片
@@ -88,93 +89,42 @@ class _ClashInfoCardState extends State<ClashInfoCard> {
           ),
         ],
       ),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Theme.of(
-            context,
-          ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2),
+      child: InfoContainer(
+        rows: [
+          // 运行模式
+          InfoRow.text(
+            label: context.translate.home.coreRunMode,
+            value: runMode,
           ),
-        ),
-        child: Column(
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  context.translate.home.coreRunMode,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(
+          // 代理地址
+          InfoRow.text(
+            label: context.translate.home.proxyAddress,
+            value: proxyAddress,
+            valueStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              fontWeight: FontWeight.w600,
+              fontFeatures: [const FontFeature.tabularFigures()],
+              color: isRunning
+                  ? Theme.of(context).colorScheme.onSurface
+                  : Theme.of(
                       context,
-                    ).colorScheme.onSurface.withValues(alpha: 0.7),
-                  ),
-                ),
-                Text(
-                  runMode,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
-                    color: Theme.of(context).colorScheme.onSurface,
-                  ),
-                ),
-              ],
+                    ).colorScheme.onSurface.withValues(alpha: 0.4),
             ),
-            const SizedBox(height: 12),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  context.translate.home.proxyAddress,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(
+          ),
+          // 核心版本
+          InfoRow.text(
+            label: context.translate.home.coreVersion,
+            value: isRunning ? version : '--',
+            valueStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              fontWeight: FontWeight.w600,
+              fontFeatures: [const FontFeature.tabularFigures()],
+              color: isRunning
+                  ? Theme.of(context).colorScheme.onSurface
+                  : Theme.of(
                       context,
-                    ).colorScheme.onSurface.withValues(alpha: 0.7),
-                  ),
-                ),
-                Text(
-                  proxyAddress,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
-                    fontFeatures: [const FontFeature.tabularFigures()],
-                    color: isRunning
-                        ? Theme.of(context).colorScheme.onSurface
-                        : Theme.of(
-                            context,
-                          ).colorScheme.onSurface.withValues(alpha: 0.4),
-                  ),
-                ),
-              ],
+                    ).colorScheme.onSurface.withValues(alpha: 0.4),
             ),
-            const SizedBox(height: 12),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  context.translate.home.coreVersion,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(
-                      context,
-                    ).colorScheme.onSurface.withValues(alpha: 0.7),
-                  ),
-                ),
-                Text(
-                  isRunning ? version : '--',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
-                    fontFeatures: [const FontFeature.tabularFigures()],
-                    color: isRunning
-                        ? Theme.of(context).colorScheme.onSurface
-                        : Theme.of(
-                            context,
-                          ).colorScheme.onSurface.withValues(alpha: 0.4),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

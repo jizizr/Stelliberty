@@ -144,10 +144,7 @@ class _ModernTextFieldState extends State<ModernTextField> {
               decoration: BoxDecoration(
                 color: backgroundColor,
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(
-                  color: borderColor,
-                  width: 1.5,
-                ),
+                border: Border.all(color: borderColor, width: 1.5),
               ),
               child: Row(
                 children: [
@@ -175,7 +172,9 @@ class _ModernTextFieldState extends State<ModernTextField> {
                                 widget.prefixIcon,
                                 color: _isFocused
                                     ? colorScheme.primary
-                                    : colorScheme.onSurface.withValues(alpha: 0.6),
+                                    : colorScheme.onSurface.withValues(
+                                        alpha: 0.6,
+                                      ),
                               )
                             : null,
                         suffixText: widget.suffixText,
@@ -183,7 +182,8 @@ class _ModernTextFieldState extends State<ModernTextField> {
                           color: colorScheme.onSurface.withValues(alpha: 0.6),
                         ),
                         border: InputBorder.none,
-                        contentPadding: widget.contentPadding ??
+                        contentPadding:
+                            widget.contentPadding ??
                             EdgeInsets.symmetric(
                               horizontal: widget.prefixIcon != null ? 12 : 16,
                               vertical: 14,

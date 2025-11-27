@@ -601,7 +601,7 @@ class _TunConfigCardState extends State<TunConfigCard> {
 
       const SizedBox(height: 16),
 
-      // 禁用 ICMP 转发
+      // ICMP 转发（正向表述，开关打开=启用，关闭=禁用）
       Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
@@ -610,16 +610,12 @@ class _TunConfigCardState extends State<TunConfigCard> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  context.translate.clashFeatures.tunMode.disableIcmpForwarding,
+                  context.translate.clashFeatures.tunMode.icmpForwarding,
                   style: Theme.of(context).textTheme.titleSmall,
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  context
-                      .translate
-                      .clashFeatures
-                      .tunMode
-                      .disableIcmpForwardingDesc,
+                  context.translate.clashFeatures.tunMode.icmpForwardingDesc,
                   style: Theme.of(
                     context,
                   ).textTheme.bodySmall?.copyWith(color: Colors.grey),
@@ -629,10 +625,12 @@ class _TunConfigCardState extends State<TunConfigCard> {
           ),
           const SizedBox(width: 16),
           ModernSwitch(
-            value: _tunDisableIcmpForwarding,
+            // 反转显示：内部存储的是 disable，UI 显示的是 enable
+            value: !_tunDisableIcmpForwarding,
             onChanged: (value) {
-              setState(() => _tunDisableIcmpForwarding = value);
-              ClashManager.instance.setTunDisableIcmpForwarding(value);
+              // 反转存储：UI 的 enable 转换为内部的 disable
+              setState(() => _tunDisableIcmpForwarding = !value);
+              ClashManager.instance.setTunDisableIcmpForwarding(!value);
             },
           ),
         ],

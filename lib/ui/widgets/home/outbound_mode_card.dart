@@ -6,17 +6,17 @@ import 'package:stelliberty/ui/widgets/home/base_card.dart';
 import 'package:stelliberty/utils/logger.dart';
 import 'package:stelliberty/i18n/i18n.dart';
 
-/// 出站模式切换卡片
-///
-/// 提供规则模式、全局模式、直连模式切换
-class ProxyModeCard extends StatefulWidget {
-  const ProxyModeCard({super.key});
+// 出站模式卡片
+//
+// 提供规则模式、全局模式、直连模式切换
+class OutboundModeCard extends StatefulWidget {
+  const OutboundModeCard({super.key});
 
   @override
-  State<ProxyModeCard> createState() => _ProxyModeCardState();
+  State<OutboundModeCard> createState() => _OutboundModeCardState();
 }
 
-class _ProxyModeCardState extends State<ProxyModeCard> {
+class _OutboundModeCardState extends State<OutboundModeCard> {
   String _selectedMode = 'rule';
 
   @override
