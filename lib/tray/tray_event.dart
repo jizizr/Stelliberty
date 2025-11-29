@@ -122,14 +122,18 @@ class TrayEventHandler with TrayListener {
       // 获取保存的窗口状态
       final shouldMaximize = AppPreferences.instance.getIsMaximized();
 
-      await windowManager.setOpacity(1.0);
-      await windowManager.setSkipTaskbar(false);
-      await windowManager.focus();
+      if (opacity < 1.0) {
+        await windowManager.setOpacity(1.0);
+        Logger.info('窗口不透明度已恢复（opacity: $opacity → 1.0）');
+      }
 
-      // 根据保存的状态恢复窗口
+      // 根据保存的状态决定是否最大化
       if (shouldMaximize) {
         await windowManager.maximize();
       }
+
+      await windowManager.show();
+      await windowManager.focus();
 
       Logger.info('窗口已显示 (最大化：$shouldMaximize)');
     } catch (e) {

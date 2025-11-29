@@ -139,8 +139,8 @@ class WindowButtons extends StatelessWidget {
         Logger.error('保存窗口状态失败：$e');
       }
 
-      await windowManager.setOpacity(0.0);
-      await windowManager.setSkipTaskbar(true);
+      await windowManager.setOpacity(0.99);
+      await windowManager.hide();
       return;
     }
 
