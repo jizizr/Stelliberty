@@ -87,7 +87,7 @@ class DelayTestService {
 
   // 测试代理延迟（支持代理组）
   // 使用 Clash API 进行统一延迟测试（需要 Clash 正在运行）
-  // 注意：此方法会直接修改传入的 proxyNodes Map
+  // 注意：此方法不修改传入的 proxyNodes Map，仅返回延迟值
   //
   // 重要：不递归解析代理组，直接测试传入的节点名称
   // 如果是代理组，Clash API 会测试该代理组当前选中的节点
@@ -113,24 +113,20 @@ class DelayTestService {
     Logger.debug('测试延迟：$proxyName (通过 Clash API)');
     final delay = await DelayTester.testProxyDelay(node, testUrl: testUrl);
 
-    // 直接修改传入的 Map，更新节点延迟
-    _updateNodeDelay(proxyNodes, proxyName, delay);
-
     return delay;
   }
 
   // 批量测试代理组中所有节点的延迟
   // 使用并发测试以提高效率，根据 CPU 核心数动态调整并发数
   // 每个节点测试完成后立即更新 UI，而不是等待整批完成
-  static Future<Map<String, ProxyNode>> testGroupDelays(
+  static Future<Map<String, int>> testGroupDelays(
     String groupName,
     Map<String, ProxyNode> proxyNodes,
     List<ProxyGroup> allProxyGroups,
     Map<String, String> selectedMap, {
     String? testUrl,
     Function(String nodeName)? onNodeStart,
-    Function(String nodeName)? onNodeComplete,
-    Function(Map<String, ProxyNode>)? onBatchUpdated,
+    Function(String nodeName, int delay)? onNodeComplete,
   }) async {
     final group = allProxyGroups.firstWhere(
       (g) => g.name == groupName,
@@ -145,7 +141,7 @@ class DelayTestService {
 
     if (proxyNames.isEmpty) {
       Logger.warning('代理组 $groupName 中没有可测试的节点');
-      return proxyNodes;
+      return {};
     }
 
     // 使用动态并发数（基于 CPU 核心数）
@@ -154,8 +150,8 @@ class DelayTestService {
       '开始测试代理组 $groupName 中的 ${proxyNames.length} 个项目（并发数：$concurrency）',
     );
 
-    // 直接使用传入的 Map，避免不必要的复制
-    var updatedNodes = proxyNodes;
+    // 存储所有节点的延迟结果
+    final delayResults = <String, int>{};
     int successCount = 0;
     int completedCount = 0;
 
@@ -171,28 +167,24 @@ class DelayTestService {
         // 执行测试
         final delay = await testProxyDelay(
           proxyName,
-          updatedNodes,
+          proxyNodes,
           allProxyGroups,
           selectedMap,
           testUrl: testUrl,
         );
+
+        // 保存延迟结果
+        delayResults[proxyName] = delay;
 
         // 更新成功计数
         if (delay > 0) {
           successCount++;
         }
 
-        // 通知节点测试完成
-        onNodeComplete?.call(proxyName);
-
         completedCount++;
 
-        // 立即创建新 Map 实例并通知 UI 更新（关键改进）
-        // 注意：不修改 updatedNodes 引用，而是创建临时副本传给回调
-        if (onBatchUpdated != null) {
-          final newMap = Map<String, ProxyNode>.from(updatedNodes);
-          onBatchUpdated(newMap);
-        }
+        // 通知节点测试完成
+        onNodeComplete?.call(proxyName, delay);
 
         Logger.debug('已完成 $completedCount/${proxyNames.length} 个代理的延迟测试');
       }).toList();
@@ -205,20 +197,6 @@ class DelayTestService {
 
     Logger.info('延迟测试完成，成功：$successCount/${proxyNames.length}');
 
-    // 返回最后一次创建的新 Map 实例（确保返回值包含所有批次的更新）
-    return Map<String, ProxyNode>.from(updatedNodes);
-  }
-
-  // 更新节点延迟（内部方法）
-  // 注意：此方法会修改传入的 Map
-  static void _updateNodeDelay(
-    Map<String, ProxyNode> proxyNodes,
-    String nodeName,
-    int delay,
-  ) {
-    final node = proxyNodes[nodeName];
-    if (node != null) {
-      proxyNodes[nodeName] = node.copyWith(delay: delay);
-    }
+    return delayResults;
   }
 }

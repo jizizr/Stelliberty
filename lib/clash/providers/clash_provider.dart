@@ -815,7 +815,13 @@ class ClashProvider extends ChangeNotifier {
     );
 
     if (notify) {
-      // 单个节点测试时，创建新的 Map 实例以触发 UI 更新
+      // 在最新的 _proxyNodes 上更新延迟值
+      final node = _proxyNodes[proxyName];
+      if (node != null) {
+        _proxyNodes[proxyName] = node.copyWith(delay: delay);
+      }
+
+      // 创建新的 Map 实例以触发 UI 更新
       _proxyNodes = Map<String, ProxyNode>.from(_proxyNodes);
       _proxyNodesUpdateCount++;
       notifyListeners();
@@ -859,13 +865,18 @@ class ClashProvider extends ChangeNotifier {
           // 节点开始测试时保持在 testingNodes 中
           // 无需额外操作，因为已经在集合中了
         },
-        onNodeComplete: (nodeName) {
-          // 节点测试完成，从测试集合中移除
+        onNodeComplete: (nodeName, delay) {
+          // 节点测试完成，立即更新延迟值
+          final node = _proxyNodes[nodeName];
+          if (node != null) {
+            _proxyNodes[nodeName] = node.copyWith(delay: delay);
+          }
+
+          // 从测试集合中移除
           _testingNodes.remove(nodeName);
-        },
-        onBatchUpdated: (updatedNodes) {
-          // 每批完成后，接收新的 Map 实例并通知 UI
-          _proxyNodes = updatedNodes;
+
+          // 创建新的 Map 实例并通知 UI 更新
+          _proxyNodes = Map<String, ProxyNode>.from(_proxyNodes);
           _proxyNodesUpdateCount++;
           notifyListeners();
         },
