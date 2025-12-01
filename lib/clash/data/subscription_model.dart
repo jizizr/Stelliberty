@@ -22,6 +22,26 @@ enum SubscriptionProxyMode {
   }
 }
 
+// 自动更新模式
+enum AutoUpdateMode {
+  // 禁用自动更新
+  disabled('disabled'),
+
+  // 间隔更新（按分钟）
+  interval('interval');
+
+  const AutoUpdateMode(this.value);
+
+  final String value;
+
+  static AutoUpdateMode fromString(String value) {
+    for (final mode in AutoUpdateMode.values) {
+      if (mode.value == value) return mode;
+    }
+    return AutoUpdateMode.disabled;
+  }
+}
+
 // 订阅信息（流量统计）
 class SubscriptionInfo {
   final int upload; // 已上传（字节）
@@ -98,8 +118,9 @@ class Subscription {
   final String id; // 唯一标识
   final String name; // 订阅名称
   final String url; // 订阅链接
-  final bool autoUpdate; // 是否自动更新
-  final Duration autoUpdateInterval; // 自动更新间隔
+  final AutoUpdateMode autoUpdateMode; // 自动更新模式
+  final int intervalMinutes; // 间隔更新时长（分钟，仅当模式为 interval 时有效）
+  final bool updateOnStartup; // 启动时更新（禁用自动更新时可选）
   final DateTime? lastUpdateTime; // 上次更新时间
   final SubscriptionInfo? info; // 订阅信息
   final bool isUpdating; // 是否正在更新
@@ -113,8 +134,9 @@ class Subscription {
     required this.id,
     required this.name,
     required this.url,
-    this.autoUpdate = true,
-    this.autoUpdateInterval = const Duration(hours: 24),
+    this.autoUpdateMode = AutoUpdateMode.disabled,
+    this.intervalMinutes = 60,
+    this.updateOnStartup = false,
     this.lastUpdateTime,
     this.info,
     this.isUpdating = false,
@@ -134,19 +156,27 @@ class Subscription {
     );
   }
 
-  // 是否需要更新
+  // 是否需要自动更新
   bool get needsUpdate {
     // 如果未启用自动更新，则不需要更新
-    if (!autoUpdate) {
+    if (autoUpdateMode == AutoUpdateMode.disabled) {
       return false;
     }
+
     // 如果从未更新过，需要更新
     if (lastUpdateTime == null) {
       return true;
     }
-    // 检查是否到了更新时间（包含相等的情况，避免卡在"待更新"状态）
-    final nextUpdateTime = lastUpdateTime!.add(autoUpdateInterval);
-    return !DateTime.now().isBefore(nextUpdateTime);
+
+    // 间隔更新模式
+    if (autoUpdateMode == AutoUpdateMode.interval) {
+      final nextUpdateTime = lastUpdateTime!.add(
+        Duration(minutes: intervalMinutes),
+      );
+      return DateTime.now().isAfter(nextUpdateTime);
+    }
+
+    return false;
   }
 
   // 获取配置文件路径
@@ -161,8 +191,9 @@ class Subscription {
     String? id,
     String? name,
     String? url,
-    bool? autoUpdate,
-    Duration? autoUpdateInterval,
+    AutoUpdateMode? autoUpdateMode,
+    int? intervalMinutes,
+    bool? updateOnStartup,
     DateTime? lastUpdateTime,
     SubscriptionInfo? info,
     bool? isUpdating,
@@ -176,8 +207,9 @@ class Subscription {
       id: id ?? this.id,
       name: name ?? this.name,
       url: url ?? this.url,
-      autoUpdate: autoUpdate ?? this.autoUpdate,
-      autoUpdateInterval: autoUpdateInterval ?? this.autoUpdateInterval,
+      autoUpdateMode: autoUpdateMode ?? this.autoUpdateMode,
+      intervalMinutes: intervalMinutes ?? this.intervalMinutes,
+      updateOnStartup: updateOnStartup ?? this.updateOnStartup,
       lastUpdateTime: lastUpdateTime ?? this.lastUpdateTime,
       info: info ?? this.info,
       isUpdating: isUpdating ?? this.isUpdating,
@@ -193,8 +225,9 @@ class Subscription {
     'id': id,
     'name': name,
     'url': url,
-    'autoUpdate': autoUpdate,
-    'autoUpdateInterval': autoUpdateInterval.inSeconds,
+    'autoUpdateMode': autoUpdateMode.value,
+    'intervalMinutes': intervalMinutes,
+    'updateOnStartup': updateOnStartup,
     'lastUpdateTime': lastUpdateTime?.toIso8601String(),
     'info': info?.toJson(),
     'isLocalFile': isLocalFile,
@@ -209,10 +242,11 @@ class Subscription {
       id: json['id'],
       name: json['name'],
       url: json['url'],
-      autoUpdate: json['autoUpdate'] ?? true,
-      autoUpdateInterval: Duration(
-        seconds: json['autoUpdateInterval'] ?? 86400,
+      autoUpdateMode: AutoUpdateMode.fromString(
+        json['autoUpdateMode'] ?? 'disabled',
       ),
+      intervalMinutes: json['intervalMinutes'] ?? 60,
+      updateOnStartup: json['updateOnStartup'] ?? false,
       lastUpdateTime: json['lastUpdateTime'] != null
           ? DateTime.parse(json['lastUpdateTime'])
           : null,

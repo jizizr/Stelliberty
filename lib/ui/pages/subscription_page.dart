@@ -58,9 +58,7 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
       return;
     }
 
-    Logger.info(
-      '发现 ${startupUpdateSubscriptions.length} 个启用启动时更新的订阅',
-    );
+    Logger.info('发现 ${startupUpdateSubscriptions.length} 个启用启动时更新的订阅');
 
     // 使用并发更新提升性能，限制并发数为 3
     const concurrency = 3;

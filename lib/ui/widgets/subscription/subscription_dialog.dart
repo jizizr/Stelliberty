@@ -1,13 +1,18 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:file_picker/file_picker.dart';
-import 'package:desktop_drop/desktop_drop.dart';
 import 'package:stelliberty/clash/data/subscription_model.dart';
 import 'package:stelliberty/utils/logger.dart';
 import 'package:stelliberty/ui/widgets/modern_toast.dart';
-import 'package:stelliberty/ui/common/modern_switch.dart';
 import 'package:stelliberty/ui/common/modern_dialog.dart';
+import 'package:stelliberty/ui/common/modern_dialog_subs/option_selector.dart';
+import 'package:stelliberty/ui/common/modern_dialog_subs/text_input_field.dart';
+import 'package:stelliberty/ui/common/modern_dialog_subs/file_selector.dart';
+import 'package:stelliberty/ui/common/modern_dialog_subs/proxy_mode_selector.dart';
+import 'package:stelliberty/ui/common/modern_switch.dart';
 import 'package:stelliberty/i18n/i18n.dart';
+
+// 对话框间距常量
+const double _dialogContentPadding = 20.0;
+const double _dialogItemSpacing = 20.0;
 
 // 订阅导入方式枚举
 enum SubscriptionImportMethod {
@@ -18,41 +23,36 @@ enum SubscriptionImportMethod {
   localFile,
 }
 
-// 订阅对话框组件 - 毛玻璃风格
-// 支持两种模式：
-// 1. 添加模式：可选择链接导入或本地文件导入
-// 2. 编辑模式：修改现有订阅配置
-// 关键特性：
-// - 毛玻璃背景（BackdropFilter + 16 sigma）
-// - 动态高度 URL 输入框（minLines: 1, maxLines: null）
-// - 拖拽导入本地文件
-// - 表单验证（URL 格式、域名、协议）
+// 订阅对话框 - 支持添加和编辑两种模式
+// 添加模式可选链接或本地文件导入，编辑模式修改现有配置
 class SubscriptionDialog extends StatefulWidget {
   final String title;
   final String? initialName;
   final String? initialUrl;
-  final bool? initialAutoUpdate;
-  final Duration? initialAutoUpdateInterval;
-  final SubscriptionProxyMode? initialProxyMode; // 新增：初始代理模式
+  final AutoUpdateMode? initialAutoUpdateMode;
+  final int? initialIntervalMinutes;
+  final bool? initialUpdateOnStartup;
+  final SubscriptionProxyMode? initialProxyMode;
   final String confirmText;
   final IconData titleIcon;
-  final bool isAddMode; // 新增：是否为添加模式
-  final bool isLocalFile; // 新增：是否为本地文件订阅
-  final Future<bool> Function(SubscriptionDialogResult)? onConfirm; // 新增：确认回调
+  final bool isAddMode;
+  final bool isLocalFile;
+  final Future<bool> Function(SubscriptionDialogResult)? onConfirm;
 
   const SubscriptionDialog({
     super.key,
     required this.title,
     this.initialName,
     this.initialUrl,
-    this.initialAutoUpdate,
-    this.initialAutoUpdateInterval,
+    this.initialAutoUpdateMode,
+    this.initialIntervalMinutes,
+    this.initialUpdateOnStartup,
     this.initialProxyMode,
     this.confirmText = 'Confirm',
     this.titleIcon = Icons.rss_feed,
-    this.isAddMode = false, // 默认为编辑模式
-    this.isLocalFile = false, // 默认为远程订阅
-    this.onConfirm, // 确认回调
+    this.isAddMode = false,
+    this.isLocalFile = false,
+    this.onConfirm,
   });
 
   // 显示添加配置对话框
@@ -85,12 +85,13 @@ class SubscriptionDialog extends StatefulWidget {
         title: context.translate.subscriptionDialog.editTitle,
         initialName: subscription.name,
         initialUrl: subscription.url,
-        initialAutoUpdate: subscription.autoUpdate,
-        initialAutoUpdateInterval: subscription.autoUpdateInterval,
+        initialAutoUpdateMode: subscription.autoUpdateMode,
+        initialIntervalMinutes: subscription.intervalMinutes,
+        initialUpdateOnStartup: subscription.updateOnStartup,
         initialProxyMode: subscription.proxyMode,
         confirmText: context.translate.subscriptionDialog.saveButton,
         titleIcon: Icons.edit_outlined,
-        isLocalFile: subscription.isLocalFile, // 传递本地文件标识
+        isLocalFile: subscription.isLocalFile,
       ),
     );
   }
@@ -103,19 +104,21 @@ class _SubscriptionDialogState extends State<SubscriptionDialog> {
   late final TextEditingController _nameController;
   late final TextEditingController _urlController;
   late final TextEditingController _intervalController;
-  late bool _autoUpdate;
-  late SubscriptionProxyMode _proxyMode; // 代理模式
+  late AutoUpdateMode _autoUpdateMode;
+  late bool _updateOnStartup;
+  late SubscriptionProxyMode _proxyMode;
 
   // 导入方式选择
   SubscriptionImportMethod _importMethod = SubscriptionImportMethod.link;
 
   // 选中的文件信息
-  File? _selectedFile;
-  String? _selectedFileName;
+  FileSelectionResult? _selectedFile;
 
   final _formKey = GlobalKey<FormState>();
   bool _isLoading = false;
-  bool _isDragging = false; // 拖拽状态
+
+  // 重建延迟标志，避免输入时频繁重建
+  bool _needsRebuild = false;
 
   @override
   void initState() {
@@ -125,9 +128,12 @@ class _SubscriptionDialogState extends State<SubscriptionDialog> {
     _nameController = TextEditingController(text: widget.initialName ?? '');
     _urlController = TextEditingController(text: widget.initialUrl ?? '');
     _intervalController = TextEditingController(
-      text: (widget.initialAutoUpdateInterval?.inMinutes ?? 60).toString(),
+      text: (widget.initialIntervalMinutes ?? 60).toString(),
     );
-    _autoUpdate = widget.initialAutoUpdate ?? false;
+
+    // 初始化自动更新模式和启动时更新
+    _autoUpdateMode = widget.initialAutoUpdateMode ?? AutoUpdateMode.disabled;
+    _updateOnStartup = widget.initialUpdateOnStartup ?? false;
     _proxyMode = widget.initialProxyMode ?? SubscriptionProxyMode.direct;
 
     // 添加监听器以检测内容变化
@@ -147,26 +153,41 @@ class _SubscriptionDialogState extends State<SubscriptionDialog> {
     final urlChanged =
         !widget.isLocalFile &&
         _urlController.text.trim() != (widget.initialUrl ?? '');
-    final autoUpdateChanged =
-        _autoUpdate != (widget.initialAutoUpdate ?? false);
+    final autoUpdateModeChanged =
+        _autoUpdateMode !=
+        (widget.initialAutoUpdateMode ?? AutoUpdateMode.disabled);
     final intervalChanged =
         !widget.isLocalFile &&
+        _autoUpdateMode == AutoUpdateMode.interval &&
         int.tryParse(_intervalController.text.trim()) !=
-            (widget.initialAutoUpdateInterval?.inMinutes ?? 60);
+            (widget.initialIntervalMinutes ?? 60);
+    final updateOnStartupChanged =
+        !widget.isLocalFile &&
+        _updateOnStartup != (widget.initialUpdateOnStartup ?? false);
     final proxyModeChanged =
         !widget.isLocalFile &&
         _proxyMode != (widget.initialProxyMode ?? SubscriptionProxyMode.direct);
 
     return nameChanged ||
         urlChanged ||
-        autoUpdateChanged ||
+        autoUpdateModeChanged ||
         intervalChanged ||
+        updateOnStartupChanged ||
         proxyModeChanged;
   }
 
-  // 内容变化时触发重建以更新按钮状态
+  // 内容变化时标记需要重建，延迟到下一帧执行
   void _checkForChanges() {
-    setState(() {});
+    if (!_needsRebuild) {
+      _needsRebuild = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _needsRebuild) {
+          setState(() {
+            _needsRebuild = false;
+          });
+        }
+      });
+    }
   }
 
   @override
@@ -229,7 +250,7 @@ class _SubscriptionDialogState extends State<SubscriptionDialog> {
 
   Widget _buildContent() {
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.all(_dialogContentPadding),
       child: Form(
         key: _formKey,
         child: Column(
@@ -239,7 +260,7 @@ class _SubscriptionDialogState extends State<SubscriptionDialog> {
             // 如果是添加模式，显示导入方式选择
             if (widget.isAddMode) ...[
               _buildImportModeSelector(),
-              const SizedBox(height: 20),
+              const SizedBox(height: _dialogItemSpacing),
             ],
 
             _buildTextField(
@@ -261,7 +282,7 @@ class _SubscriptionDialogState extends State<SubscriptionDialog> {
             if (widget.isAddMode &&
                     _importMethod == SubscriptionImportMethod.link ||
                 !widget.isAddMode && !widget.isLocalFile) ...[
-              const SizedBox(height: 20),
+              const SizedBox(height: _dialogItemSpacing),
               _buildTextField(
                 controller: _urlController,
                 label:
@@ -314,7 +335,7 @@ class _SubscriptionDialogState extends State<SubscriptionDialog> {
               ),
             ] else if (widget.isAddMode &&
                 _importMethod == SubscriptionImportMethod.localFile) ...[
-              const SizedBox(height: 20),
+              const SizedBox(height: _dialogItemSpacing),
               _buildFileSelector(),
             ],
 
@@ -324,9 +345,9 @@ class _SubscriptionDialogState extends State<SubscriptionDialog> {
             if ((widget.isAddMode &&
                     _importMethod == SubscriptionImportMethod.link) ||
                 (!widget.isAddMode && !widget.isLocalFile)) ...[
-              const SizedBox(height: 20),
+              const SizedBox(height: _dialogItemSpacing),
               _buildAutoUpdateSection(),
-              const SizedBox(height: 20),
+              const SizedBox(height: _dialogItemSpacing),
               _buildProxyModeSection(),
             ],
           ],
@@ -396,6 +417,7 @@ class _SubscriptionDialogState extends State<SubscriptionDialog> {
   }
 
   Widget _buildAutoUpdateSection() {
+    final trans = context.translate.subscriptionDialog;
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Material(
@@ -405,7 +427,7 @@ class _SubscriptionDialogState extends State<SubscriptionDialog> {
         decoration: BoxDecoration(
           color: isDark
               ? Colors.white.withValues(alpha: 0.04)
-              : Colors.white.withValues(alpha: 0.5),
+              : Colors.white.withValues(alpha: 0.6),
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
             color: Colors.white.withValues(alpha: isDark ? 0.1 : 0.2),
@@ -413,8 +435,8 @@ class _SubscriptionDialogState extends State<SubscriptionDialog> {
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
           children: [
+            // 标题
             Row(
               children: [
                 Icon(
@@ -424,77 +446,39 @@ class _SubscriptionDialogState extends State<SubscriptionDialog> {
                 ),
                 const SizedBox(width: 8),
                 Text(
-                  context.translate.subscriptionDialog.autoUpdateTitle,
+                  trans.autoUpdateTitle,
                   style: TextStyle(
-                    color: Theme.of(context).colorScheme.primary,
-                    fontWeight: FontWeight.w600,
                     fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: Theme.of(context).colorScheme.primary,
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-              decoration: BoxDecoration(
-                color: _autoUpdate
-                    ? Theme.of(
-                        context,
-                      ).colorScheme.primary.withValues(alpha: 0.08)
-                    : Colors.transparent,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          context.translate.subscriptionDialog.autoUpdateEnable,
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
-                            color: Theme.of(context).colorScheme.onSurface,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          context.translate.subscriptionDialog.autoUpdateDesc,
-                          style: TextStyle(
-                            color: Theme.of(
-                              context,
-                            ).colorScheme.onSurface.withValues(alpha: 0.6),
-                            fontSize: 12,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  ModernSwitch(
-                    value: _autoUpdate,
-                    onChanged: (value) {
-                      setState(() => _autoUpdate = value);
-                    },
-                  ),
-                ],
-              ),
-            ),
-            if (_autoUpdate) ...[
-              const SizedBox(height: 12),
-              _buildTextField(
+            const SizedBox(height: 16),
+
+            // 两个模式选项（横向排列）
+            _buildUpdateModeOptions(),
+
+            // 禁用更新时的"启动时更新"选项
+            if (_autoUpdateMode == AutoUpdateMode.disabled) ...[
+              const SizedBox(height: 16),
+              _buildUpdateOnStartupCheckbox(),
+            ],
+
+            // 间隔更新配置（当选择间隔更新时展开）
+            if (_autoUpdateMode == AutoUpdateMode.interval) ...[
+              const SizedBox(height: 16),
+              TextInputField(
                 controller: _intervalController,
-                label: context.translate.subscriptionDialog.updateIntervalLabel,
-                hint: context.translate.subscriptionDialog.updateIntervalHint,
+                label: trans.updateIntervalLabel,
+                hint: trans.updateIntervalHint,
                 icon: Icons.schedule,
                 validator: (value) {
-                  if (_autoUpdate) {
+                  if (_autoUpdateMode == AutoUpdateMode.interval) {
                     final minutes = int.tryParse(value?.trim() ?? '');
                     if (minutes == null || minutes < 1) {
-                      return context
-                          .translate
-                          .subscriptionDialog
-                          .updateIntervalError;
+                      return trans.updateIntervalError;
                     }
                   }
                   return null;
@@ -507,289 +491,138 @@ class _SubscriptionDialogState extends State<SubscriptionDialog> {
     );
   }
 
-  // 构建代理模式选择区域
-  Widget _buildProxyModeSection() {
+  // 构建更新模式选项（横向排列）
+  Widget _buildUpdateModeOptions() {
+    final trans = context.translate.subscriptionDialog;
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    return Material(
-      color: Colors.transparent,
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: isDark
-              ? Colors.white.withValues(alpha: 0.04)
-              : Colors.white.withValues(alpha: 0.5),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: Colors.white.withValues(alpha: isDark ? 0.1 : 0.2),
-          ),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Row(
-              children: [
-                Icon(
-                  Icons.public,
-                  color: Theme.of(context).colorScheme.primary,
-                  size: 16,
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  context.translate.subscriptionDialog.proxyModeTitle,
-                  style: TextStyle(
-                    color: Theme.of(context).colorScheme.primary,
-                    fontWeight: FontWeight.w600,
-                    fontSize: 14,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            // 三个代理模式选项
-            ...SubscriptionProxyMode.values.map((mode) {
-              final isSelected = _proxyMode == mode;
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 8.0),
-                child: Material(
-                  color: Colors.transparent,
-                  borderRadius: BorderRadius.circular(10),
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(10),
-                    onTap: () {
-                      setState(() => _proxyMode = mode);
-                    },
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 12,
-                      ),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(10),
-                        border: isSelected
-                            ? Border.all(
-                                color: Theme.of(context).colorScheme.primary,
-                                width: 2,
-                              )
-                            : Border.all(
-                                color: Colors.white.withValues(
-                                  alpha: isDark ? 0.1 : 0.2,
-                                ),
-                              ),
-                        color: isSelected
-                            ? Theme.of(
-                                context,
-                              ).colorScheme.primary.withValues(alpha: 0.08)
-                            : (isDark
-                                  ? Colors.white.withValues(alpha: 0.02)
-                                  : Colors.white.withValues(alpha: 0.4)),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(
-                            isSelected
-                                ? Icons.radio_button_checked
-                                : Icons.radio_button_unchecked,
-                            color: isSelected
-                                ? Theme.of(context).colorScheme.primary
-                                : Theme.of(context).colorScheme.onSurface
-                                      .withValues(alpha: 0.4),
-                            size: 20,
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  mode.displayName,
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: isSelected
-                                        ? FontWeight.w600
-                                        : FontWeight.normal,
-                                  ),
-                                ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  _getProxyModeDescription(mode),
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: Theme.of(context)
-                                        .colorScheme
-                                        .onSurface
-                                        .withValues(alpha: 0.6),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
+    final options = [
+      (
+        AutoUpdateMode.disabled,
+        trans.autoUpdateDisabled,
+        trans.autoUpdateDisabledDesc,
+      ),
+      (
+        AutoUpdateMode.interval,
+        trans.autoUpdateInterval,
+        trans.autoUpdateIntervalDesc,
+      ),
+    ];
+
+    return Row(
+      children: options.map((option) {
+        final value = option.$1;
+        final title = option.$2;
+        final subtitle = option.$3;
+        final isSelected = _autoUpdateMode == value;
+
+        return Expanded(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: Material(
+              color: Colors.transparent,
+              borderRadius: BorderRadius.circular(8),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(8),
+                onTap: () {
+                  setState(() {
+                    _autoUpdateMode = value;
+                  });
+                },
+                child: Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: isSelected
+                        ? Theme.of(
+                            context,
+                          ).colorScheme.primary.withValues(alpha: 0.15)
+                        : (isDark
+                              ? Colors.white.withValues(alpha: 0.03)
+                              : Colors.white.withValues(alpha: 0.4)),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: isSelected
+                          ? Theme.of(context).colorScheme.primary
+                          : Colors.white.withValues(alpha: isDark ? 0.1 : 0.2),
+                      width: isSelected ? 1.5 : 1,
                     ),
                   ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: isSelected
+                              ? Theme.of(context).colorScheme.primary
+                              : Theme.of(context).colorScheme.onSurface,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        subtitle,
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.onSurface.withValues(alpha: 0.6),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              );
-            }),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // 获取代理模式描述
-  String _getProxyModeDescription(SubscriptionProxyMode mode) {
-    final trans = context.translate.subscriptionDialog;
-    switch (mode) {
-      case SubscriptionProxyMode.direct:
-        return trans.proxyModeDirect;
-      case SubscriptionProxyMode.system:
-        return trans.proxyModeSystem;
-      case SubscriptionProxyMode.core:
-        return trans.proxyModeCore;
-    }
-  }
-
-  // 构建导入方式选择器
-  Widget _buildImportModeSelector() {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    return Material(
-      color: Colors.transparent,
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: isDark
-              ? Colors.white.withValues(alpha: 0.04)
-              : Colors.white.withValues(alpha: 0.5),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: Colors.white.withValues(alpha: isDark ? 0.1 : 0.2),
+              ),
+            ),
           ),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Row(
-              children: [
-                Icon(
-                  Icons.import_export,
-                  color: Theme.of(context).colorScheme.secondary,
-                  size: 16,
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  context.translate.subscriptionDialog.importMethodTitle,
-                  style: TextStyle(
-                    color: Theme.of(context).colorScheme.secondary,
-                    fontWeight: FontWeight.w600,
-                    fontSize: 14,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: _buildImportMethodOption(
-                    method: SubscriptionImportMethod.link,
-                    icon: Icons.link,
-                    title: context.translate.subscriptionDialog.importLink,
-                    subtitle:
-                        context.translate.subscriptionDialog.importLinkSupport,
-                    colorScheme: Theme.of(context).colorScheme.primary,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _buildImportMethodOption(
-                    method: SubscriptionImportMethod.localFile,
-                    icon: Icons.folder,
-                    title: context.translate.subscriptionDialog.importLocal,
-                    subtitle: context
-                        .translate
-                        .subscriptionDialog
-                        .importLocalNoSupport,
-                    colorScheme: Theme.of(context).colorScheme.secondary,
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
+        );
+      }).toList(),
     );
   }
 
-  Widget _buildImportMethodOption({
-    required SubscriptionImportMethod method,
-    required IconData icon,
-    required String title,
-    required String subtitle,
-    required Color colorScheme,
-  }) {
+  // 构建"启动时更新"开关卡片
+  Widget _buildUpdateOnStartupCheckbox() {
+    final trans = context.translate.subscriptionDialog;
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final isSelected = _importMethod == method;
 
     return Material(
       color: Colors.transparent,
-      borderRadius: BorderRadius.circular(10),
       child: InkWell(
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(8),
         onTap: () {
           setState(() {
-            _importMethod = method;
-            _autoUpdate = method == SubscriptionImportMethod.link;
+            _updateOnStartup = !_updateOnStartup;
           });
         },
         child: Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(10),
-            border: isSelected
-                ? Border.all(color: colorScheme, width: 2)
-                : Border.all(
-                    color: Colors.white.withValues(alpha: isDark ? 0.1 : 0.2),
-                  ),
-            color: isSelected
-                ? colorScheme.withValues(alpha: 0.08)
-                : (isDark
-                      ? Colors.white.withValues(alpha: 0.02)
-                      : Colors.white.withValues(alpha: 0.4)),
+            color: isDark
+                ? Colors.white.withValues(alpha: 0.04)
+                : Colors.white.withValues(alpha: 0.4),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: Colors.white.withValues(alpha: isDark ? 0.1 : 0.2),
+            ),
           ),
           child: Row(
             children: [
-              Icon(
-                isSelected
-                    ? Icons.radio_button_checked
-                    : Icons.radio_button_unchecked,
-                color: isSelected
-                    ? colorScheme
-                    : Theme.of(
-                        context,
-                      ).colorScheme.onSurface.withValues(alpha: 0.4),
-                size: 18,
-              ),
-              const SizedBox(width: 8),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      title,
+                      trans.updateOnStartup,
                       style: TextStyle(
                         fontSize: 13,
-                        fontWeight: isSelected
-                            ? FontWeight.w600
-                            : FontWeight.w500,
+                        fontWeight: FontWeight.w600,
+                        color: Theme.of(context).colorScheme.onSurface,
                       ),
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      subtitle,
+                      trans.updateOnStartupDesc,
                       style: TextStyle(
                         fontSize: 11,
                         color: Theme.of(
@@ -800,6 +633,15 @@ class _SubscriptionDialogState extends State<SubscriptionDialog> {
                   ],
                 ),
               ),
+              const SizedBox(width: 12),
+              ModernSwitch(
+                value: _updateOnStartup,
+                onChanged: (value) {
+                  setState(() {
+                    _updateOnStartup = value;
+                  });
+                },
+              ),
             ],
           ),
         ),
@@ -807,202 +649,68 @@ class _SubscriptionDialogState extends State<SubscriptionDialog> {
     );
   }
 
-  // 构建文件选择器
-  Widget _buildFileSelector() {
-    return DropTarget(
-      onDragEntered: (details) {
-        setState(() {
-          _isDragging = true;
-        });
+  // 构建代理模式选择区域
+  Widget _buildProxyModeSection() {
+    return ProxyModeSelector(
+      selectedValue: _proxyMode,
+      onChanged: (value) {
+        setState(() => _proxyMode = value);
       },
-      onDragExited: (details) {
-        setState(() {
-          _isDragging = false;
-        });
-      },
-      onDragDone: (details) async {
-        setState(() {
-          _isDragging = false;
-        });
-        final paths = details.files.map((file) => file.path).toList();
-        await _handleDroppedFiles(paths);
-      },
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(16),
-          onTap: _selectFile,
-          child: Container(
-            decoration: BoxDecoration(
-              color: _isDragging
-                  ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.1)
-                  : Theme.of(
-                      context,
-                    ).colorScheme.surface.withValues(alpha: 0.5),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                color: _isDragging
-                    ? Theme.of(context).colorScheme.primary
-                    : (_selectedFile != null
-                          ? Theme.of(
-                              context,
-                            ).colorScheme.primary.withValues(alpha: 0.5)
-                          : Theme.of(
-                              context,
-                            ).colorScheme.outline.withValues(alpha: 0.2)),
-                width: _isDragging || _selectedFile != null ? 2 : 1,
-              ),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-              child: Row(
-                children: [
-                  Icon(
-                    _isDragging
-                        ? Icons.file_download
-                        : (_selectedFile != null
-                              ? Icons.check_circle
-                              : Icons.upload_file),
-                    size: 20,
-                    color: _isDragging
-                        ? Theme.of(context).colorScheme.primary
-                        : (_selectedFile != null
-                              ? Theme.of(context).colorScheme.primary
-                              : Theme.of(
-                                  context,
-                                ).colorScheme.onSurface.withValues(alpha: 0.6)),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          _isDragging
-                              ? context
-                                    .translate
-                                    .subscriptionDialog
-                                    .dropToImport
-                              : (_selectedFile != null
-                                    ? context
-                                          .translate
-                                          .subscriptionDialog
-                                          .fileSelectedLabel
-                                    : context
-                                          .translate
-                                          .subscriptionDialog
-                                          .selectFileLabel),
-                          style: TextStyle(
-                            color: Theme.of(
-                              context,
-                            ).colorScheme.onSurface.withValues(alpha: 0.7),
-                            fontSize: 16,
-                            fontWeight: _selectedFile != null || _isDragging
-                                ? FontWeight.w600
-                                : FontWeight.normal,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          _isDragging
-                              ? context.translate.subscriptionDialog.dragSupport
-                              : (_selectedFile != null
-                                    ? _selectedFileName ??
-                                          context
-                                              .translate
-                                              .subscriptionDialog
-                                              .unknownFile
-                                    : context
-                                          .translate
-                                          .subscriptionDialog
-                                          .clickOrDrag),
-                          style: TextStyle(
-                            color: _isDragging
-                                ? Theme.of(context).colorScheme.primary
-                                : (_selectedFile != null
-                                      ? Theme.of(context).colorScheme.primary
-                                      : Theme.of(context).colorScheme.onSurface
-                                            .withValues(alpha: 0.5)),
-                            fontSize: 12,
-                            fontWeight: _selectedFile != null || _isDragging
-                                ? FontWeight.w500
-                                : FontWeight.normal,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Icon(
-                    _isDragging
-                        ? Icons.download
-                        : (_selectedFile != null
-                              ? Icons.edit
-                              : Icons.folder_open),
-                    color: Theme.of(context).colorScheme.primary,
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
     );
   }
 
-  // 选择文件
-  Future<void> _selectFile() async {
-    try {
-      FilePickerResult? result = await FilePicker.platform.pickFiles(
-        type: FileType.any, // 允许选择所有文件类型
-        allowMultiple: false,
-      );
+  // 构建导入方式选择器
+  Widget _buildImportModeSelector() {
+    final trans = context.translate.subscriptionDialog;
 
-      if (result != null && result.files.single.path != null) {
-        final file = File(result.files.single.path!);
-        final fileName = result.files.single.name;
-
-        // 验证文件是否存在和可读
-        if (await file.exists()) {
-          setState(() {
-            _selectedFile = file;
-            _selectedFileName = fileName;
-          });
-        } else {
-          throw Exception('文件不存在或无法访问');
-        }
-      }
-    } catch (e) {
-      // 文件选择失败，不执行任何操作
-      Logger.debug('文件选择失败: $e');
-    }
+    return OptionSelectorWidget<SubscriptionImportMethod>(
+      title: trans.importMethodTitle,
+      titleIcon: Icons.import_export,
+      isHorizontal: true,
+      options: [
+        OptionItem(
+          value: SubscriptionImportMethod.link,
+          title: trans.importLink,
+          subtitle: trans.importLinkSupport,
+        ),
+        OptionItem(
+          value: SubscriptionImportMethod.localFile,
+          title: trans.importLocal,
+          subtitle: trans.importLocalNoSupport,
+        ),
+      ],
+      selectedValue: _importMethod,
+      onChanged: (value) {
+        setState(() {
+          _importMethod = value;
+          // 本地文件导入时默认禁用自动更新
+          if (value == SubscriptionImportMethod.localFile) {
+            _autoUpdateMode = AutoUpdateMode.disabled;
+          } else if (_autoUpdateMode == AutoUpdateMode.disabled) {
+            // 链接导入时如果当前是禁用状态，切换为间隔更新
+            _autoUpdateMode = AutoUpdateMode.interval;
+          }
+        });
+      },
+    );
   }
 
-  // 处理拖拽文件
-  Future<void> _handleDroppedFiles(List<String> paths) async {
-    if (paths.isEmpty) return;
+  // 构建文件选择器
+  Widget _buildFileSelector() {
+    final trans = context.translate.subscriptionDialog;
 
-    try {
-      // 只处理第一个文件
-      final filePath = paths.first;
-      final file = File(filePath);
-
-      // 验证文件是否存在
-      if (!await file.exists()) {
-        Logger.warning('拖拽的文件不存在: $filePath');
-        return;
-      }
-
-      final fileName = filePath.split(Platform.pathSeparator).last;
-
-      setState(() {
-        _selectedFile = file;
-        _selectedFileName = fileName;
-      });
-
-      Logger.debug('通过拖拽选择文件: $fileName');
-    } catch (e) {
-      Logger.error('处理拖拽文件失败: $e');
-    }
+    return FileSelectorWidget(
+      onFileSelected: (result) {
+        setState(() {
+          _selectedFile = result;
+        });
+      },
+      initialFile: _selectedFile,
+      hintText: trans.selectFileLabel,
+      selectedText: trans.fileSelectedLabel,
+      draggingText: trans.dropToImport,
+      dragHintText: trans.clickOrDrag,
+    );
   }
 
   void _handleConfirm() async {
@@ -1024,15 +732,13 @@ class _SubscriptionDialogState extends State<SubscriptionDialog> {
         name: _nameController.text.trim(),
         url: _importMethod == SubscriptionImportMethod.link
             ? _urlController.text.trim()
-            : null, // 本地导入时url为null
-        autoUpdate: _autoUpdate,
-        autoUpdateInterval: Duration(
-          minutes: int.tryParse(_intervalController.text.trim()) ?? 60,
-        ),
-        isLocalImport:
-            _importMethod == SubscriptionImportMethod.localFile, // 是否为本地导入
-        localFilePath: _selectedFile?.path, // 本地文件路径
-        proxyMode: _proxyMode, // 代理模式
+            : null,
+        autoUpdateMode: _autoUpdateMode,
+        intervalMinutes: int.tryParse(_intervalController.text.trim()) ?? 60,
+        updateOnStartup: _updateOnStartup,
+        isLocalImport: _importMethod == SubscriptionImportMethod.localFile,
+        localFilePath: _selectedFile?.file.path,
+        proxyMode: _proxyMode,
       );
 
       // 如果有确认回调，调用它并等待结果
@@ -1099,18 +805,20 @@ class _SubscriptionDialogState extends State<SubscriptionDialog> {
 // 订阅对话框结果
 class SubscriptionDialogResult {
   final String name;
-  final String? url; // url现在可以为null（本地导入时）
-  final bool autoUpdate;
-  final Duration autoUpdateInterval;
-  final bool isLocalImport; // 新增：是否为本地导入
-  final String? localFilePath; // 新增：本地文件路径
-  final SubscriptionProxyMode proxyMode; // 新增：代理模式
+  final String? url;
+  final AutoUpdateMode autoUpdateMode;
+  final int intervalMinutes;
+  final bool updateOnStartup;
+  final bool isLocalImport;
+  final String? localFilePath;
+  final SubscriptionProxyMode proxyMode;
 
   const SubscriptionDialogResult({
     required this.name,
     this.url,
-    required this.autoUpdate,
-    required this.autoUpdateInterval,
+    required this.autoUpdateMode,
+    this.intervalMinutes = 60,
+    this.updateOnStartup = false,
     this.isLocalImport = false,
     this.localFilePath,
     this.proxyMode = SubscriptionProxyMode.direct,

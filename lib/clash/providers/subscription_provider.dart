@@ -259,8 +259,9 @@ class SubscriptionProvider extends ChangeNotifier {
   Future<bool> addSubscription({
     required String name,
     required String url,
-    bool autoUpdate = true,
-    Duration autoUpdateInterval = const Duration(hours: 24),
+    AutoUpdateMode autoUpdateMode = AutoUpdateMode.disabled,
+    int intervalMinutes = 60,
+    bool updateOnStartup = false,
     bool downloadNow = true,
     SubscriptionProxyMode proxyMode = SubscriptionProxyMode.direct,
   }) async {
@@ -279,8 +280,9 @@ class SubscriptionProvider extends ChangeNotifier {
         id: DateTime.now().millisecondsSinceEpoch.toString(),
         name: name,
         url: url,
-        autoUpdate: autoUpdate,
-        autoUpdateInterval: autoUpdateInterval,
+        autoUpdateMode: autoUpdateMode,
+        intervalMinutes: intervalMinutes,
+        updateOnStartup: updateOnStartup,
         proxyMode: proxyMode,
       );
 
@@ -568,27 +570,30 @@ class SubscriptionProvider extends ChangeNotifier {
   // 返回所有启用自动更新的订阅中最短的更新间隔
   // 如果没有启用自动更新的订阅，返回 null
   Duration? _calculateNextCheckInterval() {
-    // 过滤出启用自动更新的订阅
-    final autoUpdateSubscriptions = _subscriptions
-        .where((s) => s.autoUpdate && !s.isLocalFile)
+    // 过滤出启用间隔更新的订阅（不包括本地文件）
+    final intervalUpdateSubscriptions = _subscriptions
+        .where(
+          (s) => s.autoUpdateMode == AutoUpdateMode.interval && !s.isLocalFile,
+        )
         .toList();
 
-    if (autoUpdateSubscriptions.isEmpty) {
-      Logger.debug('没有启用自动更新的订阅');
+    if (intervalUpdateSubscriptions.isEmpty) {
+      Logger.debug('没有启用间隔自动更新的订阅');
       return null;
     }
 
-    // 找出最短的更新间隔
-    Duration shortestInterval =
-        autoUpdateSubscriptions.first.autoUpdateInterval;
-    for (final subscription in autoUpdateSubscriptions) {
-      if (subscription.autoUpdateInterval < shortestInterval) {
-        shortestInterval = subscription.autoUpdateInterval;
+    // 找出最短的更新间隔（转换为 Duration）
+    int shortestMinutes = intervalUpdateSubscriptions.first.intervalMinutes;
+    for (final subscription in intervalUpdateSubscriptions) {
+      if (subscription.intervalMinutes < shortestMinutes) {
+        shortestMinutes = subscription.intervalMinutes;
       }
     }
 
+    final shortestInterval = Duration(minutes: shortestMinutes);
+
     Logger.debug(
-      '找到 ${autoUpdateSubscriptions.length} 个自动更新订阅，最短间隔: ${shortestInterval.inMinutes} 分钟',
+      '找到 ${intervalUpdateSubscriptions.length} 个间隔自动更新订阅，最短间隔: $shortestMinutes 分钟',
     );
     return shortestInterval;
   }
@@ -718,7 +723,7 @@ class SubscriptionProvider extends ChangeNotifier {
             name: name,
             url: '', // 本地文件无URL
           ).copyWith(
-            autoUpdate: false, // 本地文件不支持自动更新
+            autoUpdateMode: AutoUpdateMode.disabled, // 本地文件不支持自动更新
             isLocalFile: true, // 标记为本地文件
           );
 
@@ -902,8 +907,9 @@ class SubscriptionProvider extends ChangeNotifier {
     required String subscriptionId,
     String? name,
     String? url,
-    bool? autoUpdate,
-    Duration? autoUpdateInterval,
+    AutoUpdateMode? autoUpdateMode,
+    int? intervalMinutes,
+    bool? updateOnStartup,
     SubscriptionProxyMode? proxyMode,
   }) async {
     // 不清除全局错误，单个操作不影响全局状态
@@ -920,17 +926,19 @@ class SubscriptionProvider extends ChangeNotifier {
       _subscriptions[index] = subscription.copyWith(
         name: name ?? subscription.name,
         url: url ?? subscription.url,
-        autoUpdate: autoUpdate ?? subscription.autoUpdate,
-        autoUpdateInterval:
-            autoUpdateInterval ?? subscription.autoUpdateInterval,
+        autoUpdateMode: autoUpdateMode ?? subscription.autoUpdateMode,
+        intervalMinutes: intervalMinutes ?? subscription.intervalMinutes,
+        updateOnStartup: updateOnStartup ?? subscription.updateOnStartup,
         proxyMode: proxyMode ?? subscription.proxyMode,
       );
 
       await _service.saveSubscriptionList(_subscriptions);
       notifyListeners();
 
-      // 如果修改了 autoUpdate 或 autoUpdateInterval，重新计算定时器
-      if (autoUpdate != null || autoUpdateInterval != null) {
+      // 如果修改了自动更新配置，重新计算定时器
+      if (autoUpdateMode != null ||
+          intervalMinutes != null ||
+          updateOnStartup != null) {
         _restartAutoUpdateTimer();
       }
 

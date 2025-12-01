@@ -6,7 +6,7 @@ import 'package:stelliberty/tray/tray_manager.dart';
 import 'package:stelliberty/ui/widgets/home/base_card.dart';
 import 'package:stelliberty/i18n/i18n.dart';
 
-// 代理控制卡片
+// 系统代理卡片
 //
 // 提供系统代理开关功能
 class ProxySwitchCard extends StatelessWidget {

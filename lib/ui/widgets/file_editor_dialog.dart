@@ -24,14 +24,18 @@ class FileEditorDialog extends StatefulWidget {
   // 初始文件内容
   final String initialContent;
 
-  // 保存回调函数
-  final Future<bool> Function(String content) onSave;
+  // 保存回调函数（只读模式下可为 null）
+  final Future<bool> Function(String content)? onSave;
+
+  // 是否为只读模式
+  final bool readOnly;
 
   const FileEditorDialog({
     super.key,
     required this.fileName,
     required this.initialContent,
-    required this.onSave,
+    this.onSave,
+    this.readOnly = false,
   });
 
   // 显示文件编辑器对话框
@@ -39,7 +43,8 @@ class FileEditorDialog extends StatefulWidget {
     BuildContext context, {
     required String fileName,
     required String initialContent,
-    required Future<bool> Function(String content) onSave,
+    Future<bool> Function(String content)? onSave,
+    bool readOnly = false,
   }) {
     return showDialog<void>(
       context: context,
@@ -48,6 +53,7 @@ class FileEditorDialog extends StatefulWidget {
         fileName: fileName,
         initialContent: initialContent,
         onSave: onSave,
+        readOnly: readOnly,
       ),
     );
   }
@@ -125,7 +131,8 @@ class _FileEditorDialogState extends State<FileEditorDialog> {
 
   // 内容变化回调
   void _onContentChanged() {
-    if (_disposed) return;
+    // 只读模式下不跟踪修改
+    if (_disposed || widget.readOnly) return;
     final isModified = _controller.text != widget.initialContent;
     if (isModified != _isModified) {
       SchedulerBinding.instance.addPostFrameCallback((_) {
@@ -177,19 +184,26 @@ class _FileEditorDialogState extends State<FileEditorDialog> {
         ),
       ),
       actionsRight: [
-        DialogActionButton(
-          label: context.translate.fileEditor.cancelButton,
-          isPrimary: false,
-          onPressed: _isSaving ? null : () => Navigator.of(context).pop(),
-        ),
-        DialogActionButton(
-          label: _isSaving
-              ? context.translate.fileEditor.savingButton
-              : context.translate.fileEditor.saveButton,
-          isPrimary: true,
-          isLoading: _isSaving,
-          onPressed: (_isSaving || !_isModified) ? null : _handleSave,
-        ),
+        if (!widget.readOnly) ...[
+          DialogActionButton(
+            label: context.translate.fileEditor.cancelButton,
+            isPrimary: false,
+            onPressed: _isSaving ? null : () => Navigator.of(context).pop(),
+          ),
+          DialogActionButton(
+            label: _isSaving
+                ? context.translate.fileEditor.savingButton
+                : context.translate.fileEditor.saveButton,
+            isPrimary: true,
+            isLoading: _isSaving,
+            onPressed: (_isSaving || !_isModified) ? null : _handleSave,
+          ),
+        ] else
+          DialogActionButton(
+            label: context.translate.common.close,
+            isPrimary: true,
+            onPressed: () => Navigator.of(context).pop(),
+          ),
       ],
       onClose: () => Navigator.of(context).pop(),
     );
@@ -221,6 +235,7 @@ class _FileEditorDialogState extends State<FileEditorDialog> {
               curve: Curves.easeIn,
               child: CodeEditor(
                 controller: _controller,
+                readOnly: widget.readOnly,
                 padding: const EdgeInsets.only(
                   left: 5,
                   right: 0,
@@ -327,12 +342,15 @@ class _FileEditorDialogState extends State<FileEditorDialog> {
 
   // 处理保存操作
   Future<void> _handleSave() async {
+    // 只读模式或无保存回调时不执行保存
+    if (widget.onSave == null) return;
+
     setState(() {
       _isSaving = true;
     });
 
     try {
-      final success = await widget.onSave(_controller.text);
+      final success = await widget.onSave!(_controller.text);
 
       if (!mounted) return;
 
