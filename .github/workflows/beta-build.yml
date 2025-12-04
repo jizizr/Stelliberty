@@ -178,7 +178,9 @@ jobs:
 
       - name: 运行预构建脚本
         run: dart run scripts/prebuild.dart --installer
-
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          
       - name: 生成 Rust 桥接代码
         run: rinf gen
 
