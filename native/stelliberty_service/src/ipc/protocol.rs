@@ -4,10 +4,6 @@
 
 use serde::{Deserialize, Serialize};
 
-// 服务版本号（用于版本检查）
-#[allow(dead_code)]
-pub const SERVICE_VERSION: &str = env!("CARGO_PKG_VERSION");
-
 // IPC 通信路径
 #[cfg(windows)]
 pub const IPC_PATH: &str = r"\\.\pipe\stelliberty_service";
@@ -48,8 +44,8 @@ pub enum IpcCommand {
     // 获取服务版本
     GetVersion,
 
-    // Ping（心跳检测）
-    Ping,
+    // Heartbeat（心跳检测），由主程序定期发送
+    Heartbeat,
 }
 
 // 服务返回给客户端的响应
@@ -92,31 +88,6 @@ pub enum IpcResponse {
         version: String,
     },
 
-    // Pong（心跳响应）
-    Pong,
-}
-
-impl IpcResponse {
-    // 创建成功响应
-    #[allow(dead_code)]
-    pub fn success() -> Self {
-        Self::Success { message: None }
-    }
-
-    // 创建带消息的成功响应
-    #[allow(dead_code)]
-    pub fn success_with_message(message: impl Into<String>) -> Self {
-        Self::Success {
-            message: Some(message.into()),
-        }
-    }
-
-    // 创建错误响应
-    #[allow(dead_code)]
-    pub fn error(code: i32, message: impl Into<String>) -> Self {
-        Self::Error {
-            code,
-            message: message.into(),
-        }
-    }
+    // HeartbeatAck（心跳响应）
+    HeartbeatAck,
 }

@@ -21,7 +21,7 @@ const SERVICE_NAME: &str = "StellibertyService";
 #[cfg(windows)]
 use std::ffi::OsString;
 #[cfg(windows)]
-use std::time::Duration;
+use std::time::{Duration, Instant};
 #[cfg(windows)]
 use windows_service::{
     define_windows_service,
@@ -58,11 +58,12 @@ fn service_main_windows(_arguments: Vec<OsString>) {
 fn run_service_windows() -> Result<(), Box<dyn std::error::Error>> {
     let (shutdown_tx, mut shutdown_rx) = mpsc::channel::<()>(1);
 
+    let shutdown_tx_for_handler = shutdown_tx.clone();
     let event_handler = move |control_event| -> ServiceControlHandlerResult {
         match control_event {
             ServiceControl::Stop => {
                 log::info!("收到停止信号");
-                let _ = shutdown_tx.blocking_send(());
+                let _ = shutdown_tx_for_handler.blocking_send(());
                 ServiceControlHandlerResult::NoError
             }
             ServiceControl::Interrogate => ServiceControlHandlerResult::NoError,
@@ -90,7 +91,8 @@ fn run_service_windows() -> Result<(), Box<dyn std::error::Error>> {
 
     runtime.block_on(async move {
         let clash_manager = Arc::new(RwLock::new(ClashManager::new()));
-        let handler = handler::create_handler(clash_manager.clone());
+        let last_heartbeat = Arc::new(RwLock::new(Instant::now()));
+        let handler = handler::create_handler(clash_manager.clone(), last_heartbeat.clone());
         let mut ipc_server = IpcServer::new(handler);
 
         let ipc_handle = tokio::spawn(async move {
@@ -112,6 +114,61 @@ fn run_service_windows() -> Result<(), Box<dyn std::error::Error>> {
         }
 
         log::info!("Stelliberty Service 运行中");
+
+        // 启动心跳监控器（HeartbeatMonitor）任务
+        // 心跳超时只停止 Clash 核心，服务继续运行等待重连
+        let heartbeat_clash_manager = clash_manager.clone();
+        let heartbeat_last_heartbeat = last_heartbeat.clone();
+        let heartbeat_handle = tokio::spawn(async move {
+            const HEARTBEAT_TIMEOUT: Duration = Duration::from_secs(70);
+            const CHECK_INTERVAL: Duration = Duration::from_secs(30);
+
+            log::info!("启动心跳监控器，超时时间: {}s", HEARTBEAT_TIMEOUT.as_secs());
+
+            // 记录上一次检查的时间，用于检测系统休眠
+            let mut last_check_time = Instant::now();
+
+            loop {
+                tokio::time::sleep(CHECK_INTERVAL).await;
+
+                let now = Instant::now();
+                let check_elapsed = now.duration_since(last_check_time);
+                last_check_time = now;
+
+                // 检测系统休眠唤醒：两次检查之间的间隔远大于 CHECK_INTERVAL
+                // 正常情况下 check_elapsed 约等于 CHECK_INTERVAL（30s）
+                // 如果 > 60s，说明系统可能刚从休眠中恢复
+                if check_elapsed > Duration::from_secs(60) {
+                    log::info!(
+                        "检测到系统休眠唤醒（检查间隔: {}s），重置心跳计时器",
+                        check_elapsed.as_secs()
+                    );
+                    *heartbeat_last_heartbeat.write().await = Instant::now();
+                    continue;
+                }
+
+                let elapsed = heartbeat_last_heartbeat.read().await.elapsed();
+                if elapsed > HEARTBEAT_TIMEOUT {
+                    log::warn!(
+                        "超过 {} 秒未收到主程序心跳，停止 Clash 核心（服务继续运行）",
+                        HEARTBEAT_TIMEOUT.as_secs()
+                    );
+
+                    // 只停止 Clash 核心，不关闭服务
+                    let mut manager = heartbeat_clash_manager.write().await;
+                    if let Err(e) = manager.stop() {
+                        log::error!("心跳超时停止 Clash 失败: {}", e);
+                    } else {
+                        log::info!("心跳超时，Clash 核心已停止，等待主程序重连");
+                    }
+
+                    // 重置心跳时间，避免反复触发
+                    *heartbeat_last_heartbeat.write().await = Instant::now();
+                } else {
+                    log::trace!("心跳正常，距离上次心跳: {}s", elapsed.as_secs());
+                }
+            }
+        });
 
         shutdown_rx.recv().await;
         log::info!("正在停止服务...");
@@ -150,6 +207,7 @@ fn run_service_windows() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
 
+        heartbeat_handle.abort();
         ipc_handle.abort();
         log::info!("服务已停止");
     });
@@ -170,7 +228,7 @@ fn run_service_windows() -> Result<(), Box<dyn std::error::Error>> {
 // ============ Linux systemd 实现 ============
 
 #[cfg(target_os = "linux")]
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 #[cfg(target_os = "linux")]
 pub async fn run_service() -> Result<()> {
@@ -195,7 +253,8 @@ pub async fn run_service() -> Result<()> {
     });
 
     let clash_manager = Arc::new(RwLock::new(ClashManager::new()));
-    let handler = handler::create_handler(clash_manager.clone());
+    let last_heartbeat = Arc::new(RwLock::new(Instant::now()));
+    let handler = handler::create_handler(clash_manager.clone(), last_heartbeat.clone());
     let mut ipc_server = IpcServer::new(handler);
 
     let ipc_handle = tokio::spawn(async move {
@@ -205,6 +264,61 @@ pub async fn run_service() -> Result<()> {
     });
 
     log::info!("Stelliberty Service 运行中");
+
+    // 启动心跳监控器（HeartbeatMonitor）任务
+    // 心跳超时只停止 Clash 核心，服务继续运行等待重连
+    let heartbeat_clash_manager = clash_manager.clone();
+    let heartbeat_last_heartbeat = last_heartbeat.clone();
+    let heartbeat_handle = tokio::spawn(async move {
+        const HEARTBEAT_TIMEOUT: Duration = Duration::from_secs(70);
+        const CHECK_INTERVAL: Duration = Duration::from_secs(30);
+
+        log::info!("启动心跳监控器，超时时间: {}s", HEARTBEAT_TIMEOUT.as_secs());
+
+        // 记录上一次检查的时间，用于检测系统休眠
+        let mut last_check_time = Instant::now();
+
+        loop {
+            tokio::time::sleep(CHECK_INTERVAL).await;
+
+            let now = Instant::now();
+            let check_elapsed = now.duration_since(last_check_time);
+            last_check_time = now;
+
+            // 检测系统休眠唤醒：两次检查之间的间隔远大于 CHECK_INTERVAL
+            // 正常情况下 check_elapsed 约等于 CHECK_INTERVAL（30s）
+            // 如果 > 60s，说明系统可能刚从休眠中恢复
+            if check_elapsed > Duration::from_secs(60) {
+                log::info!(
+                    "检测到系统休眠唤醒（检查间隔: {}s），重置心跳计时器",
+                    check_elapsed.as_secs()
+                );
+                *heartbeat_last_heartbeat.write().await = Instant::now();
+                continue;
+            }
+
+            let elapsed = heartbeat_last_heartbeat.read().await.elapsed();
+            if elapsed > HEARTBEAT_TIMEOUT {
+                log::warn!(
+                    "超过 {} 秒未收到主程序心跳，停止 Clash 核心（服务继续运行）",
+                    HEARTBEAT_TIMEOUT.as_secs()
+                );
+
+                // 只停止 Clash 核心，不关闭服务
+                let mut manager = heartbeat_clash_manager.write().await;
+                if let Err(e) = manager.stop() {
+                    log::error!("心跳超时停止 Clash 失败: {}", e);
+                } else {
+                    log::info!("心跳超时，Clash 核心已停止，等待主程序重连");
+                }
+
+                // 重置心跳时间，避免反复触发
+                *heartbeat_last_heartbeat.write().await = Instant::now();
+            } else {
+                log::trace!("心跳正常，距离上次心跳: {}s", elapsed.as_secs());
+            }
+        }
+    });
 
     shutdown_rx.recv().await;
     log::info!("正在停止服务...");
@@ -231,6 +345,7 @@ pub async fn run_service() -> Result<()> {
         }
     }
 
+    heartbeat_handle.abort();
     ipc_handle.abort();
     log::info!("服务已停止");
     Ok(())

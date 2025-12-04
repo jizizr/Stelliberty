@@ -177,14 +177,6 @@ impl IpcServer {
         Ok(())
     }
 
-    // 关闭服务端
-    #[allow(dead_code)]
-    pub async fn shutdown(&self) {
-        if let Some(tx) = &self.shutdown_tx {
-            let _ = tx.send(()).await;
-        }
-    }
-
     // 处理客户端连接
     async fn handle_client<S>(mut stream: S, handler: CommandHandler) -> Result<()>
     where

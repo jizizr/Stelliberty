@@ -7,12 +7,17 @@ use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
 use tokio::sync::broadcast;
 
+// 日志缓冲区容量
+const LOG_BUFFER_CAPACITY: usize = 2000;
+
 // 日志广播通道容量
 const LOG_BROADCAST_CAPACITY: usize = 100;
 
-// 全局日志缓冲区，保存最近的1000行日志
+// 全局日志缓冲区
 static LOG_BUFFER: once_cell::sync::Lazy<Arc<Mutex<VecDeque<String>>>> =
-    once_cell::sync::Lazy::new(|| Arc::new(Mutex::new(VecDeque::with_capacity(1000))));
+    once_cell::sync::Lazy::new(|| {
+        Arc::new(Mutex::new(VecDeque::with_capacity(LOG_BUFFER_CAPACITY)))
+    });
 
 // 全局日志广播通道（用于实时日志流）
 static LOG_BROADCASTER: once_cell::sync::Lazy<broadcast::Sender<String>> =
@@ -58,7 +63,7 @@ impl log::Log for MemoryLogger {
             let log_line = format!(
                 "[{}] {} {} >> {}",
                 record.level(),
-                now.format("%H:%M:%S"),
+                now.format("%m-%d %H:%M:%S"),
                 record.target(),
                 record.args()
             );
@@ -77,8 +82,8 @@ impl log::Log for MemoryLogger {
             };
             buffer.push_back(log_line.clone());
 
-            // 保持缓冲区大小不超过 1000 行
-            while buffer.len() > 1000 {
+            // 保持缓冲区大小不超过上限
+            while buffer.len() > LOG_BUFFER_CAPACITY {
                 buffer.pop_front();
             }
 

@@ -16,7 +16,9 @@ pub mod service;
 pub mod subscription;
 
 pub use messages::{StartClashProcess, StopClashProcess};
-pub use service::{GetServiceStatus, InstallService, StartClash, StopClash, UninstallService};
+pub use service::{
+    GetServiceStatus, InstallService, SendServiceHeartbeat, StartClash, StopClash, UninstallService,
+};
 
 /// 初始化 Clash 模块
 ///
@@ -122,6 +124,17 @@ pub fn init() {
     // 通过服务停止 Clash
     spawn(async {
         let receiver = StopClash::get_dart_signal_receiver();
+        while let Some(dart_signal) = receiver.recv().await {
+            let message = dart_signal.message;
+            tokio::spawn(async move {
+                message.handle().await;
+            });
+        }
+    });
+
+    // 向服务发送心跳
+    spawn(async {
+        let receiver = SendServiceHeartbeat::get_dart_signal_receiver();
         while let Some(dart_signal) = receiver.recv().await {
             let message = dart_signal.message;
             tokio::spawn(async move {

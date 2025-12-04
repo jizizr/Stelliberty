@@ -3,16 +3,19 @@
 use crate::clash::ClashManager;
 use crate::ipc::{IpcCommand, IpcResponse};
 use std::sync::Arc;
+use std::time::Instant;
 use tokio::sync::RwLock;
 
 // 创建命令处理器（异步）
 pub fn create_handler(
     clash_manager: Arc<RwLock<ClashManager>>,
+    last_heartbeat: Arc<RwLock<Instant>>,
 ) -> impl Fn(IpcCommand) -> std::pin::Pin<Box<dyn std::future::Future<Output = IpcResponse> + Send>>
 + Send
 + Sync {
     move |command: IpcCommand| {
         let clash_manager = clash_manager.clone();
+        let last_heartbeat = last_heartbeat.clone();
 
         Box::pin(async move {
             match command {
@@ -101,9 +104,10 @@ pub fn create_handler(
                     }
                 }
 
-                IpcCommand::Ping => {
-                    log::trace!("收到 Ping 请求");
-                    IpcResponse::Pong
+                IpcCommand::Heartbeat => {
+                    log::trace!("收到 Heartbeat 请求");
+                    *last_heartbeat.write().await = Instant::now();
+                    IpcResponse::HeartbeatAck
                 }
             }
         })

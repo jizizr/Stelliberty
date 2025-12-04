@@ -9,7 +9,8 @@ pub mod service;
 
 use anyhow::Result;
 use std::sync::Arc;
-use tokio::sync::RwLock;
+use std::time::{Duration, Instant};
+use tokio::sync::{RwLock, mpsc};
 
 // 检查是否有足够的权限运行
 pub fn check_privileges() -> bool {
@@ -96,17 +97,84 @@ pub fn print_usage() {
 pub async fn run_console_mode() -> Result<()> {
     log::info!("以控制台模式运行服务");
 
-    // 创建 Clash 管理器
-    let clash_manager = Arc::new(RwLock::new(clash::ClashManager::new()));
+    // 创建一个 channel 用于优雅关闭
+    let (shutdown_tx, mut shutdown_rx) = mpsc::channel::<()>(1);
 
-    // 创建 IPC 服务端
-    let handler = service::handler::create_handler(clash_manager.clone());
+    // 注册 Ctrl+C 信号处理器
+    let shutdown_tx_clone = shutdown_tx.clone();
+    tokio::spawn(async move {
+        tokio::signal::ctrl_c()
+            .await
+            .expect("无法注册 Ctrl+C 处理器");
+        log::info!("收到 Ctrl+C 信号");
+        let _ = shutdown_tx_clone.send(()).await;
+    });
+
+    // 创建共享状态
+    let clash_manager = Arc::new(RwLock::new(clash::ClashManager::new()));
+    let last_heartbeat = Arc::new(RwLock::new(Instant::now()));
+
+    // 创建 IPC 服务端和处理器
+    let handler = service::handler::create_handler(clash_manager.clone(), last_heartbeat.clone());
     let mut ipc_server = ipc::IpcServer::new(handler);
 
-    // 运行 IPC 服务端
-    ipc_server.run().await?;
+    // 启动心跳监控器（HeartbeatMonitor）任务
+    let monitor_shutdown_tx = shutdown_tx.clone();
+    tokio::spawn(async move {
+        const HEARTBEAT_TIMEOUT: Duration = Duration::from_secs(70);
+        const CHECK_INTERVAL: Duration = Duration::from_secs(30);
 
-    log::info!("服务停止");
+        log::info!("启动心跳监控器，超时时间: {}s", HEARTBEAT_TIMEOUT.as_secs());
+
+        loop {
+            tokio::time::sleep(CHECK_INTERVAL).await;
+            let elapsed = last_heartbeat.read().await.elapsed();
+            if elapsed > HEARTBEAT_TIMEOUT {
+                log::warn!(
+                    "超过 {} 秒未收到主程序心跳，判定为孤立进程，服务将自动关闭...",
+                    HEARTBEAT_TIMEOUT.as_secs()
+                );
+                if monitor_shutdown_tx.send(()).await.is_err() {
+                    log::error!("发送关闭信号失败，服务可能无法正常退出");
+                }
+                break;
+            } else {
+                log::trace!("心跳正常，距离上次心跳: {}s", elapsed.as_secs());
+            }
+        }
+    });
+
+    // 运行 IPC 服务端
+    let ipc_handle = tokio::spawn(async move {
+        if let Err(e) = ipc_server.run().await {
+            log::error!("IPC 服务器运行失败: {e}");
+        }
+    });
+
+    log::info!("服务运行中，按 Ctrl+C 退出");
+
+    // 等待关闭信号
+    shutdown_rx.recv().await;
+    log::info!("正在停止服务...");
+
+    // 添加超时保护
+    use tokio::time::timeout;
+    match timeout(Duration::from_secs(5), async {
+        let mut manager = clash_manager.write().await;
+        manager.stop()
+    })
+    .await
+    {
+        Ok(Ok(())) => log::info!("Clash 已正常停止"),
+        Ok(Err(e)) => log::error!("停止 Clash 失败: {e}, 服务将继续退出"),
+        Err(_) => {
+            log::error!("停止 Clash 超时 (5秒)，服务将强制退出");
+            drop(clash_manager);
+        }
+    }
+
+    ipc_handle.abort();
+    log::info!("服务已停止");
     Ok(())
 }
 

@@ -145,10 +145,10 @@ impl IpcClient {
         matches!(
             timeout(
                 Duration::from_millis(500),
-                self.send_command(IpcCommand::Ping)
+                self.send_command(IpcCommand::Heartbeat)
             )
             .await,
-            Ok(Ok(IpcResponse::Pong))
+            Ok(Ok(IpcResponse::HeartbeatAck))
         )
     }
 }
