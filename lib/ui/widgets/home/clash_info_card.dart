@@ -271,8 +271,7 @@ class _ClashInfoCardState extends State<ClashInfoCard> {
     try {
       await clashProvider.stop();
       await Future.delayed(const Duration(milliseconds: 300));
-      // ⚠️ 修复：不传入 configPath，让 LifecycleManager 使用保存的原始订阅路径
-      // 这样可以确保重启时使用干净的原始配置，而不是已包含覆写的 runtime_config.yaml
+
       await clashProvider.start();
 
       // 显示成功提示

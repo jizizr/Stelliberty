@@ -620,7 +620,8 @@ class ClashPreferences {
     final keys = _prefs!.getKeys();
     final keysToRemove = keys
         .where(
-          (key) => key.startsWith('$_kProxySelectionPrefix${subscriptionId}_'),
+          (String key) =>
+              key.startsWith('$_kProxySelectionPrefix${subscriptionId}_'),
         )
         .toList();
 
@@ -634,7 +635,7 @@ class ClashPreferences {
     _ensureInit();
     final keys = _prefs!.getKeys();
     final keysToRemove = keys
-        .where((key) => key.startsWith(_kProxySelectionPrefix))
+        .where((String key) => key.startsWith(_kProxySelectionPrefix))
         .toList();
 
     for (final key in keysToRemove) {

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:stelliberty/clash/network/api_client.dart';
 import 'package:stelliberty/clash/services/process_service.dart';
 import 'package:stelliberty/clash/config/config_injector.dart';
@@ -45,11 +46,21 @@ class LifecycleManager {
   String? _originalConfigPath;
   String? get currentConfigPath => _originalConfigPath;
 
+  // 更新当前配置路径（用于热重载后同步路径）
+  void updateConfigPath(String? configPath) {
+    if (configPath != null && configPath.isNotEmpty) {
+      _originalConfigPath = configPath;
+      Logger.debug('配置路径已更新：$configPath');
+    }
+  }
+
   // 启动时实际使用的端口列表（用于停止时准确释放）
   List<int>? _actualPortsUsed;
 
   // 防抖定时器
   Timer? _restartDebounceTimer;
+  // 服务心跳定时器
+  Timer? _serviceHeartbeatTimer;
 
   // 状态缓存
   String _version = 'Unknown';
@@ -130,12 +141,19 @@ class LifecycleManager {
     _coreStateManager.setStarting(reason: '开始启动核心');
 
     try {
-      // 如果传入的 configPath 为空，使用原始订阅路径（重启场景）
+      // 如果传入的 configPath 为空，尝试使用原始订阅路径（重启场景）
       if ((configPath == null || configPath.isEmpty) &&
           _originalConfigPath != null &&
           _originalConfigPath!.isNotEmpty) {
-        Logger.info('重启时未提供配置路径，使用原始订阅路径：$_originalConfigPath');
-        configPath = _originalConfigPath;
+        // 检查原始配置文件是否存在
+        final originalFile = File(_originalConfigPath!);
+        if (await originalFile.exists()) {
+          Logger.info('重启时未提供配置路径，使用原始订阅路径：$_originalConfigPath');
+          configPath = _originalConfigPath;
+        } else {
+          Logger.warning('原始订阅配置文件已不存在：$_originalConfigPath，将使用默认配置或等待新配置');
+          _originalConfigPath = null; // 清空过期的路径
+        }
       }
 
       // ⚠️ 保存原始订阅路径（用于重启和回退）
@@ -483,6 +501,12 @@ class LifecycleManager {
 
       // 标记为运行状态
       _coreStateManager.setRunning(reason: '核心启动成功');
+
+      // 服务模式下启动心跳定时器
+      if (_currentStartMode == ClashStartMode.service) {
+        _startServiceHeartbeat();
+      }
+
       _notifyListeners();
       Logger.info(
         'Clash 核心启动成功（${_currentStartMode == ClashStartMode.service ? "服务模式" : "普通模式"}）',
@@ -601,6 +625,7 @@ class LifecycleManager {
       // 再停止 Clash 核心
       if (_currentStartMode == ClashStartMode.service) {
         Logger.info('使用服务模式停止核心');
+        _stopServiceHeartbeat(); // 停止心跳定时器
         await _stopWithService();
       } else {
         Logger.info('使用普通模式停止核心');
@@ -757,7 +782,29 @@ class LifecycleManager {
     _restartDebounceTimer = null;
   }
 
+  // 启动服务心跳定时器（仅服务模式使用）
+  void _startServiceHeartbeat() {
+    _serviceHeartbeatTimer?.cancel();
+    _serviceHeartbeatTimer = Timer.periodic(const Duration(seconds: 30), (
+      timer,
+    ) {
+      Logger.debug('发送服务心跳');
+      SendServiceHeartbeat().sendSignalToRust();
+    });
+    Logger.info('服务心跳定时器已启动（30秒间隔）');
+  }
+
+  // 停止服务心跳定时器
+  void _stopServiceHeartbeat() {
+    if (_serviceHeartbeatTimer != null) {
+      _serviceHeartbeatTimer!.cancel();
+      _serviceHeartbeatTimer = null;
+      Logger.info('服务心跳定时器已停止');
+    }
+  }
+
   void dispose() {
     _restartDebounceTimer?.cancel();
+    _serviceHeartbeatTimer?.cancel();
   }
 }

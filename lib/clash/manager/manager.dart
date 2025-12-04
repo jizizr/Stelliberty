@@ -252,10 +252,17 @@ class ClashManager extends ChangeNotifier {
     String? configPath,
     List<OverrideConfig> overrides = const [],
   }) async {
-    return await _configManager.reloadConfig(
+    final success = await _configManager.reloadConfig(
       configPath: configPath,
       overrides: overrides,
     );
+
+    // 热重载成功后，更新 lifecycle_manager 的配置路径缓存
+    if (success && configPath != null) {
+      _lifecycleManager.updateConfigPath(configPath);
+    }
+
+    return success;
   }
 
   Future<bool> setAllowLan(bool enabled) async {
@@ -437,10 +444,8 @@ class ClashManager extends ChangeNotifier {
       reason: reason,
       overrides: overrides,
       startCallback: () async {
-        return await startCore(
-          configPath: currentConfigPath,
-          overrides: overrides,
-        );
+        // 不传 configPath，让 startCore 使用缓存的原始订阅路径
+        return await startCore(overrides: overrides);
       },
     );
   }

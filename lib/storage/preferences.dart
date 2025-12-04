@@ -290,9 +290,70 @@ class AppPreferences {
     await _prefs!.remove(_kIgnoredUpdateVersion);
   }
 
-  // ==================== 调试和重置 ====================
+  // ==================== 通用存储方法 ====================
+  // 用于业务代码需要保存自定义键值的场景（如 UI 状态、缓存等）
 
-  // 获取所有存储的配置 (调试用)
+  // 获取字符串值
+  String? getString(String key) {
+    _ensureInit();
+    return _prefs!.getString(key);
+  }
+
+  // 保存字符串值
+  Future<void> setString(String key, String value) async {
+    _ensureInit();
+    await _prefs!.setString(key, value);
+  }
+
+  // 获取双精度浮点数值
+  double? getDouble(String key) {
+    _ensureInit();
+    return _prefs!.getDouble(key);
+  }
+
+  // 保存双精度浮点数值
+  Future<void> setDouble(String key, double value) async {
+    _ensureInit();
+    await _prefs!.setDouble(key, value);
+  }
+
+  // 获取整数值
+  int? getInt(String key) {
+    _ensureInit();
+    return _prefs!.getInt(key);
+  }
+
+  // 保存整数值
+  Future<void> setInt(String key, int value) async {
+    _ensureInit();
+    await _prefs!.setInt(key, value);
+  }
+
+  // 获取布尔值
+  bool? getBool(String key) {
+    _ensureInit();
+    return _prefs!.getBool(key);
+  }
+
+  // 保存布尔值
+  Future<void> setBool(String key, bool value) async {
+    _ensureInit();
+    await _prefs!.setBool(key, value);
+  }
+
+  // 删除指定键
+  Future<void> remove(String key) async {
+    _ensureInit();
+    await _prefs!.remove(key);
+  }
+
+  // 检查键是否存在
+  bool containsKey(String key) {
+    _ensureInit();
+    return _prefs!.containsKey(key);
+  }
+
+  // 获取所有存储的配置
   Map<String, dynamic> getAllSettings() {
     _ensureInit();
     final keys = [

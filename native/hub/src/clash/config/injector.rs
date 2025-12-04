@@ -26,9 +26,14 @@ pub fn inject_runtime_params(
     })?;
 
     // 2. 注入 IPC 端点（Named Pipe/Unix Socket）
+    // Debug/Profile 模式使用 _dev 后缀，避免与 Release 模式冲突
     #[cfg(windows)]
     {
+        #[cfg(debug_assertions)]
+        let pipe_path = r"\\.\pipe\stelliberty_dev".to_string();
+        #[cfg(not(debug_assertions))]
         let pipe_path = r"\\.\pipe\stelliberty".to_string();
+
         config_map.insert(
             YamlValue::String("external-controller-pipe".to_string()),
             YamlValue::String(pipe_path.clone()),
@@ -38,7 +43,11 @@ pub fn inject_runtime_params(
 
     #[cfg(unix)]
     {
+        #[cfg(debug_assertions)]
+        let socket_path = "/tmp/stelliberty_dev.sock".to_string();
+        #[cfg(not(debug_assertions))]
         let socket_path = "/tmp/stelliberty.sock".to_string();
+
         config_map.insert(
             YamlValue::String("external-controller-unix".to_string()),
             YamlValue::String(socket_path.clone()),
