@@ -80,9 +80,11 @@ class _NetworkSettingsPageState extends State<NetworkSettingsPage> {
               child: SingleChildScrollView(
                 controller: _scrollController,
                 physics: const BouncingScrollPhysics(),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 32 - SpacingConstants.scrollbarRightCompensation,
-                  vertical: 16,
+                padding: const EdgeInsets.fromLTRB(
+                  32,
+                  16,
+                  32 - SpacingConstants.scrollbarRightCompensation,
+                  16,
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,

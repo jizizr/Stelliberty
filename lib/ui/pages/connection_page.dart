@@ -39,10 +39,18 @@ class ConnectionPageContent extends StatefulWidget {
 }
 
 class _ConnectionPageContentState extends State<ConnectionPageContent> {
+  final ScrollController _scrollController = ScrollController();
+
   @override
   void initState() {
     super.initState();
     Logger.info('初始化 ConnectionPage');
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
   }
 
   @override
@@ -305,23 +313,27 @@ class _ConnectionPageContentState extends State<ConnectionPageContent> {
     }
 
     // 固定每行两个卡片
-    return GridView.builder(
-      padding: _ConnectionGridSpacing.gridPadding,
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2, // 固定每行两个
-        crossAxisSpacing: _ConnectionGridSpacing.cardColumnSpacing,
-        mainAxisSpacing: _ConnectionGridSpacing.cardRowSpacing,
-        mainAxisExtent: 120.0, // 更紧凑的卡片高度
+    return Scrollbar(
+      controller: _scrollController,
+      child: GridView.builder(
+        controller: _scrollController,
+        padding: _ConnectionGridSpacing.gridPadding,
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 2, // 固定每行两个
+          crossAxisSpacing: _ConnectionGridSpacing.cardColumnSpacing,
+          mainAxisSpacing: _ConnectionGridSpacing.cardRowSpacing,
+          mainAxisExtent: 120.0, // 更紧凑的卡片高度
+        ),
+        itemCount: connections.length,
+        itemBuilder: (context, index) {
+          final connection = connections[index];
+          return ConnectionCard(
+            connection: connection,
+            onTap: () => _showConnectionDetails(context, connection),
+            onClose: () => _closeConnection(context, provider, connection),
+          );
+        },
       ),
-      itemCount: connections.length,
-      itemBuilder: (context, index) {
-        final connection = connections[index];
-        return ConnectionCard(
-          connection: connection,
-          onTap: () => _showConnectionDetails(context, connection),
-          onClose: () => _closeConnection(context, provider, connection),
-        );
-      },
     );
   }
 

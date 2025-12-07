@@ -46,10 +46,18 @@ class SubscriptionPage extends StatefulWidget {
 }
 
 class _SubscriptionPageState extends State<SubscriptionPage> {
+  final ScrollController _scrollController = ScrollController();
+
   @override
   void initState() {
     super.initState();
     Logger.info('初始化 SubscriptionPage');
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
   }
 
   @override
@@ -263,80 +271,84 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
     }
 
     // 显示订阅列表（支持拖动排序，响应式布局）
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        // 当宽度超过 600 时显示两列，否则一列
-        final crossAxisCount = constraints.maxWidth >= 800 ? 2 : 1;
+    return Scrollbar(
+      controller: _scrollController,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          // 当宽度超过 600 时显示两列，否则一列
+          final crossAxisCount = constraints.maxWidth >= 800 ? 2 : 1;
 
-        return ReorderableGridView.builder(
-          padding: _SubscriptionGridSpacing.gridPadding,
-          itemCount: data.subscriptions.length,
-          dragEnabled: true,
-          onReorder: (oldIndex, newIndex) {
-            provider.reorderSubscriptions(oldIndex, newIndex);
-          },
-          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: crossAxisCount,
-            crossAxisSpacing: _SubscriptionGridSpacing.cardColumnSpacing,
-            mainAxisSpacing: _SubscriptionGridSpacing.cardRowSpacing,
-            mainAxisExtent: 110,
-          ),
-          dragWidgetBuilder: (index, child) {
-            final subscription = data.subscriptions[index];
-            final isSelected = subscription.id == data.currentSubscriptionId;
+          return ReorderableGridView.builder(
+            controller: _scrollController,
+            padding: _SubscriptionGridSpacing.gridPadding,
+            itemCount: data.subscriptions.length,
+            dragEnabled: true,
+            onReorder: (oldIndex, newIndex) {
+              provider.reorderSubscriptions(oldIndex, newIndex);
+            },
+            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: crossAxisCount,
+              crossAxisSpacing: _SubscriptionGridSpacing.cardColumnSpacing,
+              mainAxisSpacing: _SubscriptionGridSpacing.cardRowSpacing,
+              mainAxisExtent: 110,
+            ),
+            dragWidgetBuilder: (index, child) {
+              final subscription = data.subscriptions[index];
+              final isSelected = subscription.id == data.currentSubscriptionId;
 
-            return Material(
-              color: Colors.transparent,
-              elevation: 0,
-              child: SubscriptionCard(
+              return Material(
+                color: Colors.transparent,
+                elevation: 0,
+                child: SubscriptionCard(
+                  key: ValueKey(subscription.id),
+                  subscription: subscription,
+                  isSelected: isSelected,
+                  onTap: null,
+                  onUpdate: null,
+                  onEdit: null,
+                  onEditFile: null,
+                  onViewConfig: null,
+                  onDelete: null,
+                  onManageOverride: null,
+                  onViewProvider: null,
+                ),
+              );
+            },
+            itemBuilder: (context, index) {
+              final subscription = data.subscriptions[index];
+              final isSelected = subscription.id == data.currentSubscriptionId;
+
+              return RepaintBoundary(
                 key: ValueKey(subscription.id),
-                subscription: subscription,
-                isSelected: isSelected,
-                onTap: null,
-                onUpdate: null,
-                onEdit: null,
-                onEditFile: null,
-                onViewConfig: null,
-                onDelete: null,
-                onManageOverride: null,
-                onViewProvider: null,
-              ),
-            );
-          },
-          itemBuilder: (context, index) {
-            final subscription = data.subscriptions[index];
-            final isSelected = subscription.id == data.currentSubscriptionId;
-
-            return RepaintBoundary(
-              key: ValueKey(subscription.id),
-              child: SubscriptionCard(
-                subscription: subscription,
-                isSelected: isSelected,
-                onTap: () => provider.selectSubscription(subscription.id),
-                onUpdate: () =>
-                    _updateSubscription(context, provider, subscription),
-                onEdit: () => _showEditSubscriptionDialog(
-                  context,
-                  provider,
-                  subscription,
+                child: SubscriptionCard(
+                  subscription: subscription,
+                  isSelected: isSelected,
+                  onTap: () => provider.selectSubscription(subscription.id),
+                  onUpdate: () =>
+                      _updateSubscription(context, provider, subscription),
+                  onEdit: () => _showEditSubscriptionDialog(
+                    context,
+                    provider,
+                    subscription,
+                  ),
+                  onEditFile: () =>
+                      _showFileEditorDialog(context, provider, subscription),
+                  onViewConfig: () =>
+                      _showViewConfigDialog(context, provider, subscription),
+                  onDelete: () =>
+                      _deleteSubscription(context, provider, subscription),
+                  onManageOverride: () => _showOverrideManagementDialog(
+                    context,
+                    provider,
+                    subscription,
+                  ),
+                  onViewProvider: () => _showProviderViewerDialog(context),
                 ),
-                onEditFile: () =>
-                    _showFileEditorDialog(context, provider, subscription),
-                onViewConfig: () =>
-                    _showViewConfigDialog(context, provider, subscription),
-                onDelete: () =>
-                    _deleteSubscription(context, provider, subscription),
-                onManageOverride: () => _showOverrideManagementDialog(
-                  context,
-                  provider,
-                  subscription,
-                ),
-                onViewProvider: () => _showProviderViewerDialog(context),
-              ),
-            );
-          },
-        );
-      },
+              );
+            },
+          );
+        },
+      ),
     );
   }
 
