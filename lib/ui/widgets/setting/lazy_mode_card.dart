@@ -62,7 +62,9 @@ class _LazyModeCardState extends State<LazyModeCard> {
           Row(
             children: [
               const Icon(Icons.bedtime_rounded),
-              const SizedBox(width: ModernFeatureCardSpacing.featureIconToTextSpacing),
+              const SizedBox(
+                width: ModernFeatureCardSpacing.featureIconToTextSpacing,
+              ),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [

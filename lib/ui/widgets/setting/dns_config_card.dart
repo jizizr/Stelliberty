@@ -815,7 +815,9 @@ class _DnsConfigCardState extends State<DnsConfigCard> {
         Row(
           children: [
             const Icon(Icons.check_circle_outline, size: 20),
-            const SizedBox(width: ModernFeatureCardSpacing.featureIconToTextSpacing),
+            const SizedBox(
+              width: ModernFeatureCardSpacing.featureIconToTextSpacing,
+            ),
             Text(label, style: Theme.of(context).textTheme.titleSmall),
           ],
         ),

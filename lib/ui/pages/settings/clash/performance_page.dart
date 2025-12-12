@@ -134,11 +134,13 @@ class _PerformancePageState extends State<PerformancePage> {
                           child: Row(
                             children: [
                               const Icon(Icons.public),
-                              const SizedBox(width: ModernFeatureCardSpacing.featureIconToTextSpacing),
+                              const SizedBox(
+                                width: ModernFeatureCardSpacing
+                                    .featureIconToTextSpacing,
+                              ),
                               Expanded(
                                 child: Column(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.start,
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
                                       context
@@ -172,9 +174,8 @@ class _PerformancePageState extends State<PerformancePage> {
                         MouseRegion(
                           onEnter: (_) =>
                               setState(() => _isHoveringOnGeodataMenu = true),
-                          onExit: (_) => setState(
-                            () => _isHoveringOnGeodataMenu = false,
-                          ),
+                          onExit: (_) =>
+                              setState(() => _isHoveringOnGeodataMenu = false),
                           child: ModernDropdownMenu<String>(
                             items: const ['standard', 'memconservative'],
                             selectedItem: _geodataLoader,
@@ -213,11 +214,13 @@ class _PerformancePageState extends State<PerformancePage> {
                           child: Row(
                             children: [
                               const Icon(Icons.search),
-                              const SizedBox(width: ModernFeatureCardSpacing.featureIconToTextSpacing),
+                              const SizedBox(
+                                width: ModernFeatureCardSpacing
+                                    .featureIconToTextSpacing,
+                              ),
                               Expanded(
                                 child: Column(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.start,
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
                                       context
@@ -251,9 +254,8 @@ class _PerformancePageState extends State<PerformancePage> {
                         MouseRegion(
                           onEnter: (_) =>
                               setState(() => _isHoveringOnProcessMenu = true),
-                          onExit: (_) => setState(
-                            () => _isHoveringOnProcessMenu = false,
-                          ),
+                          onExit: (_) =>
+                              setState(() => _isHoveringOnProcessMenu = false),
                           child: ModernDropdownMenu<String>(
                             items: const ['off', 'strict', 'always'],
                             selectedItem: _findProcessMode,

@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:stelliberty/i18n/i18n.dart';
+import 'package:stelliberty/clash/manager/manager.dart';
 import 'package:stelliberty/clash/providers/clash_provider.dart';
 import 'package:stelliberty/clash/config/clash_defaults.dart';
-import 'package:stelliberty/clash/storage/preferences.dart';
 import 'package:stelliberty/ui/common/modern_feature_card.dart';
 import 'package:stelliberty/ui/common/modern_text_field.dart';
 import 'package:stelliberty/ui/widgets/modern_tooltip.dart';
@@ -26,7 +26,7 @@ class _TestUrlCardState extends State<TestUrlCard> {
   void initState() {
     super.initState();
     _testUrlController = TextEditingController(
-      text: ClashPreferences.instance.getTestUrl(),
+      text: ClashManager.instance.testUrl,
     );
   }
 
@@ -84,7 +84,9 @@ class _TestUrlCardState extends State<TestUrlCard> {
           Row(
             children: [
               const Icon(Icons.speed_outlined),
-              const SizedBox(width: ModernFeatureCardSpacing.featureIconToTextSpacing),
+              const SizedBox(
+                width: ModernFeatureCardSpacing.featureIconToTextSpacing,
+              ),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [

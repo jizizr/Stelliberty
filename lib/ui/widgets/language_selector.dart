@@ -102,7 +102,9 @@ class _LanguageSelectorState extends State<LanguageSelector> {
             Row(
               children: [
                 const Icon(Icons.language_outlined),
-                const SizedBox(width: ModernFeatureCardSpacing.featureIconToTextSpacing),
+                const SizedBox(
+                  width: ModernFeatureCardSpacing.featureIconToTextSpacing,
+                ),
                 Text(
                   context.translate.language.settings,
                   style: Theme.of(context).textTheme.titleMedium,
@@ -110,10 +112,8 @@ class _LanguageSelectorState extends State<LanguageSelector> {
               ],
             ),
             MouseRegion(
-              onEnter: (_) =>
-                  setState(() => _isHoveringOnLanguageMenu = true),
-              onExit: (_) =>
-                  setState(() => _isHoveringOnLanguageMenu = false),
+              onEnter: (_) => setState(() => _isHoveringOnLanguageMenu = true),
+              onExit: (_) => setState(() => _isHoveringOnLanguageMenu = false),
               child: ModernDropdownMenu<AppLanguageMode>(
                 items: AppLanguageMode.values,
                 selectedItem: _currentLanguage,

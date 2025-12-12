@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:stelliberty/i18n/i18n.dart';
+import 'package:stelliberty/clash/manager/manager.dart';
 import 'package:stelliberty/clash/providers/clash_provider.dart';
-import 'package:stelliberty/clash/storage/preferences.dart';
 import 'package:stelliberty/ui/common/modern_feature_card.dart';
 import 'package:stelliberty/ui/common/modern_dropdown_menu.dart';
 import 'package:stelliberty/ui/common/modern_dropdown_button.dart';
@@ -58,9 +58,7 @@ class _LogLevelCardState extends State<LogLevelCard> {
   @override
   void initState() {
     super.initState();
-    _logLevel = LogLevel.fromString(
-      ClashPreferences.instance.getCoreLogLevel(),
-    );
+    _logLevel = LogLevel.fromString(ClashManager.instance.clashCoreLogLevel);
   }
 
   @override

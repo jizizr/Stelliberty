@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:stelliberty/i18n/i18n.dart';
+import 'package:stelliberty/clash/manager/manager.dart';
 import 'package:stelliberty/clash/providers/clash_provider.dart';
-import 'package:stelliberty/clash/storage/preferences.dart';
 import 'package:stelliberty/clash/config/clash_defaults.dart';
 import 'package:stelliberty/ui/common/modern_feature_card.dart';
 import 'package:stelliberty/ui/common/modern_text_field.dart';
@@ -35,14 +35,15 @@ class _PortSettingsCardState extends State<PortSettingsCard> {
   void initState() {
     super.initState();
     _clashProvider = Provider.of<ClashProvider>(context, listen: false);
+    final clashManager = ClashManager.instance;
     _mixedPortController = TextEditingController(
-      text: ClashPreferences.instance.getMixedPort().toString(),
+      text: clashManager.mixedPort.toString(),
     );
     _socksPortController = TextEditingController(
-      text: ClashPreferences.instance.getSocksPort()?.toString() ?? '',
+      text: clashManager.socksPort?.toString() ?? '',
     );
     _httpPortController = TextEditingController(
-      text: ClashPreferences.instance.getHttpPort()?.toString() ?? '',
+      text: clashManager.httpPort?.toString() ?? '',
     );
   }
 
@@ -192,7 +193,9 @@ class _PortSettingsCardState extends State<PortSettingsCard> {
           Row(
             children: [
               const Icon(Icons.settings_ethernet_outlined),
-              const SizedBox(width: ModernFeatureCardSpacing.featureIconToTextSpacing),
+              const SizedBox(
+                width: ModernFeatureCardSpacing.featureIconToTextSpacing,
+              ),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [

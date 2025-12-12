@@ -262,7 +262,9 @@ class _TunConfigCardState extends State<TunConfigCard> {
           Row(
             children: [
               const Icon(Icons.vpn_lock),
-              const SizedBox(width: ModernFeatureCardSpacing.featureIconToTextSpacing),
+              const SizedBox(
+                width: ModernFeatureCardSpacing.featureIconToTextSpacing,
+              ),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [

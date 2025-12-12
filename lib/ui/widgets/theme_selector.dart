@@ -75,7 +75,10 @@ class _ThemeSelectorState extends State<ThemeSelector> {
                     Row(
                       children: [
                         const Icon(Icons.palette_outlined),
-                        const SizedBox(width: ModernFeatureCardSpacing.featureIconToTextSpacing),
+                        const SizedBox(
+                          width:
+                              ModernFeatureCardSpacing.featureIconToTextSpacing,
+                        ),
                         Text(
                           context.translate.theme.title,
                           style: Theme.of(context).textTheme.titleMedium,
@@ -126,22 +129,21 @@ class _ThemeSelectorState extends State<ThemeSelector> {
                           Row(
                             children: [
                               const Icon(Icons.blur_on_outlined),
-                              const SizedBox(width: ModernFeatureCardSpacing.featureIconToTextSpacing),
+                              const SizedBox(
+                                width: ModernFeatureCardSpacing
+                                    .featureIconToTextSpacing,
+                              ),
                               Text(
                                 context.translate.theme.effect,
-                                style: Theme.of(
-                                  context,
-                                ).textTheme.titleMedium,
+                                style: Theme.of(context).textTheme.titleMedium,
                               ),
                             ],
                           ),
                           MouseRegion(
-                            onEnter: (_) => setState(
-                              () => _isHoveringOnEffectMenu = true,
-                            ),
-                            onExit: (_) => setState(
-                              () => _isHoveringOnEffectMenu = false,
-                            ),
+                            onEnter: (_) =>
+                                setState(() => _isHoveringOnEffectMenu = true),
+                            onExit: (_) =>
+                                setState(() => _isHoveringOnEffectMenu = false),
                             child: ModernDropdownMenu<AppWindowEffect>(
                               items: AppWindowEffect.values,
                               selectedItem: windowEffectProvider.windowEffect,
@@ -158,10 +160,7 @@ class _ThemeSelectorState extends State<ThemeSelector> {
                                         .theme
                                         .effectAcrylic;
                                   case AppWindowEffect.tabbed:
-                                    return context
-                                        .translate
-                                        .theme
-                                        .effectTabbed;
+                                    return context.translate.theme.effectTabbed;
                                   default:
                                     return context
                                         .translate
@@ -173,10 +172,7 @@ class _ThemeSelectorState extends State<ThemeSelector> {
                                 text: (effect) {
                                   switch (effect) {
                                     case AppWindowEffect.mica:
-                                      return context
-                                          .translate
-                                          .theme
-                                          .effectMica;
+                                      return context.translate.theme.effectMica;
                                     case AppWindowEffect.acrylic:
                                       return context
                                           .translate

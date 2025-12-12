@@ -599,7 +599,6 @@ class LifecycleManager {
     _coreStateManager.setStopping(reason: '开始停止核心');
 
     try {
-
       // 先停止监控服务（优雅关闭 WebSocket 连接）
       // 避免 Clash 核心停止后强制断开连接导致的错误日志
       try {

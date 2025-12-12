@@ -212,7 +212,9 @@ class _NetworkSettingsPageState extends State<NetworkSettingsPage> {
           Row(
             children: [
               Icon(icon),
-              const SizedBox(width: ModernFeatureCardSpacing.featureIconToTextSpacing),
+              const SizedBox(
+                width: ModernFeatureCardSpacing.featureIconToTextSpacing,
+              ),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [

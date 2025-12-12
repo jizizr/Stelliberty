@@ -90,6 +90,10 @@ class ClashManager extends ChangeNotifier {
   int? get httpPort => _configManager.httpPort; // HTTP 端口
   String get outboundMode => _configManager.outboundMode;
 
+  // TCP Keep-Alive 配置（启动参数，直接从持久化读取）
+  bool get keepAliveEnabled => ClashPreferences.instance.getKeepAliveEnabled();
+  int get keepAliveInterval => ClashPreferences.instance.getKeepAliveInterval();
+
   bool get isSystemProxyEnabled => _systemProxyManager.isSystemProxyEnabled;
 
   // 覆写获取回调（从 SubscriptionProvider 注入）
@@ -372,7 +376,8 @@ class ClashManager extends ChangeNotifier {
 
   Future<bool> setExternalController(bool enabled) async {
     // 使用 ConfigManager 的方法更新配置（同时更新内存和持久化）
-    final defaultAddress = ClashPreferences.instance.getExternalControllerAddress();
+    final defaultAddress = ClashPreferences.instance
+        .getExternalControllerAddress();
     await _configManager.setExternalController(enabled, defaultAddress);
 
     if (isCoreRunning) {

@@ -179,7 +179,9 @@ class ModernFeatureLayoutCard extends StatelessWidget {
           // 左侧：图标 + 标题 + 描述
           if (icon != null) ...[
             Icon(icon, size: iconSize ?? 24, color: iconColor),
-            const SizedBox(width: ModernFeatureCardSpacing.featureIconToTextSpacing),
+            const SizedBox(
+              width: ModernFeatureCardSpacing.featureIconToTextSpacing,
+            ),
           ],
 
           // 标题和描述
@@ -202,7 +204,10 @@ class ModernFeatureLayoutCard extends StatelessWidget {
               children: [
                 if (trailingLeadingButton != null) ...[
                   trailingLeadingButton!,
-                  const SizedBox(width: ModernFeatureCardSpacing.auxiliaryIconToControlSpacing),
+                  const SizedBox(
+                    width:
+                        ModernFeatureCardSpacing.auxiliaryIconToControlSpacing,
+                  ),
                 ],
                 if (trailing != null) trailing!,
               ],
@@ -261,7 +266,9 @@ class ModernFeatureToggleCard extends StatelessWidget {
           Row(
             children: [
               Icon(icon),
-              const SizedBox(width: ModernFeatureCardSpacing.featureIconToTextSpacing),
+              const SizedBox(
+                width: ModernFeatureCardSpacing.featureIconToTextSpacing,
+              ),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,

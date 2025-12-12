@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:stelliberty/i18n/i18n.dart';
+import 'package:stelliberty/clash/manager/manager.dart';
 import 'package:stelliberty/clash/providers/clash_provider.dart';
 import 'package:stelliberty/clash/storage/preferences.dart';
 import 'package:stelliberty/ui/common/modern_feature_card.dart';
@@ -25,9 +26,10 @@ class _KeepAliveCardState extends State<KeepAliveCard> {
   @override
   void initState() {
     super.initState();
-    _keepAliveEnabled = ClashPreferences.instance.getKeepAliveEnabled();
+    final clashManager = ClashManager.instance;
+    _keepAliveEnabled = clashManager.keepAliveEnabled;
     _keepAliveIntervalController = TextEditingController(
-      text: ClashPreferences.instance.getKeepAliveInterval().toString(),
+      text: clashManager.keepAliveInterval.toString(),
     );
   }
 
