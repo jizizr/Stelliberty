@@ -636,6 +636,7 @@
     "tunRequiresService": "Service installation required to enable TUN mode",
     "switchedToMode": "Switched to {name}",
     "selectedModeNotice": "Selected {name}, will take effect after starting the core",
+    "unsupportedGroupType": "This proxy group type does not support manual node switching",
     "switchModeFailed": "Failed to switch outbound mode: {error}",
     "outboundMode": "Outbound Mode",
     "modeSelectionDesc": "Select traffic routing strategy",

@@ -4,6 +4,7 @@ import 'package:stelliberty/clash/providers/clash_provider.dart';
 import 'package:stelliberty/clash/providers/subscription_provider.dart';
 import 'package:stelliberty/storage/preferences.dart';
 import 'package:stelliberty/ui/notifiers/proxy_notifier.dart';
+import 'package:stelliberty/ui/widgets/modern_toast.dart';
 import 'package:stelliberty/ui/widgets/proxy/proxy_action_bar.dart';
 import 'package:stelliberty/ui/widgets/proxy/proxy_empty_state.dart';
 import 'package:stelliberty/ui/widgets/proxy/proxy_node_grid.dart';
@@ -342,7 +343,15 @@ class _ProxyPageWidgetState extends State<ProxyPage>
     String proxyName,
   ) async {
     final clashProvider = context.read<ClashProvider>();
-    await clashProvider.changeProxy(groupName, proxyName);
+    final success = await clashProvider.changeProxy(groupName, proxyName);
+
+    // 如果切换失败（如代理组类型不支持手动切换），给用户提示
+    if (!success && context.mounted) {
+      ModernToast.warning(
+        context,
+        context.translate.proxy.unsupportedGroupType,
+      );
+    }
 
     // 移除 setState(),让 ClashProvider.notifyListeners() 触发 Selector 更新
     // 这样只会重建 ProxyNodeGrid,而不是整个页面

@@ -541,8 +541,6 @@ class ClashProvider extends ChangeNotifier {
     // 检查代理组类型是否支持手动选择
     if (!_isSelectableGroupType(group.type)) {
       Logger.warning('代理组 $groupName 类型为 ${group.type}，不支持手动切换节点');
-      _errorMessage = '该代理组类型 (${group.type}) 不支持手动切换';
-      notifyListeners();
       return false;
     }
 

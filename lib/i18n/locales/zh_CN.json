@@ -639,6 +639,7 @@
     "tunRequiresService": "需要安装服务才能启用虚拟网卡模式",
     "switchedToMode": "已切换到 {name}",
     "selectedModeNotice": "已选择 {name}，启动核心后生效",
+    "unsupportedGroupType": "该代理组类型不支持手动切换节点",
     "switchModeFailed": "切换出站模式失败: {error}",
     "outboundMode": "出站模式",
     "modeSelectionDesc": "选择流量分流策略",
