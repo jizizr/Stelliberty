@@ -383,6 +383,29 @@ class ClashProvider extends ChangeNotifier {
     }
   }
 
+  // 从 Clash 刷新代理状态（不恢复本地选择，而是将 Clash 的当前状态保存到本地）
+  // 用于应用从后台恢复时同步外部控制器的节点切换
+  Future<void> refreshProxiesFromClash() async {
+    // 并发保护：如果已经有加载操作在进行，等待它完成
+    if (_loadProxiesCompleter != null) {
+      Logger.debug('代理列表正在加载中，等待完成…');
+      return _loadProxiesCompleter!.future;
+    }
+
+    // 创建新的 Completer
+    _loadProxiesCompleter = Completer<void>();
+
+    try {
+      await _doRefreshProxiesFromClash();
+      _loadProxiesCompleter!.complete();
+    } catch (e) {
+      _loadProxiesCompleter!.completeError(e);
+      rethrow;
+    } finally {
+      _loadProxiesCompleter = null;
+    }
+  }
+
   // 实际的加载逻辑
   Future<void> _doLoadProxies() async {
     Logger.info('开始加载代理列表');
@@ -525,6 +548,178 @@ class ClashProvider extends ChangeNotifier {
       totalStopwatch.stop();
       Logger.info('加载代理列表完成（总耗时：${totalStopwatch.elapsedMilliseconds}ms）');
     }
+  }
+
+  // 从 Clash 刷新代理状态的实际逻辑（不恢复本地选择，而是将 Clash 的当前状态保存到本地）
+  Future<void> _doRefreshProxiesFromClash() async {
+    Logger.info('开始从 Clash 刷新代理状态');
+
+    final totalStopwatch = Stopwatch()..start();
+
+    if (!isCoreRunning) {
+      Logger.info('Clash 未在运行，无法刷新代理状态');
+      return;
+    }
+
+    Logger.debug(
+      '刷新前状态：代理组=${_allProxyGroups.length}，节点=${_proxyNodes.length}',
+    );
+
+    _isLoadingProxies = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      // 从 Clash API 获取代理数据
+      final apiStopwatch = Stopwatch()..start();
+      Map<String, dynamic>? proxies;
+      int retryCount = 0;
+      const maxRetries = 2;
+
+      while (retryCount <= maxRetries) {
+        try {
+          proxies = await _clashManager.getProxies();
+          break;
+        } catch (e) {
+          retryCount++;
+          if (retryCount <= maxRetries) {
+            Logger.warning('获取代理数据失败（尝试 $retryCount/$maxRetries），1秒后重试：$e');
+            await Future.delayed(const Duration(seconds: 1));
+          } else {
+            Logger.error('获取代理数据失败，已重试 $maxRetries 次：$e');
+            rethrow;
+          }
+        }
+      }
+
+      if (proxies == null) {
+        throw Exception('获取代理数据失败');
+      }
+
+      apiStopwatch.stop();
+      Logger.debug(
+        '从 Clash API 获取代理数据完成：${proxies.length} 项（耗时：${apiStopwatch.elapsedMilliseconds}ms，重试次数：$retryCount）',
+      );
+
+      // 解析节点
+      final parseStopwatch = Stopwatch()..start();
+      _proxyNodes = {};
+      proxies.forEach((name, data) {
+        final node = ProxyNode.fromJson(name, data);
+        _proxyNodes[name] = node;
+      });
+      _proxyNodesUpdateCount++;
+      parseStopwatch.stop();
+      Logger.debug(
+        '解析节点完成：${_proxyNodes.length} 个（耗时：${parseStopwatch.elapsedMilliseconds}ms）',
+      );
+
+      _allProxyGroups = [];
+      _invalidateCache();
+
+      final addedGroups = <String>{};
+      final globalGroup = proxies['GLOBAL'];
+      final hasGlobalAll = globalGroup?['all'] != null;
+
+      // 阶段 1：优先添加 GLOBAL 组
+      if (globalGroup != null) {
+        final globalNode = _proxyNodes['GLOBAL'];
+        if (globalNode != null && globalNode.isGroup) {
+          _allProxyGroups.add(ProxyGroup.fromJson('GLOBAL', globalGroup));
+          addedGroups.add('GLOBAL');
+        }
+      }
+
+      // 阶段 2：按 GLOBAL.all 顺序添加其他代理组
+      if (hasGlobalAll) {
+        final orderedNames = List<String>.from(globalGroup!['all']);
+        for (final groupName in orderedNames) {
+          if (addedGroups.contains(groupName)) continue;
+
+          final proxyData = proxies[groupName];
+          if (proxyData == null) continue;
+
+          final node = _proxyNodes[groupName];
+          if (node == null || !node.isGroup) continue;
+
+          _allProxyGroups.add(ProxyGroup.fromJson(groupName, proxyData));
+          addedGroups.add(groupName);
+        }
+      }
+
+      // 阶段 3：补充遗漏的代理组
+      proxies.forEach((name, data) {
+        if (addedGroups.contains(name)) return;
+
+        final node = _proxyNodes[name];
+        if (node == null || !node.isGroup) return;
+
+        _allProxyGroups.add(ProxyGroup.fromJson(name, data));
+      });
+
+      Logger.debug('解析完成：${_allProxyGroups.length} 个代理组');
+
+      // 关键：将 Clash 的当前状态保存到本地存储（反向同步）
+      final saveStopwatch = Stopwatch()..start();
+      await _saveCurrentClashSelections();
+      saveStopwatch.stop();
+      Logger.debug(
+        '保存 Clash 当前状态到本地完成（耗时：${saveStopwatch.elapsedMilliseconds}ms）',
+      );
+
+      // 默认选中第一个可见的代理组
+      if (_selectedGroupName == null && proxyGroups.isNotEmpty) {
+        _selectedGroupName = proxyGroups.first.name;
+      }
+
+      Logger.info(
+        '刷新完成: ${_allProxyGroups.length} 个代理组（${proxyGroups.length} 可见），${_proxyNodes.length} 个节点',
+      );
+    } catch (e) {
+      _errorMessage = '刷新代理状态失败：$e';
+      Logger.error(_errorMessage!);
+    } finally {
+      _isLoadingProxies = false;
+      notifyListeners();
+
+      totalStopwatch.stop();
+      Logger.info(
+        '从 Clash 刷新代理状态完成（总耗时：${totalStopwatch.elapsedMilliseconds}ms）',
+      );
+    }
+  }
+
+  // 将 Clash 的当前状态保存到本地存储
+  Future<void> _saveCurrentClashSelections() async {
+    final currentSubscriptionId = ClashPreferences.instance
+        .getCurrentSubscriptionId();
+    if (currentSubscriptionId == null) {
+      Logger.warning('无法保存 Clash 状态：当前订阅 ID 为空');
+      return;
+    }
+
+    int savedCount = 0;
+    _selectedMap.clear();
+
+    for (final group in _allProxyGroups) {
+      if (!_isSelectableGroupType(group.type)) {
+        continue;
+      }
+
+      // 使用 Clash 返回的当前选中节点
+      if (group.now != null && group.now!.isNotEmpty) {
+        await ClashPreferences.instance.saveProxySelection(
+          currentSubscriptionId,
+          group.name,
+          group.now!,
+        );
+        _selectedMap[group.name] = group.now!;
+        savedCount++;
+        Logger.debug('保存节点选择: ${group.name} -> ${group.now}');
+      }
+    }
+
+    Logger.info('节点选择保存完成：保存=$savedCount');
   }
 
   // 切换代理节点

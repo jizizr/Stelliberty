@@ -13,6 +13,8 @@ class ProxyActionBar extends StatefulWidget {
   final int sortMode;
   final ValueChanged<int> onSortModeChanged;
   final ProxyNotifier viewModel;
+  final String layoutMode; // 'horizontal' 或 'vertical'
+  final VoidCallback onLayoutModeChanged;
 
   const ProxyActionBar({
     super.key,
@@ -22,6 +24,8 @@ class ProxyActionBar extends StatefulWidget {
     required this.sortMode,
     required this.onSortModeChanged,
     required this.viewModel,
+    required this.layoutMode,
+    required this.onLayoutModeChanged,
   });
 
   @override
@@ -70,79 +74,123 @@ class _ProxyActionBarState extends State<ProxyActionBar> {
           child: ListenableBuilder(
             listenable: widget.viewModel,
             builder: (context, _) {
-              return Row(
-                children: [
-                  // 测速按钮
-                  _ActionButton(
-                    icon: Icons.network_check,
-                    tooltip: context.translate.proxy.testAllDelays,
-                    onPressed: state.canTestDelays
-                        ? () => clashProvider.testGroupDelays(
-                            widget.selectedGroupName,
-                          )
-                        : null,
-                    isLoading: state.isBatchTestingDelay,
-                  ),
-                  const SizedBox(width: 8),
-                  // 定位按钮
-                  _ActionButton(
-                    icon: Icons.gps_fixed,
-                    tooltip: context.translate.proxy.locate,
-                    onPressed: state.canLocate && widget.onLocate != null
-                        ? widget.onLocate
-                        : null,
-                  ),
-                  const SizedBox(width: 8),
-                  // 回到顶部按钮
-                  _ActionButton(
-                    icon: Icons.vertical_align_top,
-                    tooltip: context.translate.proxy.scrollToTop,
-                    onPressed: widget.onScrollToTop,
-                  ),
-                  const SizedBox(width: 8),
-                  // 排序按钮
-                  _ActionButton(
-                    icon: _getSortIcon(widget.sortMode),
-                    tooltip: _getSortTooltip(context, widget.sortMode),
-                    onPressed: _handleSortModeChange,
-                  ),
-                  const SizedBox(width: 8),
-                  // 搜索按钮或搜索框
-                  Expanded(
-                    child: AnimatedCrossFade(
-                      duration: const Duration(milliseconds: 300),
-                      firstCurve: Curves.easeInOut,
-                      secondCurve: Curves.easeInOut,
-                      sizeCurve: Curves.easeInOut,
-                      crossFadeState: widget.viewModel.isSearching
-                          ? CrossFadeState.showSecond
-                          : CrossFadeState.showFirst,
-                      firstChild: Align(
-                        alignment: Alignment.centerLeft,
-                        child: _ActionButton(
-                          icon: Icons.search,
-                          tooltip: context.translate.proxy.search,
-                          onPressed: () {
-                            widget.viewModel.toggleSearch();
-                            // 延迟聚焦，确保搜索框已渲染
-                            Future.delayed(
-                              const Duration(milliseconds: 350),
-                              () {
-                                _searchFocusNode.requestFocus();
-                              },
-                            );
-                          },
-                        ),
-                      ),
-                      secondChild: _buildSearchField(context),
-                    ),
-                  ),
-                ],
-              );
+              // 横向布局和竖向布局显示不同的按钮
+              if (widget.layoutMode == 'horizontal') {
+                return _buildHorizontalButtons(context, state, clashProvider);
+              } else {
+                return _buildVerticalButtons(context);
+              }
             },
           ),
         );
       },
+    );
+  }
+
+  // 构建横向模式按钮
+  Widget _buildHorizontalButtons(
+    BuildContext context,
+    _ActionBarState state,
+    ClashProvider clashProvider,
+  ) {
+    return Row(
+      children: [
+        // 测速按钮
+        _ActionButton(
+          icon: Icons.network_check,
+          tooltip: context.translate.proxy.testAllDelays,
+          onPressed: state.canTestDelays
+              ? () => clashProvider.testGroupDelays(widget.selectedGroupName)
+              : null,
+          isLoading: state.isBatchTestingDelay,
+        ),
+        const SizedBox(width: 8),
+        // 定位按钮
+        _ActionButton(
+          icon: Icons.gps_fixed,
+          tooltip: context.translate.proxy.locate,
+          onPressed: state.canLocate && widget.onLocate != null
+              ? widget.onLocate
+              : null,
+        ),
+        const SizedBox(width: 8),
+        // 回到顶部按钮
+        _ActionButton(
+          icon: Icons.vertical_align_top,
+          tooltip: context.translate.proxy.scrollToTop,
+          onPressed: widget.onScrollToTop,
+        ),
+        const SizedBox(width: 8),
+        // 排序按钮
+        _ActionButton(
+          icon: _getSortIcon(widget.sortMode),
+          tooltip: _getSortTooltip(context, widget.sortMode),
+          onPressed: _handleSortModeChange,
+        ),
+        const SizedBox(width: 8),
+        // 搜索按钮或搜索框
+        Expanded(
+          child: AnimatedCrossFade(
+            duration: const Duration(milliseconds: 300),
+            firstCurve: Curves.easeInOut,
+            secondCurve: Curves.easeInOut,
+            sizeCurve: Curves.easeInOut,
+            crossFadeState: widget.viewModel.isSearching
+                ? CrossFadeState.showSecond
+                : CrossFadeState.showFirst,
+            firstChild: Align(
+              alignment: Alignment.centerLeft,
+              child: _ActionButton(
+                icon: Icons.search,
+                tooltip: context.translate.proxy.search,
+                onPressed: () {
+                  widget.viewModel.toggleSearch();
+                  Future.delayed(
+                    const Duration(milliseconds: 350),
+                    () => _searchFocusNode.requestFocus(),
+                  );
+                },
+              ),
+            ),
+            secondChild: _buildSearchField(context),
+          ),
+        ),
+        const SizedBox(width: 8),
+        // 布局切换按钮
+        _ActionButton(
+          icon: Icons.view_agenda,
+          tooltip: context.translate.proxy.switchToVerticalLayout,
+          onPressed: widget.onLayoutModeChanged,
+        ),
+      ],
+    );
+  }
+
+  // 构建竖向模式按钮
+  Widget _buildVerticalButtons(BuildContext context) {
+    return Row(
+      children: [
+        // 回到顶部按钮
+        _ActionButton(
+          icon: Icons.vertical_align_top,
+          tooltip: context.translate.proxy.scrollToTop,
+          onPressed: widget.onScrollToTop,
+        ),
+        const SizedBox(width: 8),
+        // 排序按钮
+        _ActionButton(
+          icon: _getSortIcon(widget.sortMode),
+          tooltip: _getSortTooltip(context, widget.sortMode),
+          onPressed: _handleSortModeChange,
+        ),
+        const Spacer(),
+        // 布局切换按钮
+        _ActionButton(
+          icon: Icons.view_list,
+          tooltip: context.translate.proxy.switchToHorizontalLayout,
+          onPressed: widget.onLayoutModeChanged,
+        ),
+      ],
     );
   }
 

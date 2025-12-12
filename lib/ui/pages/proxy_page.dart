@@ -9,6 +9,8 @@ import 'package:stelliberty/ui/widgets/proxy/proxy_action_bar.dart';
 import 'package:stelliberty/ui/widgets/proxy/proxy_empty_state.dart';
 import 'package:stelliberty/ui/widgets/proxy/proxy_node_grid.dart';
 import 'package:stelliberty/ui/widgets/proxy/proxy_group_selector.dart';
+import 'package:stelliberty/ui/widgets/proxy/proxy_group_list_vertical.dart';
+import 'package:stelliberty/ui/constants/spacing.dart';
 import 'package:stelliberty/utils/logger.dart';
 import 'package:stelliberty/i18n/i18n.dart';
 import 'package:stelliberty/clash/data/clash_model.dart';
@@ -64,10 +66,12 @@ class _ProxyPageWidgetState extends State<ProxyPage>
   int _currentGroupIndex = 0;
   double _scrollOffsetCache = 0.0;
   bool _isScrollAnimating = false; // 滚动动画进行中标志
+  String _layoutMode = 'horizontal'; // 'horizontal' 或 'vertical'
 
   // 持久化键值
   static const String _scrollOffsetKey = 'proxy_page_scroll_offset';
   static const String _subscriptionPathKey = 'proxy_page_subscription_path';
+  static const String _layoutModeKey = 'proxy_page_layout_mode';
 
   // 保存上次的订阅路径，用于检测订阅切换
   String? _subscriptionPathCache;
@@ -84,6 +88,9 @@ class _ProxyPageWidgetState extends State<ProxyPage>
 
     // 创建默认 ScrollController
     _nodeListScrollController = ScrollController();
+
+    // 加载布局模式
+    _loadLayoutMode();
 
     WidgetsBinding.instance.addObserver(this);
     _nodeListScrollController.addListener(_updateScrollOffset);
@@ -195,6 +202,34 @@ class _ProxyPageWidgetState extends State<ProxyPage>
     }
   }
 
+  // 加载布局模式
+  void _loadLayoutMode() {
+    try {
+      final prefs = AppPreferences.instance;
+      _layoutMode = prefs.getString(_layoutModeKey) ?? 'horizontal';
+      Logger.info('加载布局模式：$_layoutMode');
+    } catch (e) {
+      Logger.error('加载布局模式失败：$e');
+      _layoutMode = 'horizontal';
+    }
+  }
+
+  // 切换布局模式
+  void _switchLayoutMode() {
+    setState(() {
+      _layoutMode = _layoutMode == 'horizontal' ? 'vertical' : 'horizontal';
+    });
+
+    // 保存布局模式
+    try {
+      final prefs = AppPreferences.instance;
+      prefs.setString(_layoutModeKey, _layoutMode);
+      Logger.info('切换布局模式：$_layoutMode');
+    } catch (e) {
+      Logger.error('保存布局模式失败：$e');
+    }
+  }
+
   @override
   void dispose() {
     // 在 dispose 前同步保存滚动位置
@@ -212,12 +247,12 @@ class _ProxyPageWidgetState extends State<ProxyPage>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
 
-    // 当应用从后台恢复时，刷新代理数据以同步外部控制器的节点切换
+    // 当应用从后台恢复时，从 Clash 刷新代理状态以同步外部控制器的节点切换
     if (state == AppLifecycleState.resumed) {
       Logger.debug('应用恢复，刷新代理数据');
       final clashProvider = context.read<ClashProvider>();
       if (clashProvider.isCoreRunning) {
-        clashProvider.loadProxies();
+        clashProvider.refreshProxiesFromClash();
       }
     }
   }
@@ -323,8 +358,11 @@ class _ProxyPageWidgetState extends State<ProxyPage>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildGroupSelectorHeader(context, clashProvider, selectedGroup),
-        const Divider(height: 1),
+        // 横向模式显示代理组选择器
+        if (_layoutMode == 'horizontal') ...[
+          _buildGroupSelectorHeader(context, clashProvider, selectedGroup),
+          const Divider(height: 1),
+        ],
         ListenableBuilder(
           listenable: _viewModel,
           builder: (context, _) {
@@ -337,10 +375,16 @@ class _ProxyPageWidgetState extends State<ProxyPage>
               sortMode: _viewModel.sortMode,
               onSortModeChanged: _viewModel.changeSortMode,
               viewModel: _viewModel,
+              layoutMode: _layoutMode,
+              onLayoutModeChanged: _switchLayoutMode,
             );
           },
         ),
-        _buildSortedProxyNodeGrid(context, clashProvider, selectedGroup),
+        // 根据布局模式渲染不同的内容
+        if (_layoutMode == 'horizontal')
+          _buildSortedProxyNodeGrid(context, clashProvider, selectedGroup)
+        else
+          Expanded(child: _buildVerticalProxyList(context, clashProvider)),
       ],
     );
   }
@@ -445,6 +489,24 @@ class _ProxyPageWidgetState extends State<ProxyPage>
       onSelectProxy: (groupName, proxyName) =>
           _selectProxy(context, groupName, proxyName),
       onTestDelay: (proxyName) => _testSingleNodeDelay(context, proxyName),
+    );
+  }
+
+  // 构建竖向代理组列表
+  Widget _buildVerticalProxyList(
+    BuildContext context,
+    ClashProvider clashProvider,
+  ) {
+    return Padding(
+      padding: SpacingConstants.scrollbarPadding,
+      child: ProxyGroupListVertical(
+        clashProvider: clashProvider,
+        viewModel: _viewModel,
+        scrollController: _nodeListScrollController,
+        onSelectProxy: (groupName, proxyName) =>
+            _selectProxy(context, groupName, proxyName),
+        onTestDelay: (proxyName) => _testSingleNodeDelay(context, proxyName),
+      ),
     );
   }
 

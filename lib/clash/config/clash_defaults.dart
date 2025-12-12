@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 
 // Clash 默认配置常量
 class ClashDefaults {
@@ -6,7 +7,8 @@ class ClashDefaults {
 
   // ==================== API 配置 ====================
   static const String apiHost = '127.0.0.1';
-  static const int apiPort = 9090;
+  // 开发模式使用 19090 避免与其他 Clash 实例冲突，生产模式使用标准 9090
+  static int get apiPort => kDebugMode || kProfileMode ? 19090 : 9090;
 
   // ==================== 端口配置 ====================
   static const int mixedPort = 7777; // 混合端口（HTTP + SOCKS5）

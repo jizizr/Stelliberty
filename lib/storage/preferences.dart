@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:stelliberty/storage/dev_preferences.dart';
+import 'package:stelliberty/utils/logger.dart';
 
 // 通用应用持久化配置管理,管理主题、窗口、语言等应用级配置
 class AppPreferences {
@@ -52,6 +53,8 @@ class AppPreferences {
   static const String _kAppUpdateInterval = 'app_update_interval';
   static const String _kLastAppUpdateCheckTime = 'last_app_update_check_time';
   static const String _kIgnoredUpdateVersion = 'ignored_update_version';
+  static const String _kProxyGroupExpandedStates =
+      'proxy_group_expanded_states';
 
   // ==================== 主题配置 ====================
 
@@ -410,5 +413,48 @@ class AppPreferences {
     for (final key in keys) {
       await _prefs!.remove(key);
     }
+  }
+
+  // ==================== 代理组折叠状态 ====================
+
+  // 获取代理组折叠状态
+  // 返回 Map<String, bool>，key 为代理组名称，value 为是否展开
+  Map<String, bool> getProxyGroupExpandedStates() {
+    _ensureInit();
+    final jsonString = _prefs!.getString(_kProxyGroupExpandedStates);
+    if (jsonString == null || jsonString.isEmpty) {
+      return {};
+    }
+
+    try {
+      // 使用简单的格式：groupName1:true,groupName2:false
+      final result = <String, bool>{};
+      final pairs = jsonString.split(',');
+      for (final pair in pairs) {
+        final parts = pair.split(':');
+        if (parts.length == 2) {
+          result[parts[0]] = parts[1] == 'true';
+        }
+      }
+      return result;
+    } catch (e) {
+      Logger.error('解析折叠状态失败: $e');
+      return {};
+    }
+  }
+
+  // 保存代理组折叠状态
+  Future<void> setProxyGroupExpandedStates(Map<String, bool> states) async {
+    _ensureInit();
+    // 将 Map 转换为简单的字符串格式：groupName1:true,groupName2:false
+    final encoded = states.entries.map((e) => '${e.key}:${e.value}').join(',');
+    await _prefs!.setString(_kProxyGroupExpandedStates, encoded);
+  }
+
+  // 保存单个代理组的折叠状态
+  Future<void> setProxyGroupExpanded(String groupName, bool isExpanded) async {
+    final states = getProxyGroupExpandedStates();
+    states[groupName] = isExpanded;
+    await setProxyGroupExpandedStates(states);
   }
 }
