@@ -57,7 +57,7 @@ class _BasicLayoutState extends State<BasicLayout> with WidgetsBindingObserver {
         // 检查是否有更新且对话框未显示
         if (updateInfo != null &&
             updateInfo.hasUpdate &&
-            !updateProvider.dialogShown) {
+            !updateProvider.isDialogShown) {
           // 标记对话框已显示（防止重复）
           updateProvider.markDialogShown();
 

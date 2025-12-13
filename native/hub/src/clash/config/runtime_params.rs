@@ -12,23 +12,23 @@ pub struct RuntimeConfigParams {
     pub http_port: i32,
 
     // 全局配置
-    pub ipv6: bool,
-    pub allow_lan: bool,
-    pub tcp_concurrent: bool,
-    pub unified_delay: bool,
+    pub is_ipv6_enabled: bool,
+    pub is_allow_lan_enabled: bool,
+    pub is_tcp_concurrent_enabled: bool,
+    pub is_unified_delay_enabled: bool,
     pub outbound_mode: String, // "rule" | "global" | "direct"
 
     // TUN 配置
     pub tun_enabled: bool,
     pub tun_stack: String,
     pub tun_device: String,
-    pub tun_auto_route: bool,
-    pub tun_auto_redirect: bool,
-    pub tun_auto_detect_interface: bool,
+    pub is_tun_auto_route_enabled: bool,
+    pub is_tun_auto_redirect_enabled: bool,
+    pub is_tun_auto_detect_interface_enabled: bool,
     pub tun_dns_hijack: Vec<String>,
-    pub tun_strict_route: bool,
+    pub is_tun_strict_route_enabled: bool,
     pub tun_route_exclude_address: Vec<String>,
-    pub tun_disable_icmp_forwarding: bool,
+    pub is_tun_icmp_forwarding_disabled: bool,
     pub tun_mtu: i32,
 
     // 核心配置
@@ -39,6 +39,6 @@ pub struct RuntimeConfigParams {
     pub external_controller_secret: Option<String>,
 
     // Keep-Alive 配置
-    pub keep_alive_enabled: bool,
+    pub is_keep_alive_enabled: bool,
     pub keep_alive_interval: Option<i32>,
 }

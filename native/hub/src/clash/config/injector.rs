@@ -96,10 +96,10 @@ pub fn inject_runtime_params(
         YamlValue::Number(params.http_port.into()),
     );
 
-    // 5. 注入 bind-address（根据 allow_lan 动态设置）
-    // - allow_lan 为 false 时：bind-address 为 '127.0.0.1'（仅本地，双重保护）
-    // - allow_lan 为 true 时：bind-address 为 '0.0.0.0'（所有接口，允许局域网）
-    let bind_address = if params.allow_lan {
+    // 5. 注入 bind-address（根据 is_allow_lan_enabled 动态设置）
+    // - is_allow_lan_enabled 为 false 时：bind-address 为 '127.0.0.1'（仅本地，双重保护）
+    // - is_allow_lan_enabled 为 true 时：bind-address 为 '0.0.0.0'（所有接口，允许局域网）
+    let bind_address = if params.is_allow_lan_enabled {
         "0.0.0.0".to_string()
     } else {
         "127.0.0.1".to_string()
@@ -111,9 +111,9 @@ pub fn inject_runtime_params(
     );
 
     log::info!(
-        "注入 bind-address：{}（allow_lan={}）",
+        "注入 bind-address：{}（is_allow_lan_enabled={}）",
         bind_address,
-        params.allow_lan
+        params.is_allow_lan_enabled
     );
 
     // 移除单独的 port 和 socks-port，避免端口冲突
@@ -129,11 +129,11 @@ pub fn inject_runtime_params(
     // 7. 注入统一延迟
     config_map.insert(
         YamlValue::String("unified-delay".to_string()),
-        YamlValue::Bool(params.unified_delay),
+        YamlValue::Bool(params.is_unified_delay_enabled),
     );
 
     // 8. 注入 TCP Keep-Alive 配置
-    if params.keep_alive_enabled {
+    if params.is_keep_alive_enabled {
         if let Some(interval) = params.keep_alive_interval {
             config_map.insert(
                 YamlValue::String("keep-alive-interval".to_string()),
@@ -146,15 +146,15 @@ pub fn inject_runtime_params(
 
     // 9. 注入 TUN 模式配置（始终注入完整配置，只切换 enable 字段）
     log::debug!(
-        "🔍 Rust 收到的 TUN 参数：enabled={}，stack={}，device={}，auto_route={}，auto_redirect={}，auto_detect_interface={}，strict_route={}，disable_icmp_forwarding={}，mtu={}，route_exclude_address={:?}",
+        "🔍 Rust 收到的 TUN 参数：enabled={}，stack={}，device={}，is_auto_route_enabled={}，is_auto_redirect_enabled={}，is_auto_detect_interface_enabled={}，is_strict_route_enabled={}，is_icmp_forwarding_disabled={}，mtu={}，route_exclude_address={:?}",
         params.tun_enabled,
         params.tun_stack,
         params.tun_device,
-        params.tun_auto_route,
-        params.tun_auto_redirect,
-        params.tun_auto_detect_interface,
-        params.tun_strict_route,
-        params.tun_disable_icmp_forwarding,
+        params.is_tun_auto_route_enabled,
+        params.is_tun_auto_redirect_enabled,
+        params.is_tun_auto_detect_interface_enabled,
+        params.is_tun_strict_route_enabled,
+        params.is_tun_icmp_forwarding_disabled,
         params.tun_mtu,
         params.tun_route_exclude_address
     );
@@ -174,15 +174,15 @@ pub fn inject_runtime_params(
     );
     tun_config.insert(
         YamlValue::String("auto-route".to_string()),
-        YamlValue::Bool(params.tun_auto_route),
+        YamlValue::Bool(params.is_tun_auto_route_enabled),
     );
     tun_config.insert(
         YamlValue::String("auto-redirect".to_string()),
-        YamlValue::Bool(params.tun_auto_redirect),
+        YamlValue::Bool(params.is_tun_auto_redirect_enabled),
     );
     tun_config.insert(
         YamlValue::String("auto-detect-interface".to_string()),
-        YamlValue::Bool(params.tun_auto_detect_interface),
+        YamlValue::Bool(params.is_tun_auto_detect_interface_enabled),
     );
 
     // DNS 劫持列表
@@ -198,7 +198,7 @@ pub fn inject_runtime_params(
 
     tun_config.insert(
         YamlValue::String("strict-route".to_string()),
-        YamlValue::Bool(params.tun_strict_route),
+        YamlValue::Bool(params.is_tun_strict_route_enabled),
     );
 
     // 排除网段列表
@@ -222,7 +222,7 @@ pub fn inject_runtime_params(
     // ICMP 转发控制（注意：配置项是 disable，所以需要取反逻辑）
     tun_config.insert(
         YamlValue::String("disable-icmp-forwarding".to_string()),
-        YamlValue::Bool(params.tun_disable_icmp_forwarding),
+        YamlValue::Bool(params.is_tun_icmp_forwarding_disabled),
     );
 
     config_map.insert(
@@ -273,7 +273,7 @@ fn inject_dns_config(config_map: &mut Mapping, params: &RuntimeConfigParams) -> 
         );
         dns_config.insert(
             YamlValue::String("ipv6".to_string()),
-            YamlValue::Bool(params.ipv6),
+            YamlValue::Bool(params.is_ipv6_enabled),
         );
 
         if !dns_config.contains_key(YamlValue::String("enhanced-mode".to_string())) {

@@ -97,20 +97,21 @@ class _TunConfigCardState extends State<TunConfigCard> {
     setState(() {
       _tunStack = TunStack.fromString(ClashManager.instance.tunStack);
       _tunDeviceController.text = ClashManager.instance.tunDevice;
-      _tunAutoRoute = ClashManager.instance.tunAutoRoute;
-      _tunAutoDetectInterface = ClashManager.instance.tunAutoDetectInterface;
-      _tunStrictRoute = ClashManager.instance.tunStrictRoute;
+      _tunAutoRoute = ClashManager.instance.isTunAutoRouteEnabled;
+      _tunAutoDetectInterface =
+          ClashManager.instance.isTunAutoDetectInterfaceEnabled;
+      _tunStrictRoute = ClashManager.instance.isTunStrictRouteEnabled;
       _tunMtuController.text = ClashManager.instance.tunMtu.toString();
       _tunDnsHijackController.text = ClashManager.instance.tunDnsHijack.join(
         '，',
       );
-      _tunAutoRedirect = ClashManager.instance.tunAutoRedirect;
+      _tunAutoRedirect = ClashManager.instance.isTunAutoRedirectEnabled;
       _tunRouteExcludeAddressController.text = ClashManager
           .instance
           .tunRouteExcludeAddress
           .join('，');
       _tunDisableIcmpForwarding =
-          ClashManager.instance.tunDisableIcmpForwarding;
+          ClashManager.instance.isTunIcmpForwardingDisabled;
     });
   }
 

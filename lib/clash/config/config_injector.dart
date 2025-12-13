@@ -37,26 +37,26 @@ class ConfigInjector {
     String? configContent,
     List<OverrideConfig> overrides = const [],
     required int httpPort,
-    required bool ipv6,
+    required bool isIpv6Enabled,
     required bool tunEnabled,
     required String tunStack,
     required String tunDevice,
-    required bool tunAutoRoute,
-    required bool tunAutoRedirect,
-    required bool tunAutoDetectInterface,
+    required bool isTunAutoRouteEnabled,
+    required bool isTunAutoRedirectEnabled,
+    required bool isTunAutoDetectInterfaceEnabled,
     required List<String> tunDnsHijack,
-    required bool tunStrictRoute,
+    required bool isTunStrictRouteEnabled,
     required List<String> tunRouteExcludeAddress,
-    required bool tunDisableIcmpForwarding,
+    required bool isTunIcmpForwardingDisabled,
     required int tunMtu,
-    required bool allowLan,
-    required bool tcpConcurrent,
+    required bool isAllowLanEnabled,
+    required bool isTcpConcurrentEnabled,
     required String geodataLoader,
     required String findProcessMode,
     required String clashCoreLogLevel,
     required String externalController,
     String? externalControllerSecret,
-    required bool unifiedDelay,
+    required bool isUnifiedDelayEnabled,
     required String outboundMode,
   }) async {
     try {
@@ -84,35 +84,36 @@ class ConfigInjector {
       }
 
       // 2. 构建运行时参数
-      final keepAliveEnabled = ClashPreferences.instance.getKeepAliveEnabled();
-      final keepAliveInterval = keepAliveEnabled
+      final isKeepAliveEnabled = ClashPreferences.instance
+          .getKeepAliveEnabled();
+      final keepAliveInterval = isKeepAliveEnabled
           ? ClashPreferences.instance.getKeepAliveInterval()
           : null;
 
       final params = RuntimeConfigParams(
         httpPort: httpPort,
-        ipv6: ipv6,
-        allowLan: allowLan,
-        tcpConcurrent: tcpConcurrent,
-        unifiedDelay: unifiedDelay,
+        isIpv6Enabled: isIpv6Enabled,
+        isAllowLanEnabled: isAllowLanEnabled,
+        isTcpConcurrentEnabled: isTcpConcurrentEnabled,
+        isUnifiedDelayEnabled: isUnifiedDelayEnabled,
         outboundMode: outboundMode,
         tunEnabled: tunEnabled,
         tunStack: tunStack,
         tunDevice: tunDevice,
-        tunAutoRoute: tunAutoRoute,
-        tunAutoRedirect: tunAutoRedirect,
-        tunAutoDetectInterface: tunAutoDetectInterface,
+        isTunAutoRouteEnabled: isTunAutoRouteEnabled,
+        isTunAutoRedirectEnabled: isTunAutoRedirectEnabled,
+        isTunAutoDetectInterfaceEnabled: isTunAutoDetectInterfaceEnabled,
         tunDnsHijack: tunDnsHijack,
-        tunStrictRoute: tunStrictRoute,
+        isTunStrictRouteEnabled: isTunStrictRouteEnabled,
         tunRouteExcludeAddress: tunRouteExcludeAddress,
-        tunDisableIcmpForwarding: tunDisableIcmpForwarding,
+        isTunIcmpForwardingDisabled: isTunIcmpForwardingDisabled,
         tunMtu: tunMtu,
         geodataLoader: geodataLoader,
         findProcessMode: findProcessMode,
         clashCoreLogLevel: clashCoreLogLevel,
         externalController: externalController,
         externalControllerSecret: externalControllerSecret,
-        keepAliveEnabled: keepAliveEnabled,
+        isKeepAliveEnabled: isKeepAliveEnabled,
         keepAliveInterval: keepAliveInterval,
       );
 

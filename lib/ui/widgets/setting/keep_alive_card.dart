@@ -27,7 +27,7 @@ class _KeepAliveCardState extends State<KeepAliveCard> {
   void initState() {
     super.initState();
     final clashManager = ClashManager.instance;
-    _keepAliveEnabled = clashManager.keepAliveEnabled;
+    _keepAliveEnabled = clashManager.isKeepAliveEnabled;
     _keepAliveIntervalController = TextEditingController(
       text: clashManager.keepAliveInterval.toString(),
     );

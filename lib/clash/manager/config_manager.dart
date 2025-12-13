@@ -14,10 +14,10 @@ class ConfigManager {
   final bool Function() _isCoreRunning;
 
   // 配置状态缓存
-  bool _allowLan = false;
-  bool _ipv6 = false;
-  bool _tcpConcurrent = false;
-  bool _unifiedDelay = false;
+  bool _isAllowLanEnabled = false;
+  bool _isIpv6Enabled = false;
+  bool _isTcpConcurrentEnabled = false;
+  bool _isUnifiedDelayEnabled = false;
   String _geodataLoader = ClashDefaults.defaultGeodataLoader;
   String _findProcessMode = ClashDefaults.defaultFindProcessMode;
   String _clashCoreLogLevel = ClashDefaults.defaultLogLevel;
@@ -29,13 +29,13 @@ class ConfigManager {
   bool _tunEnabled = false;
   String _tunStack = ClashDefaults.defaultTunStack;
   String _tunDevice = ClashDefaults.defaultTunDevice;
-  bool _tunAutoRoute = false;
-  bool _tunAutoRedirect = false;
-  bool _tunAutoDetectInterface = false;
+  bool _isTunAutoRouteEnabled = false;
+  bool _isTunAutoRedirectEnabled = false;
+  bool _isTunAutoDetectInterfaceEnabled = false;
   List<String> _tunDnsHijack = List.from(ClashDefaults.defaultTunDnsHijack);
-  bool _tunStrictRoute = false;
+  bool _isTunStrictRouteEnabled = false;
   List<String> _tunRouteExcludeAddress = [];
-  bool _tunDisableIcmpForwarding = false;
+  bool _isTunIcmpForwardingDisabled = false;
   int _tunMtu = ClashDefaults.defaultTunMtu;
 
   // 端口配置
@@ -44,10 +44,10 @@ class ConfigManager {
   int? _httpPort; // HTTP 端口 7778（可选）
 
   // Getters
-  bool get allowLan => _allowLan;
-  bool get ipv6 => _ipv6;
-  bool get tcpConcurrent => _tcpConcurrent;
-  bool get unifiedDelay => _unifiedDelay;
+  bool get isAllowLanEnabled => _isAllowLanEnabled;
+  bool get isIpv6Enabled => _isIpv6Enabled;
+  bool get isTcpConcurrentEnabled => _isTcpConcurrentEnabled;
+  bool get isUnifiedDelayEnabled => _isUnifiedDelayEnabled;
   String get geodataLoader => _geodataLoader;
   String get findProcessMode => _findProcessMode;
   String get clashCoreLogLevel => _clashCoreLogLevel;
@@ -57,13 +57,13 @@ class ConfigManager {
   bool get tunEnabled => _tunEnabled;
   String get tunStack => _tunStack;
   String get tunDevice => _tunDevice;
-  bool get tunAutoRoute => _tunAutoRoute;
-  bool get tunAutoRedirect => _tunAutoRedirect;
-  bool get tunAutoDetectInterface => _tunAutoDetectInterface;
+  bool get isTunAutoRouteEnabled => _isTunAutoRouteEnabled;
+  bool get isTunAutoRedirectEnabled => _isTunAutoRedirectEnabled;
+  bool get isTunAutoDetectInterfaceEnabled => _isTunAutoDetectInterfaceEnabled;
   List<String> get tunDnsHijack => _tunDnsHijack;
-  bool get tunStrictRoute => _tunStrictRoute;
+  bool get isTunStrictRouteEnabled => _isTunStrictRouteEnabled;
   List<String> get tunRouteExcludeAddress => _tunRouteExcludeAddress;
-  bool get tunDisableIcmpForwarding => _tunDisableIcmpForwarding;
+  bool get isTunIcmpForwardingDisabled => _isTunIcmpForwardingDisabled;
   int get tunMtu => _tunMtu;
   int get mixedPort => _mixedPort; // 混合端口
   int? get socksPort => _socksPort; // SOCKS 端口
@@ -93,25 +93,25 @@ class ConfigManager {
     _socksPort = ClashPreferences.instance.getSocksPort();
     _httpPort = ClashPreferences.instance.getHttpPort();
 
-    _allowLan = ClashPreferences.instance.getAllowLan();
-    _ipv6 = ClashPreferences.instance.getIpv6();
-    _tcpConcurrent = ClashPreferences.instance.getTcpConcurrent();
-    _unifiedDelay = ClashPreferences.instance.getUnifiedDelayEnabled();
+    _isAllowLanEnabled = ClashPreferences.instance.getAllowLan();
+    _isIpv6Enabled = ClashPreferences.instance.getIpv6();
+    _isTcpConcurrentEnabled = ClashPreferences.instance.getTcpConcurrent();
+    _isUnifiedDelayEnabled = ClashPreferences.instance.getUnifiedDelayEnabled();
     _geodataLoader = ClashPreferences.instance.getGeodataLoader();
     _findProcessMode = ClashPreferences.instance.getFindProcessMode();
 
     _tunEnabled = ClashPreferences.instance.getTunEnable();
     _tunStack = ClashPreferences.instance.getTunStack();
     _tunDevice = ClashPreferences.instance.getTunDevice();
-    _tunAutoRoute = ClashPreferences.instance.getTunAutoRoute();
-    _tunAutoRedirect = ClashPreferences.instance.getTunAutoRedirect();
-    _tunAutoDetectInterface = ClashPreferences.instance
+    _isTunAutoRouteEnabled = ClashPreferences.instance.getTunAutoRoute();
+    _isTunAutoRedirectEnabled = ClashPreferences.instance.getTunAutoRedirect();
+    _isTunAutoDetectInterfaceEnabled = ClashPreferences.instance
         .getTunAutoDetectInterface();
     _tunDnsHijack = ClashPreferences.instance.getTunDnsHijack();
-    _tunStrictRoute = ClashPreferences.instance.getTunStrictRoute();
+    _isTunStrictRouteEnabled = ClashPreferences.instance.getTunStrictRoute();
     _tunRouteExcludeAddress = ClashPreferences.instance
         .getTunRouteExcludeAddress();
-    _tunDisableIcmpForwarding = ClashPreferences.instance
+    _isTunIcmpForwardingDisabled = ClashPreferences.instance
         .getTunDisableIcmpForwarding();
     _tunMtu = ClashPreferences.instance.getTunMtu();
 
@@ -119,7 +119,7 @@ class ConfigManager {
 
     // 🔍 调试日志：打印加载的配置
     Logger.debug(
-      '🔍 ConfigManager 已加载配置: tunEnabled=$_tunEnabled, tunStack=$_tunStack, tunDevice=$_tunDevice, tunAutoRoute=$_tunAutoRoute, tunAutoDetectInterface=$_tunAutoDetectInterface, tunStrictRoute=$_tunStrictRoute, tunMtu=$_tunMtu',
+      '🔍 ConfigManager 已加载配置: tunEnabled=$_tunEnabled, tunStack=$_tunStack, tunDevice=$_tunDevice, tunAutoRoute=$_isTunAutoRouteEnabled, tunAutoDetectInterface=$_isTunAutoDetectInterfaceEnabled, tunStrictRoute=$_isTunStrictRouteEnabled, tunMtu=$_tunMtu',
     );
   }
 
@@ -151,7 +151,7 @@ class ConfigManager {
       }
 
       Logger.debug(
-        '重载参数：configPath=$configPath, tunEnabled=$_tunEnabled, ipv6=$_ipv6, allowLan=$_allowLan',
+        '重载参数：configPath=$configPath, tunEnabled=$_tunEnabled, ipv6=$_isIpv6Enabled, allowLan=$_isAllowLanEnabled',
       );
 
       String? actualConfigPath;
@@ -161,27 +161,27 @@ class ConfigManager {
         configPath: configPath, // 可以为 null，ConfigInjector 会使用默认配置
         overrides: overrides,
         httpPort: _mixedPort,
-        ipv6: _ipv6,
+        isIpv6Enabled: _isIpv6Enabled,
         tunEnabled: _tunEnabled,
         tunStack: _tunStack,
         tunDevice: _tunDevice,
-        tunAutoRoute: _tunAutoRoute,
-        tunAutoRedirect: _tunAutoRedirect,
-        tunAutoDetectInterface: _tunAutoDetectInterface,
+        isTunAutoRouteEnabled: _isTunAutoRouteEnabled,
+        isTunAutoRedirectEnabled: _isTunAutoRedirectEnabled,
+        isTunAutoDetectInterfaceEnabled: _isTunAutoDetectInterfaceEnabled,
         tunDnsHijack: _tunDnsHijack,
-        tunStrictRoute: _tunStrictRoute,
+        isTunStrictRouteEnabled: _isTunStrictRouteEnabled,
         tunRouteExcludeAddress: _tunRouteExcludeAddress,
-        tunDisableIcmpForwarding: _tunDisableIcmpForwarding,
+        isTunIcmpForwardingDisabled: _isTunIcmpForwardingDisabled,
         tunMtu: _tunMtu,
-        allowLan: _allowLan,
-        tcpConcurrent: _tcpConcurrent,
+        isAllowLanEnabled: _isAllowLanEnabled,
+        isTcpConcurrentEnabled: _isTcpConcurrentEnabled,
         geodataLoader: _geodataLoader,
         findProcessMode: _findProcessMode,
         clashCoreLogLevel: _clashCoreLogLevel,
         externalController: _externalController,
         externalControllerSecret: ClashPreferences.instance
             .getExternalControllerSecret(),
-        unifiedDelay: _unifiedDelay,
+        isUnifiedDelayEnabled: _isUnifiedDelayEnabled,
         outboundMode: _outboundMode,
       );
 
@@ -215,7 +215,7 @@ class ConfigManager {
   Future<bool> setAllowLan(bool enabled) async {
     try {
       if (!_isCoreRunning()) {
-        _allowLan = enabled;
+        _isAllowLanEnabled = enabled;
         await ClashPreferences.instance.setAllowLan(enabled);
         _notifyListeners();
         return true;
@@ -223,7 +223,7 @@ class ConfigManager {
 
       final success = await _apiClient.setAllowLan(enabled);
       if (success) {
-        _allowLan = enabled;
+        _isAllowLanEnabled = enabled;
         await ClashPreferences.instance.setAllowLan(enabled);
         _notifyListeners();
         Logger.info('局域网代理（支持重载）：${enabled ? "启用" : "禁用"}');
@@ -239,7 +239,7 @@ class ConfigManager {
   Future<bool> setIpv6(bool enabled) async {
     try {
       if (!_isCoreRunning()) {
-        _ipv6 = enabled;
+        _isIpv6Enabled = enabled;
         await ClashPreferences.instance.setIpv6(enabled);
         _notifyListeners();
         return true;
@@ -247,7 +247,7 @@ class ConfigManager {
 
       final success = await _apiClient.setIpv6(enabled);
       if (success) {
-        _ipv6 = enabled;
+        _isIpv6Enabled = enabled;
         await ClashPreferences.instance.setIpv6(enabled);
         _notifyListeners();
         Logger.info('IPv6（支持重载）：${enabled ? "启用" : "禁用"}');
@@ -263,7 +263,7 @@ class ConfigManager {
   Future<bool> setTcpConcurrent(bool enabled) async {
     try {
       if (!_isCoreRunning()) {
-        _tcpConcurrent = enabled;
+        _isTcpConcurrentEnabled = enabled;
         await ClashPreferences.instance.setTcpConcurrent(enabled);
         _notifyListeners();
         return true;
@@ -271,7 +271,7 @@ class ConfigManager {
 
       final success = await _apiClient.setTcpConcurrent(enabled);
       if (success) {
-        _tcpConcurrent = enabled;
+        _isTcpConcurrentEnabled = enabled;
         await ClashPreferences.instance.setTcpConcurrent(enabled);
         _notifyListeners();
         Logger.info('TCP 并发配置已更新：${enabled ? "启用" : "禁用"}');
@@ -287,7 +287,7 @@ class ConfigManager {
   Future<bool> setUnifiedDelay(bool enabled) async {
     try {
       if (!_isCoreRunning()) {
-        _unifiedDelay = enabled;
+        _isUnifiedDelayEnabled = enabled;
         await ClashPreferences.instance.setUnifiedDelayEnabled(enabled);
         _notifyListeners();
         return true;
@@ -295,7 +295,7 @@ class ConfigManager {
 
       final success = await _apiClient.setUnifiedDelay(enabled);
       if (success) {
-        _unifiedDelay = enabled;
+        _isUnifiedDelayEnabled = enabled;
         await ClashPreferences.instance.setUnifiedDelayEnabled(enabled);
         _notifyListeners();
         Logger.info('统一延迟配置已更新：${enabled ? "启用（去除握手延迟）" : "禁用（包含握手延迟）"}');
@@ -620,7 +620,7 @@ class ConfigManager {
   Future<bool> setTunAutoRoute(bool enabled) async {
     try {
       if (!_isCoreRunning()) {
-        _tunAutoRoute = enabled;
+        _isTunAutoRouteEnabled = enabled;
         await ClashPreferences.instance.setTunAutoRoute(enabled);
         _notifyListeners();
         return true;
@@ -628,7 +628,7 @@ class ConfigManager {
 
       final success = await _apiClient.setTunAutoRoute(enabled);
       if (success) {
-        _tunAutoRoute = enabled;
+        _isTunAutoRouteEnabled = enabled;
         await ClashPreferences.instance.setTunAutoRoute(enabled);
         _notifyListeners();
         Logger.info('虚拟网卡自动路由（支持重载）：${enabled ? "启用" : "禁用"}');
@@ -644,7 +644,7 @@ class ConfigManager {
   Future<bool> setTunAutoRedirect(bool enabled) async {
     try {
       if (!_isCoreRunning()) {
-        _tunAutoRedirect = enabled;
+        _isTunAutoRedirectEnabled = enabled;
         await ClashPreferences.instance.setTunAutoRedirect(enabled);
         _notifyListeners();
         return true;
@@ -652,7 +652,7 @@ class ConfigManager {
 
       final success = await _apiClient.setTunAutoRedirect(enabled);
       if (success) {
-        _tunAutoRedirect = enabled;
+        _isTunAutoRedirectEnabled = enabled;
         await ClashPreferences.instance.setTunAutoRedirect(enabled);
         _notifyListeners();
         Logger.info('虚拟网卡自动 TCP 重定向（支持重载）：${enabled ? "启用" : "禁用"}');
@@ -668,7 +668,7 @@ class ConfigManager {
   Future<bool> setTunAutoDetectInterface(bool enabled) async {
     try {
       if (!_isCoreRunning()) {
-        _tunAutoDetectInterface = enabled;
+        _isTunAutoDetectInterfaceEnabled = enabled;
         await ClashPreferences.instance.setTunAutoDetectInterface(enabled);
         _notifyListeners();
         return true;
@@ -676,7 +676,7 @@ class ConfigManager {
 
       final success = await _apiClient.setTunAutoDetectInterface(enabled);
       if (success) {
-        _tunAutoDetectInterface = enabled;
+        _isTunAutoDetectInterfaceEnabled = enabled;
         await ClashPreferences.instance.setTunAutoDetectInterface(enabled);
         _notifyListeners();
         Logger.info('虚拟网卡自动检测接口（支持重载）：${enabled ? "启用" : "禁用"}');
@@ -716,7 +716,7 @@ class ConfigManager {
   Future<bool> setTunStrictRoute(bool enabled) async {
     try {
       if (!_isCoreRunning()) {
-        _tunStrictRoute = enabled;
+        _isTunStrictRouteEnabled = enabled;
         await ClashPreferences.instance.setTunStrictRoute(enabled);
         _notifyListeners();
         return true;
@@ -724,7 +724,7 @@ class ConfigManager {
 
       final success = await _apiClient.setTunStrictRoute(enabled);
       if (success) {
-        _tunStrictRoute = enabled;
+        _isTunStrictRouteEnabled = enabled;
         await ClashPreferences.instance.setTunStrictRoute(enabled);
         _notifyListeners();
         Logger.info('虚拟网卡严格路由（支持重载）：${enabled ? "启用" : "禁用"}');
@@ -764,7 +764,7 @@ class ConfigManager {
   Future<bool> setTunDisableIcmpForwarding(bool disabled) async {
     try {
       if (!_isCoreRunning()) {
-        _tunDisableIcmpForwarding = disabled;
+        _isTunIcmpForwardingDisabled = disabled;
         await ClashPreferences.instance.setTunDisableIcmpForwarding(disabled);
         _notifyListeners();
         return true;
@@ -772,7 +772,7 @@ class ConfigManager {
 
       final success = await _apiClient.setTunDisableIcmpForwarding(disabled);
       if (success) {
-        _tunDisableIcmpForwarding = disabled;
+        _isTunIcmpForwardingDisabled = disabled;
         await ClashPreferences.instance.setTunDisableIcmpForwarding(disabled);
         _notifyListeners();
         Logger.info('虚拟网卡 ICMP 转发（支持重载）：${disabled ? "禁用" : "启用"}');
@@ -865,23 +865,23 @@ class ConfigManager {
 
       bool hasChanged = false;
 
-      if (_allowLan != results[0]) {
-        _allowLan = results[0] as bool;
+      if (_isAllowLanEnabled != results[0]) {
+        _isAllowLanEnabled = results[0] as bool;
         hasChanged = true;
       }
 
-      if (_ipv6 != results[1]) {
-        _ipv6 = results[1] as bool;
+      if (_isIpv6Enabled != results[1]) {
+        _isIpv6Enabled = results[1] as bool;
         hasChanged = true;
       }
 
-      if (_tcpConcurrent != results[2]) {
-        _tcpConcurrent = results[2] as bool;
+      if (_isTcpConcurrentEnabled != results[2]) {
+        _isTcpConcurrentEnabled = results[2] as bool;
         hasChanged = true;
       }
 
-      if (_unifiedDelay != results[3]) {
-        _unifiedDelay = results[3] as bool;
+      if (_isUnifiedDelayEnabled != results[3]) {
+        _isUnifiedDelayEnabled = results[3] as bool;
         hasChanged = true;
       }
 

@@ -13,16 +13,16 @@ class ConfigManagementService {
   int get mixedPort => _clashManager.mixedPort;
 
   // 获取局域网代理状态
-  bool getAllowLan() => _clashManager.allowLan;
+  bool getAllowLan() => _clashManager.isAllowLanEnabled;
 
   // 获取 IPv6 状态
-  bool getIpv6() => _clashManager.ipv6;
+  bool getIpv6() => _clashManager.isIpv6Enabled;
 
   // 获取 TCP 并发状态
-  bool getTcpConcurrent() => _clashManager.tcpConcurrent;
+  bool getTcpConcurrent() => _clashManager.isTcpConcurrentEnabled;
 
   // 获取统一延迟状态
-  bool getUnifiedDelay() => _clashManager.unifiedDelay;
+  bool getUnifiedDelay() => _clashManager.isUnifiedDelayEnabled;
 
   // 获取 GEO 数据加载模式
   String getGeodataLoader() => _clashManager.geodataLoader;

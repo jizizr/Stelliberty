@@ -44,8 +44,8 @@ class SubscriptionProvider extends ChangeNotifier {
   // 自动更新定时器
   Timer? _autoUpdateTimer;
 
-  // 启动时更新标志
-  bool _hasPerformedStartupUpdate = false;
+  // 启动时更新是否已完成
+  bool _isStartupUpdateDone = false;
 
   // 获取 OverrideService
   OverrideService get overrideService => _overrideService;
@@ -688,11 +688,11 @@ class SubscriptionProvider extends ChangeNotifier {
 
   // 执行启动时更新（确保只执行一次）
   Future<void> performStartupUpdate() async {
-    if (_hasPerformedStartupUpdate) {
+    if (_isStartupUpdateDone) {
       Logger.debug('启动时更新已执行过，跳过');
       return;
     }
-    _hasPerformedStartupUpdate = true;
+    _isStartupUpdateDone = true;
 
     // 找到所有启用了"启动时更新"的订阅（排除本地文件）
     final startupUpdateSubscriptions = _subscriptions

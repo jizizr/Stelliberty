@@ -62,10 +62,10 @@ class ClashManager extends ChangeNotifier {
   String? get currentConfigPath => _lifecycleManager.currentConfigPath;
   String get coreVersion => _lifecycleManager.coreVersion;
 
-  bool get allowLan => _configManager.allowLan;
-  bool get ipv6 => _configManager.ipv6;
-  bool get tcpConcurrent => _configManager.tcpConcurrent;
-  bool get unifiedDelay => _configManager.unifiedDelay;
+  bool get isAllowLanEnabled => _configManager.isAllowLanEnabled;
+  bool get isIpv6Enabled => _configManager.isIpv6Enabled;
+  bool get isTcpConcurrentEnabled => _configManager.isTcpConcurrentEnabled;
+  bool get isUnifiedDelayEnabled => _configManager.isUnifiedDelayEnabled;
   String get geodataLoader => _configManager.geodataLoader;
   String get findProcessMode => _configManager.findProcessMode;
   String get clashCoreLogLevel => _configManager.clashCoreLogLevel;
@@ -76,14 +76,16 @@ class ClashManager extends ChangeNotifier {
   bool get tunEnabled => _configManager.tunEnabled;
   String get tunStack => _configManager.tunStack;
   String get tunDevice => _configManager.tunDevice;
-  bool get tunAutoRoute => _configManager.tunAutoRoute;
-  bool get tunAutoRedirect => _configManager.tunAutoRedirect;
-  bool get tunAutoDetectInterface => _configManager.tunAutoDetectInterface;
+  bool get isTunAutoRouteEnabled => _configManager.isTunAutoRouteEnabled;
+  bool get isTunAutoRedirectEnabled => _configManager.isTunAutoRedirectEnabled;
+  bool get isTunAutoDetectInterfaceEnabled =>
+      _configManager.isTunAutoDetectInterfaceEnabled;
   List<String> get tunDnsHijack => _configManager.tunDnsHijack;
-  bool get tunStrictRoute => _configManager.tunStrictRoute;
+  bool get isTunStrictRouteEnabled => _configManager.isTunStrictRouteEnabled;
   List<String> get tunRouteExcludeAddress =>
       _configManager.tunRouteExcludeAddress;
-  bool get tunDisableIcmpForwarding => _configManager.tunDisableIcmpForwarding;
+  bool get isTunIcmpForwardingDisabled =>
+      _configManager.isTunIcmpForwardingDisabled;
   int get tunMtu => _configManager.tunMtu;
   int get mixedPort => _configManager.mixedPort; // 混合端口
   int? get socksPort => _configManager.socksPort; // SOCKS 端口
@@ -91,7 +93,8 @@ class ClashManager extends ChangeNotifier {
   String get outboundMode => _configManager.outboundMode;
 
   // TCP Keep-Alive 配置（启动参数，直接从持久化读取）
-  bool get keepAliveEnabled => ClashPreferences.instance.getKeepAliveEnabled();
+  bool get isKeepAliveEnabled =>
+      ClashPreferences.instance.getKeepAliveEnabled();
   int get keepAliveInterval => ClashPreferences.instance.getKeepAliveInterval();
 
   bool get isSystemProxyEnabled => _systemProxyManager.isSystemProxyEnabled;
@@ -191,25 +194,26 @@ class ClashManager extends ChangeNotifier {
       overrides: overrides,
       onOverridesFailed: onOverridesFailed,
       mixedPort: _configManager.mixedPort, // 传递混合端口
-      ipv6: _configManager.ipv6,
+      isIpv6Enabled: _configManager.isIpv6Enabled,
       tunEnabled: _configManager.tunEnabled,
       tunStack: _configManager.tunStack,
       tunDevice: _configManager.tunDevice,
-      tunAutoRoute: _configManager.tunAutoRoute,
-      tunAutoRedirect: _configManager.tunAutoRedirect,
-      tunAutoDetectInterface: _configManager.tunAutoDetectInterface,
+      isTunAutoRouteEnabled: _configManager.isTunAutoRouteEnabled,
+      isTunAutoRedirectEnabled: _configManager.isTunAutoRedirectEnabled,
+      isTunAutoDetectInterfaceEnabled:
+          _configManager.isTunAutoDetectInterfaceEnabled,
       tunDnsHijack: _configManager.tunDnsHijack,
-      tunStrictRoute: _configManager.tunStrictRoute,
+      isTunStrictRouteEnabled: _configManager.isTunStrictRouteEnabled,
       tunRouteExcludeAddress: _configManager.tunRouteExcludeAddress,
-      tunDisableIcmpForwarding: _configManager.tunDisableIcmpForwarding,
+      isTunIcmpForwardingDisabled: _configManager.isTunIcmpForwardingDisabled,
       tunMtu: _configManager.tunMtu,
-      allowLan: _configManager.allowLan,
-      tcpConcurrent: _configManager.tcpConcurrent,
+      isAllowLanEnabled: _configManager.isAllowLanEnabled,
+      isTcpConcurrentEnabled: _configManager.isTcpConcurrentEnabled,
       geodataLoader: _configManager.geodataLoader,
       findProcessMode: _configManager.findProcessMode,
       clashCoreLogLevel: _configManager.clashCoreLogLevel,
       externalController: _configManager.externalController,
-      unifiedDelay: _configManager.unifiedDelay,
+      isUnifiedDelayEnabled: _configManager.isUnifiedDelayEnabled,
       outboundMode: _configManager.outboundMode,
       socksPort: _configManager.socksPort,
       httpPort: _configManager.httpPort, // 单独 HTTP 端口

@@ -11,11 +11,11 @@ class AppUpdateProvider extends ChangeNotifier {
   DateTime? _lastCheckTime;
   bool _isChecking = false;
   AppUpdateInfo? _latestUpdateInfo;
-  bool _dialogShown = false;
+  bool _isDialogShown = false;
 
   AppUpdateInfo? get latestUpdateInfo => _latestUpdateInfo;
   bool get isChecking => _isChecking;
-  bool get dialogShown => _dialogShown;
+  bool get isDialogShown => _isDialogShown;
 
   // 初始化 Provider
   Future<void> initialize() async {
@@ -140,22 +140,22 @@ class AppUpdateProvider extends ChangeNotifier {
                 ignoredVersion == updateInfo.latestVersion) {
               Logger.info('版本 $ignoredVersion 已被用户忽略，跳过提示');
               _latestUpdateInfo = null;
-              _dialogShown = false;
+              _isDialogShown = false;
               return updateInfo;
             }
           }
 
           _latestUpdateInfo = updateInfo;
-          _dialogShown = false; // 重置对话框状态
+          _isDialogShown = false; // 重置对话框状态
         } else {
           Logger.info('已是最新版本: ${updateInfo.currentVersion}');
           _latestUpdateInfo = null;
-          _dialogShown = false;
+          _isDialogShown = false;
         }
       } else {
         Logger.warning('更新检查失败');
         _latestUpdateInfo = null;
-        _dialogShown = false;
+        _isDialogShown = false;
       }
 
       return updateInfo;
@@ -202,13 +202,13 @@ class AppUpdateProvider extends ChangeNotifier {
   // 清除更新信息
   void clearUpdateInfo() {
     _latestUpdateInfo = null;
-    _dialogShown = false;
+    _isDialogShown = false;
     notifyListeners();
   }
 
   // 标记对话框已显示
   void markDialogShown() {
-    _dialogShown = true;
+    _isDialogShown = true;
     // 不触发 notifyListeners，避免重复触发监听器
   }
 

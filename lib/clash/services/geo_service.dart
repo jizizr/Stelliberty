@@ -24,7 +24,7 @@ class GeoService {
 
   // 性能优化：路径缓存
   static String? _cachedGeoDataDir;
-  static bool _hasValidated = false;
+  static bool _isValidated = false;
 
   // 获取 Geodata 数据目录路径
   //
@@ -62,7 +62,7 @@ class GeoService {
     }
 
     // 只在首次或强制验证时打印详细日志
-    if (!_hasValidated || forceValidate) {
+    if (!_isValidated || forceValidate) {
       Logger.info('检查 Geodata 文件（内置方案）…');
       Logger.info('目录：$geoDataDir');
 
@@ -76,7 +76,7 @@ class GeoService {
         }
       }
 
-      _hasValidated = true;
+      _isValidated = true;
     }
 
     // 缓存路径
