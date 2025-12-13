@@ -321,28 +321,49 @@ flutter run
 For developers, the project includes a test framework for isolated feature testing:
 
 ```bash
-# Run override system test
+# Run override rule test (supports YAML or JS rules)
 flutter run --dart-define=TEST_TYPE=override
 
 # Run IPC API test
 flutter run --dart-define=TEST_TYPE=ipc-api
+
+# Run config validation test
+flutter run --dart-define=TEST_TYPE=validation
 ```
 
 **Required test files** in `assets/test/`:
-```
-assets/test/
-├── config/
-│   └── test.yaml          # Test configuration file
-├── override/
-│   ├── 错误类型测试.js      # Error type testing script
-│   └── 扩展脚本.js          # Extension script
-└── output/
-    └── final.yaml         # Expected output file
-```
+
+- **For `override` test:**
+  ```
+  assets/test/
+  ├── config/
+  │   └── test.yaml          # Base configuration file for testing
+  ├── override/
+  │   ├── your_script.js     # JS override script
+  │   └── your_rules.yaml    # YAML override rules
+  └── output/
+      └── final.yaml         # Expected final output after applying overrides
+  ```
+
+- **For `ipc-api` test:**
+  > **Note**: It is recommended to run the pre-build script (`dart run scripts/prebuild.dart`) before this test to download the necessary resources.
+  ```
+  assets/test/
+  └── config/
+      └── test.yaml          # Base configuration file for testing
+  ```
+
+- **For `validation` test:**
+  ```
+  assets/test/
+  └── config_validation_tests/
+      ├── valid_config_1.yaml
+      └── invalid_config_2.yml
+  ```
 
 > 💡 **Note**: Test mode is only available in Debug builds and automatically disabled in Release mode.
 
-Test implementations: `lib/dev_test/` (`override_test.dart`, `ipc_api_test.dart`)
+Test implementations: `lib/dev_test/` (`override_test.dart`, `ipc_api_test.dart`, `validation_test.dart`)
 
 ---
 
