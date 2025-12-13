@@ -76,11 +76,11 @@ class SubscriptionService {
     if (!isClashRunning &&
         subscription.proxyMode != SubscriptionProxyMode.direct) {
       Logger.warning(
-        'Clash 未运行，强制使用直连模式（用户配置: ${subscription.proxyMode.displayName}）',
+        'Clash 未运行，强制使用直连模式（用户配置: ${subscription.proxyMode.value}）',
       );
     }
 
-    Logger.info('代理模式：${effectiveProxyMode.displayName}');
+    Logger.info('代理模式：${effectiveProxyMode.value}');
 
     // 根据代理模式创建 HTTP 客户端
     final client = _createHttpClient(effectiveProxyMode);

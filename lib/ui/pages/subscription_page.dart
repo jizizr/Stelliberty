@@ -397,7 +397,7 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
 
     Logger.debug('打开编辑订阅对话框');
     Logger.debug('订阅名称：${latestSubscription.name}');
-    Logger.debug('当前代理模式：${latestSubscription.proxyMode.displayName}');
+    Logger.debug('当前代理模式：${latestSubscription.proxyMode.value}');
     Logger.debug('自动更新模式：${latestSubscription.autoUpdateMode.value}');
     Logger.debug('更新间隔：${latestSubscription.intervalMinutes} 分钟');
     Logger.debug('启动时更新：${latestSubscription.updateOnStartup}');
@@ -409,7 +409,7 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
 
     if (result != null && context.mounted) {
       Logger.debug('用户确认编辑，保存新配置');
-      Logger.debug('新代理模式：${result.proxyMode.displayName}');
+      Logger.debug('新代理模式：${result.proxyMode.value}');
 
       await provider.updateSubscriptionInfo(
         subscriptionId: subscription.id,

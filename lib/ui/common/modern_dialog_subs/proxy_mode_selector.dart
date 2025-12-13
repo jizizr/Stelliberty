@@ -26,17 +26,17 @@ class ProxyModeSelector extends StatelessWidget {
       options: [
         OptionItem(
           value: SubscriptionProxyMode.direct,
-          title: SubscriptionProxyMode.direct.displayName,
+          title: trans.subscriptionDialog.proxyModeDirectTitle,
           subtitle: trans.subscriptionDialog.proxyModeDirect,
         ),
         OptionItem(
           value: SubscriptionProxyMode.system,
-          title: SubscriptionProxyMode.system.displayName,
+          title: trans.subscriptionDialog.proxyModeSystemTitle,
           subtitle: trans.subscriptionDialog.proxyModeSystem,
         ),
         OptionItem(
           value: SubscriptionProxyMode.core,
-          title: SubscriptionProxyMode.core.displayName,
+          title: trans.subscriptionDialog.proxyModeCoreTitle,
           subtitle: trans.subscriptionDialog.proxyModeCore,
         ),
       ],

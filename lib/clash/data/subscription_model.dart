@@ -3,18 +3,17 @@ import '../config/clash_defaults.dart';
 // 订阅更新代理模式
 enum SubscriptionProxyMode {
   // 直连，不使用代理
-  direct('direct', '直连'),
+  direct('direct'),
 
   // 使用系统代理
-  system('system', '系统代理'),
+  system('system'),
 
   // 使用 Clash 核心代理（自举）
-  core('core', '核心代理');
+  core('core');
 
-  const SubscriptionProxyMode(this.value, this.displayName);
+  const SubscriptionProxyMode(this.value);
 
   final String value;
-  final String displayName;
 
   static SubscriptionProxyMode fromString(String value) {
     return SubscriptionProxyMode.values.firstWhere(
