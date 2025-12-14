@@ -21,6 +21,7 @@ class _LanguageSelectorState extends State<LanguageSelector> {
   Widget build(BuildContext context) {
     final trans = context.translate;
     final languageProvider = context.watch<LanguageProvider>();
+    final currentDisplayName = languageProvider.languageMode.displayName(context);
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
@@ -54,7 +55,7 @@ class _LanguageSelectorState extends State<LanguageSelector> {
                 onSelected: (mode) => languageProvider.setLanguageMode(mode),
                 itemToString: (mode) => mode.displayName(context),
                 child: CustomDropdownButton(
-                  text: languageProvider.languageMode.displayName(context),
+                  text: currentDisplayName,
                   isHovering: _isHoveringOnLanguageMenu,
                 ),
               ),
