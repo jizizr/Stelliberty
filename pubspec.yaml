@@ -49,9 +49,6 @@ dependencies:
   http: ^1.2.2
   path: ^1.9.1
   path_provider: ^2.1.5
-  
-  # 文件压缩解压
-  archive: ^4.0.7
 
   # YAML 解析
   yaml: ^3.1.3
