@@ -59,12 +59,7 @@ pub async fn batch_test_delays(
                 // 获取信号量许可（阻塞，直到有空闲槽位）
                 let _permit = semaphore.acquire().await.ok()?;
 
-                log::debug!(
-                    "开始测试节点 ({}/{}): {}",
-                    index + 1,
-                    total,
-                    node_name
-                );
+                log::debug!("开始测试节点 ({}/{}): {}", index + 1, total, node_name);
 
                 // 执行单个节点的延迟测试
                 let delay_ms = test_single_node(&node_name, &test_url, timeout_ms).await;
@@ -85,11 +80,7 @@ pub async fn batch_test_delays(
     let results: Vec<BatchTestResult> = tasks.collect().await;
 
     let success_count = results.iter().filter(|r| r.delay_ms > 0).count();
-    log::info!(
-        "批量延迟测试完成，成功：{}/{}",
-        success_count,
-        total
-    );
+    log::info!("批量延迟测试完成，成功：{}/{}", success_count, total);
 
     results
 }

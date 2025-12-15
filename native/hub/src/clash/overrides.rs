@@ -46,4 +46,3 @@ pub fn init_message_listeners() {
         log::info!("覆写文件下载消息通道已关闭，退出监听器");
     });
 }
-

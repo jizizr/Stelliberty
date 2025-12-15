@@ -207,4 +207,3 @@ impl DownloadOverrideRequest {
         response.send_signal_to_dart();
     }
 }
-

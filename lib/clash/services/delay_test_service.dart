@@ -100,20 +100,20 @@ class DelayTestService {
       });
 
       // 订阅完成信号
-      completeSubscription =
-          signals.BatchDelayTestComplete.rustSignalStream.listen((result) {
-        final message = result.message;
-        if (message.success) {
-          completer.complete();
-        } else {
-          Logger.error(
-            '批量延迟测试失败（Rust 层）：${message.errorMessage ?? "未知错误"}',
-          );
-          completer.completeError(
-            Exception(message.errorMessage ?? '批量延迟测试失败'),
-          );
-        }
-      });
+      completeSubscription = signals.BatchDelayTestComplete.rustSignalStream
+          .listen((result) {
+            final message = result.message;
+            if (message.success) {
+              completer.complete();
+            } else {
+              Logger.error(
+                '批量延迟测试失败（Rust 层）：${message.errorMessage ?? "未知错误"}',
+              );
+              completer.completeError(
+                Exception(message.errorMessage ?? '批量延迟测试失败'),
+              );
+            }
+          });
 
       // 发送批量测试请求到 Rust 层
       signals.BatchDelayTestRequest(

@@ -9,9 +9,9 @@ use serde::{Deserialize, Serialize};
 #[derive(Deserialize, DartSignal)]
 pub struct BatchDelayTestRequest {
     pub node_names: Vec<String>, // 要测试的节点名称列表
-    pub test_url: String,         // 测试 URL
-    pub timeout_ms: u32,          // 超时时间（毫秒）
-    pub concurrency: u32,         // 并发数
+    pub test_url: String,        // 测试 URL
+    pub timeout_ms: u32,         // 超时时间（毫秒）
+    pub concurrency: u32,        // 并发数
 }
 
 // Rust → Dart：单个节点测试完成（流式进度更新）
@@ -75,10 +75,6 @@ impl BatchDelayTestRequest {
         }
         .send_signal_to_dart();
 
-        log::info!(
-            "批量延迟测试完成，成功：{}/{}",
-            success_count,
-            total_count
-        );
+        log::info!("批量延迟测试完成，成功：{}/{}", success_count, total_count);
     }
 }

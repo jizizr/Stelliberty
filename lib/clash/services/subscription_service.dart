@@ -98,7 +98,9 @@ class SubscriptionService {
         url: subscription.url,
         proxyMode: rustProxyMode,
         userAgent: subscription.userAgent,
-        timeoutSeconds: Uint64(BigInt.from(ClashDefaults.subscriptionDownloadTimeout)),
+        timeoutSeconds: Uint64(
+          BigInt.from(ClashDefaults.subscriptionDownloadTimeout),
+        ),
         mixedPort: ClashPreferences.instance.getMixedPort(),
       );
       downloadRequest.sendSignalToRust();

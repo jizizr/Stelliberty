@@ -96,7 +96,9 @@ class OverrideService {
         url: config.url!,
         proxyMode: proxyMode,
         userAgent: userAgent,
-        timeoutSeconds: signals.Uint64(BigInt.from(ClashDefaults.overrideDownloadTimeout)),
+        timeoutSeconds: signals.Uint64(
+          BigInt.from(ClashDefaults.overrideDownloadTimeout),
+        ),
         mixedPort: mixedPort,
       ).sendSignalToRust();
 

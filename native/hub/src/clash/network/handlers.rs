@@ -865,7 +865,6 @@ impl StopLogStream {
     }
 }
 
-
 // 公开的 IPC GET 请求接口（供 Rust 内部模块使用）
 //
 // 用于批量延迟测试等场景，直接使用连接池发送 IPC GET 请求

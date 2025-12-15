@@ -64,7 +64,7 @@ class _ConnectionPageContentState extends State<ConnectionPageContent> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // 过滤器和控制栏（扁平化设计）
-            _buildFilterBar(context, connectionProvider),
+            _buildFilterBar(context, connectionProvider, connections),
 
             // 统一的分隔线（与代理和订阅页面相同高度）
             const Divider(height: 1, thickness: 1),
@@ -88,10 +88,14 @@ class _ConnectionPageContentState extends State<ConnectionPageContent> {
   }
 
   // 构建过滤器和控制栏（扁平化 MD3 风格）
-  Widget _buildFilterBar(BuildContext context, ConnectionProvider provider) {
+  Widget _buildFilterBar(
+    BuildContext context,
+    ConnectionProvider provider,
+    List<ConnectionInfo> connections,
+  ) {
     final trans = context.translate;
     final colorScheme = Theme.of(context).colorScheme;
-    final totalCount = provider.connections.length;
+    final totalCount = connections.length;
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
