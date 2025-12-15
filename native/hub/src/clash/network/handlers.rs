@@ -133,6 +133,120 @@ fn should_retry_on_error(error_msg: &str, attempt: usize, max_retries: usize) ->
             || error_msg.contains("Broken pipe"))
 }
 
+// 公共函数：处理 IPC 请求的核心逻辑（带自动重试）
+//
+// 参数：
+// - method: HTTP 方法名（"GET"/"POST"/"PUT"/"PATCH"/"DELETE"）
+// - path: 请求路径
+// - body: 请求体（Option<&str>）
+// - request_id: 请求 ID
+// - log_response: 是否记录响应体（仅 GET 请求）
+async fn handle_ipc_request_with_retry(
+    method: &str,
+    path: &str,
+    body: Option<&str>,
+    request_id: i64,
+    log_response: bool,
+) {
+    const MAX_RETRIES: usize = 2;
+
+    for attempt in 0..=MAX_RETRIES {
+        // 从连接池获取连接
+        let ipc_conn = match acquire_connection().await {
+            Ok(c) => c,
+            Err(e) => {
+                let error_msg = e.to_string();
+                if is_ipc_not_ready_error(&error_msg) {
+                    log::trace!("IPC {} 请求等待中：{}，原因：IPC 尚未就绪", method, path);
+                } else {
+                    log::error!("IPC {} 获取连接失败：{}，error：{}", method, path, e);
+                }
+
+                IpcResponse {
+                    request_id,
+                    status_code: 0,
+                    body: String::new(),
+                    success: false,
+                    error_message: Some(format!("获取连接失败：{}", e)),
+                }
+                .send_signal_to_dart();
+                return;
+            }
+        };
+
+        // 使用连接发送请求
+        match IpcClient::request_with_connection(method, path, body, ipc_conn).await {
+            Ok((response, ipc_conn)) => {
+                // 归还连接
+                release_connection(ipc_conn).await;
+
+                // 特殊日志处理（仅 GET 请求）
+                if log_response {
+                    if response.body.len() > 200 {
+                        let preview = response.body.chars().take(100).collect::<String>();
+                        log::trace!(
+                            "响应体内容（截断）：{}…[总长度：{}字节]",
+                            preview,
+                            response.body.len()
+                        );
+                    } else {
+                        log::trace!("响应体内容：{}", response.body);
+                    }
+                }
+
+                IpcResponse {
+                    request_id,
+                    status_code: response.status_code,
+                    body: response.body,
+                    success: true,
+                    error_message: None,
+                }
+                .send_signal_to_dart();
+                return;
+            }
+            Err(e) => {
+                // 连接已失效，不归还
+                let error_msg = e.to_string();
+
+                // 检查是否需要重试
+                if should_retry_on_error(&error_msg, attempt, MAX_RETRIES) {
+                    log::warn!(
+                        "IPC {} 请求失败（第 {} 次尝试），清空连接池后重试：{}，error：{}",
+                        method,
+                        attempt + 1,
+                        path,
+                        e
+                    );
+
+                    // 清空连接池（连接可能在系统休眠后失效）
+                    cleanup_ipc_connection_pool().await;
+
+                    // 等待 200ms 后重试
+                    tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
+                    continue;
+                }
+
+                // 不重试，返回错误
+                if is_ipc_not_ready_error(&error_msg) {
+                    log::trace!("IPC {} 请求等待中：{}，原因：IPC 尚未就绪", method, path);
+                } else {
+                    log::error!("IPC {} 请求失败：{}，error：{}", method, path, e);
+                }
+
+                IpcResponse {
+                    request_id,
+                    status_code: 0,
+                    body: String::new(),
+                    success: false,
+                    error_message: Some(format!("IPC 请求失败：{}", e)),
+                }
+                .send_signal_to_dart();
+                return;
+            }
+        }
+    }
+}
+
 // 连接池配置
 const MAX_POOL_SIZE: usize = 300; // 匹配 Dart 层最大并发（CPU核心数*15，最高300）
 const IDLE_TIMEOUT_MS: u64 = 500;
@@ -370,470 +484,85 @@ pub async fn cleanup_all_network_resources() {
     log::info!("所有网络资源已清理");
 }
 
+// GET 请求处理器
 impl IpcGetRequest {
     pub fn handle(self) {
-        let request_id = self.request_id;
         tokio::spawn(async move {
-            const MAX_RETRIES: usize = 2; // 最多重试 2 次（总共尝试 3 次）
-
-            for attempt in 0..=MAX_RETRIES {
-                // 从连接池获取连接
-                let ipc_conn = match acquire_connection().await {
-                    Ok(c) => c,
-                    Err(e) => {
-                        let error_msg = e.to_string();
-                        if is_ipc_not_ready_error(&error_msg) {
-                            log::trace!("IPC GET 请求等待中：{}，原因：IPC 尚未就绪", self.path);
-                        } else {
-                            log::error!("IPC GET 获取连接失败：{}，error：{}", self.path, e);
-                        }
-
-                        IpcResponse {
-                            request_id,
-                            status_code: 0,
-                            body: String::new(),
-                            success: false,
-                            error_message: Some(format!("获取连接失败：{}", e)),
-                        }
-                        .send_signal_to_dart();
-                        return;
-                    }
-                };
-
-                // 使用连接发送请求
-                match IpcClient::request_with_connection("GET", &self.path, None, ipc_conn).await {
-                    Ok((response, ipc_conn)) => {
-                        // 归还连接
-                        release_connection(ipc_conn).await;
-
-                        // 日志处理（成功）
-                        if response.body.len() > 200 {
-                            let preview = response.body.chars().take(100).collect::<String>();
-                            log::trace!(
-                                "响应体内容（截断）：{}…[总长度：{}字节]",
-                                preview,
-                                response.body.len()
-                            );
-                        } else {
-                            log::trace!("响应体内容：{}", response.body);
-                        }
-
-                        IpcResponse {
-                            request_id,
-                            status_code: response.status_code,
-                            body: response.body,
-                            success: true,
-                            error_message: None,
-                        }
-                        .send_signal_to_dart();
-                        return; // 成功，直接返回
-                    }
-                    Err(e) => {
-                        // 连接已失效，不归还
-                        let error_msg = e.to_string();
-
-                        // 检查是否需要重试
-                        if should_retry_on_error(&error_msg, attempt, MAX_RETRIES) {
-                            log::warn!(
-                                "IPC GET 请求失败（第 {} 次尝试），清空连接池后重试：{}，error：{}",
-                                attempt + 1,
-                                self.path,
-                                e
-                            );
-
-                            // 清空连接池（连接可能在系统休眠后失效）
-                            cleanup_ipc_connection_pool().await;
-
-                            // 等待 200ms 后重试
-                            tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
-                            continue; // 重试
-                        }
-
-                        // 不重试，返回错误
-                        if is_ipc_not_ready_error(&error_msg) {
-                            log::trace!("IPC GET 请求等待中：{}，原因：IPC 尚未就绪", self.path);
-                        } else {
-                            log::error!("IPC GET 请求失败：{}，error：{}", self.path, e);
-                        }
-
-                        IpcResponse {
-                            request_id,
-                            status_code: 0,
-                            body: String::new(),
-                            success: false,
-                            error_message: Some(format!("IPC 请求失败：{}", e)),
-                        }
-                        .send_signal_to_dart();
-                        return; // 失败，直接返回
-                    }
-                }
-            }
+            handle_ipc_request_with_retry("GET", &self.path, None, self.request_id, true).await;
         });
     }
 }
 
+// POST 请求处理器
 impl IpcPostRequest {
     pub fn handle(self) {
-        let request_id = self.request_id;
         tokio::spawn(async move {
-            const MAX_RETRIES: usize = 2;
-
-            for attempt in 0..=MAX_RETRIES {
-                let ipc_conn = match acquire_connection().await {
-                    Ok(c) => c,
-                    Err(e) => {
-                        let error_msg = e.to_string();
-                        if is_ipc_not_ready_error(&error_msg) {
-                            log::trace!("IPC POST 请求等待中：{}，原因：IPC 尚未就绪", self.path);
-                        } else {
-                            log::error!("IPC POST 获取连接失败：{}，error：{}", self.path, e);
-                        }
-
-                        IpcResponse {
-                            request_id,
-                            status_code: 0,
-                            body: String::new(),
-                            success: false,
-                            error_message: Some(format!("获取连接失败：{}", e)),
-                        }
-                        .send_signal_to_dart();
-                        return;
-                    }
-                };
-
-                match IpcClient::request_with_connection(
-                    "POST",
-                    &self.path,
-                    self.body.as_deref(),
-                    ipc_conn,
-                )
-                .await
-                {
-                    Ok((response, ipc_conn)) => {
-                        release_connection(ipc_conn).await;
-
-                        IpcResponse {
-                            request_id,
-                            status_code: response.status_code,
-                            body: response.body,
-                            success: true,
-                            error_message: None,
-                        }
-                        .send_signal_to_dart();
-                        return;
-                    }
-                    Err(e) => {
-                        let error_msg = e.to_string();
-
-                        if should_retry_on_error(&error_msg, attempt, MAX_RETRIES) {
-                            log::warn!(
-                                "IPC POST 请求失败（第 {} 次尝试），清空连接池后重试：{}，error：{}",
-                                attempt + 1,
-                                self.path,
-                                e
-                            );
-
-                            cleanup_ipc_connection_pool().await;
-                            tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
-                            continue;
-                        }
-
-                        if is_ipc_not_ready_error(&error_msg) {
-                            log::trace!("IPC POST 请求等待中：{}，原因：IPC 尚未就绪", self.path);
-                        } else {
-                            log::error!("IPC POST 请求失败：{}，error：{}", self.path, e);
-                        }
-
-                        IpcResponse {
-                            request_id,
-                            status_code: 0,
-                            body: String::new(),
-                            success: false,
-                            error_message: Some(format!("IPC 请求失败：{}", e)),
-                        }
-                        .send_signal_to_dart();
-                        return;
-                    }
-                }
-            }
+            handle_ipc_request_with_retry(
+                "POST",
+                &self.path,
+                self.body.as_deref(),
+                self.request_id,
+                false,
+            )
+            .await;
         });
     }
 }
 
+// PUT 请求处理器（需要获取配置更新信号量）
 impl IpcPutRequest {
     pub fn handle(self) {
-        let request_id = self.request_id;
         tokio::spawn(async move {
-            // 获取配置更新锁（确保串行执行）
+            // 获取配置更新信号量，防止并发配置修改
             let _permit = match CONFIG_UPDATE_SEMAPHORE.acquire().await {
                 Ok(permit) => permit,
                 Err(e) => {
-                    log::error!("获取配置更新锁失败：{}", e);
+                    log::error!("获取配置更新信号量失败：{}", e);
                     IpcResponse {
-                        request_id,
+                        request_id: self.request_id,
                         status_code: 0,
                         body: String::new(),
                         success: false,
-                        error_message: Some(format!("获取配置锁失败：{}", e)),
+                        error_message: Some(format!("获取配置更新信号量失败：{}", e)),
                     }
                     .send_signal_to_dart();
                     return;
                 }
             };
-            log::trace!("获取配置更新锁，开始处理 PUT 请求：{}", self.path);
 
-            const MAX_RETRIES: usize = 2;
-
-            for attempt in 0..=MAX_RETRIES {
-                let ipc_conn = match acquire_connection().await {
-                    Ok(c) => c,
-                    Err(e) => {
-                        let error_msg = e.to_string();
-                        if is_ipc_not_ready_error(&error_msg) {
-                            log::trace!("IPC PUT 请求等待中：{}，原因：IPC 尚未就绪", self.path);
-                        } else {
-                            log::error!("IPC PUT 获取连接失败：{}，error：{}", self.path, e);
-                        }
-
-                        IpcResponse {
-                            request_id,
-                            status_code: 0,
-                            body: String::new(),
-                            success: false,
-                            error_message: Some(format!("获取连接失败：{}", e)),
-                        }
-                        .send_signal_to_dart();
-                        return;
-                    }
-                };
-
-                match IpcClient::request_with_connection(
-                    "PUT",
-                    &self.path,
-                    self.body.as_deref(),
-                    ipc_conn,
-                )
-                .await
-                {
-                    Ok((response, ipc_conn)) => {
-                        release_connection(ipc_conn).await;
-
-                        IpcResponse {
-                            request_id,
-                            status_code: response.status_code,
-                            body: response.body,
-                            success: true,
-                            error_message: None,
-                        }
-                        .send_signal_to_dart();
-
-                        log::trace!("PUT 请求完成，释放配置更新锁：{}", self.path);
-                        return;
-                    }
-                    Err(e) => {
-                        let error_msg = e.to_string();
-
-                        if should_retry_on_error(&error_msg, attempt, MAX_RETRIES) {
-                            log::warn!(
-                                "IPC PUT 请求失败（第 {} 次尝试），清空连接池后重试：{}，error：{}",
-                                attempt + 1,
-                                self.path,
-                                e
-                            );
-
-                            cleanup_ipc_connection_pool().await;
-                            tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
-                            continue;
-                        }
-
-                        if is_ipc_not_ready_error(&error_msg) {
-                            log::trace!("IPC PUT 请求等待中：{}，原因：IPC 尚未就绪", self.path);
-                        } else {
-                            log::error!("IPC PUT 请求失败：{}，error：{}", self.path, e);
-                        }
-
-                        IpcResponse {
-                            request_id,
-                            status_code: 0,
-                            body: String::new(),
-                            success: false,
-                            error_message: Some(format!("IPC 请求失败：{}", e)),
-                        }
-                        .send_signal_to_dart();
-                        return;
-                    }
-                }
-            }
-            // _permit 在此处 drop，自动释放锁
+            handle_ipc_request_with_retry(
+                "PUT",
+                &self.path,
+                self.body.as_deref(),
+                self.request_id,
+                false,
+            )
+            .await;
         });
     }
 }
 
+// PATCH 请求处理器
 impl IpcPatchRequest {
     pub fn handle(self) {
-        let request_id = self.request_id;
         tokio::spawn(async move {
-            const MAX_RETRIES: usize = 2;
-
-            for attempt in 0..=MAX_RETRIES {
-                let ipc_conn = match acquire_connection().await {
-                    Ok(c) => c,
-                    Err(e) => {
-                        let error_msg = e.to_string();
-                        if is_ipc_not_ready_error(&error_msg) {
-                            log::trace!("IPC PATCH 请求等待中：{}，原因：IPC 尚未就绪", self.path);
-                        } else {
-                            log::error!("IPC PATCH 获取连接失败：{}，error：{}", self.path, e);
-                        }
-
-                        IpcResponse {
-                            request_id,
-                            status_code: 0,
-                            body: String::new(),
-                            success: false,
-                            error_message: Some(format!("获取连接失败：{}", e)),
-                        }
-                        .send_signal_to_dart();
-                        return;
-                    }
-                };
-
-                match IpcClient::request_with_connection(
-                    "PATCH",
-                    &self.path,
-                    self.body.as_deref(),
-                    ipc_conn,
-                )
-                .await
-                {
-                    Ok((response, ipc_conn)) => {
-                        release_connection(ipc_conn).await;
-
-                        IpcResponse {
-                            request_id,
-                            status_code: response.status_code,
-                            body: response.body,
-                            success: true,
-                            error_message: None,
-                        }
-                        .send_signal_to_dart();
-                        return;
-                    }
-                    Err(e) => {
-                        let error_msg = e.to_string();
-
-                        if should_retry_on_error(&error_msg, attempt, MAX_RETRIES) {
-                            log::warn!(
-                                "IPC PATCH 请求失败（第 {} 次尝试），清空连接池后重试：{}，error：{}",
-                                attempt + 1,
-                                self.path,
-                                e
-                            );
-
-                            cleanup_ipc_connection_pool().await;
-                            tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
-                            continue;
-                        }
-
-                        if is_ipc_not_ready_error(&error_msg) {
-                            log::trace!("IPC PATCH 请求等待中：{}，原因：IPC 尚未就绪", self.path);
-                        } else {
-                            log::error!("IPC PATCH 请求失败：{}，error：{}", self.path, e);
-                        }
-
-                        IpcResponse {
-                            request_id,
-                            status_code: 0,
-                            body: String::new(),
-                            success: false,
-                            error_message: Some(format!("IPC 请求失败：{}", e)),
-                        }
-                        .send_signal_to_dart();
-                        return;
-                    }
-                }
-            }
+            handle_ipc_request_with_retry(
+                "PATCH",
+                &self.path,
+                self.body.as_deref(),
+                self.request_id,
+                false,
+            )
+            .await;
         });
     }
 }
 
+// DELETE 请求处理器
 impl IpcDeleteRequest {
     pub fn handle(self) {
-        let request_id = self.request_id;
         tokio::spawn(async move {
-            const MAX_RETRIES: usize = 2;
-
-            for attempt in 0..=MAX_RETRIES {
-                let ipc_conn = match acquire_connection().await {
-                    Ok(c) => c,
-                    Err(e) => {
-                        let error_msg = e.to_string();
-                        if is_ipc_not_ready_error(&error_msg) {
-                            log::trace!("IPC DELETE 请求等待中：{}，原因：IPC 尚未就绪", self.path);
-                        } else {
-                            log::error!("IPC DELETE 获取连接失败：{}，error：{}", self.path, e);
-                        }
-
-                        IpcResponse {
-                            request_id,
-                            status_code: 0,
-                            body: String::new(),
-                            success: false,
-                            error_message: Some(format!("获取连接失败：{}", e)),
-                        }
-                        .send_signal_to_dart();
-                        return;
-                    }
-                };
-
-                match IpcClient::request_with_connection("DELETE", &self.path, None, ipc_conn).await {
-                    Ok((response, ipc_conn)) => {
-                        release_connection(ipc_conn).await;
-
-                        IpcResponse {
-                            request_id,
-                            status_code: response.status_code,
-                            body: response.body,
-                            success: true,
-                            error_message: None,
-                        }
-                        .send_signal_to_dart();
-                        return;
-                    }
-                    Err(e) => {
-                        let error_msg = e.to_string();
-
-                        if should_retry_on_error(&error_msg, attempt, MAX_RETRIES) {
-                            log::warn!(
-                                "IPC DELETE 请求失败（第 {} 次尝试），清空连接池后重试：{}，error：{}",
-                                attempt + 1,
-                                self.path,
-                                e
-                            );
-
-                            cleanup_ipc_connection_pool().await;
-                            tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
-                            continue;
-                        }
-
-                        if is_ipc_not_ready_error(&error_msg) {
-                            log::trace!("IPC DELETE 请求等待中：{}，原因：IPC 尚未就绪", self.path);
-                        } else {
-                            log::error!("IPC DELETE 请求失败：{}，error：{}", self.path, e);
-                        }
-
-                        IpcResponse {
-                            request_id,
-                            status_code: 0,
-                            body: String::new(),
-                            success: false,
-                            error_message: Some(format!("IPC 请求失败：{}", e)),
-                        }
-                        .send_signal_to_dart();
-                        return;
-                    }
-                }
-            }
+            handle_ipc_request_with_retry("DELETE", &self.path, None, self.request_id, false).await;
         });
     }
 }
