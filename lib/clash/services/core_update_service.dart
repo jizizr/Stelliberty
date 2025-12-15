@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:archive/archive.dart';
 import 'package:http/http.dart' as http;
@@ -327,9 +326,7 @@ class CoreUpdateService {
         );
 
         final content = coreFile.content;
-        if (content is List<int>) return content;
-        if (content is Uint8List) return content.toList();
-        throw Exception('无法解析压缩包内容');
+        return content.toList();
       } else if (fileName.endsWith('.gz')) {
         return GZipDecoder().decodeBytes(fileBytes);
       } else {
