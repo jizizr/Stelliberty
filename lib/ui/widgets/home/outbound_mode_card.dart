@@ -70,7 +70,6 @@ class _OutboundModeCardState extends State<OutboundModeCard> {
   Widget build(BuildContext context) {
     final trans = context.translate;
 
-    // 使用 Selector 只监听 isRunning，避免 isLoadingProxies 变化导致的重建
     return Selector<ClashProvider, bool>(
       selector: (_, provider) => provider.isCoreRunning,
       builder: (context, isRunning, child) {

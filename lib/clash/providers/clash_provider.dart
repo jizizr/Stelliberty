@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:stelliberty/clash/manager/manager.dart';
 import 'package:stelliberty/clash/data/clash_model.dart';
 import 'package:stelliberty/clash/data/traffic_data_model.dart';
@@ -16,7 +16,7 @@ import 'package:stelliberty/src/bindings/signals/signals.dart' as signals;
 // 管理 Clash 的运行状态、代理列表等
 //
 // 注意：使用 ClashManager 单例实例，确保全局只有一个 Clash 进程
-class ClashProvider extends ChangeNotifier {
+class ClashProvider extends ChangeNotifier with WidgetsBindingObserver {
   // 使用 ClashManager 单例实例
   ClashManager get _clashManager => ClashManager.instance;
 
@@ -105,6 +105,11 @@ class ClashProvider extends ChangeNotifier {
   // UI 更新节流间隔（毫秒）
   static const int _notifyThrottleMs = 100;
 
+  // 延迟值过期定时器（节点名 → Timer）
+  final Map<String, Timer> _delayExpireTimers = {};
+  // 延迟值保留时长（5 分钟）
+  static const Duration _delayRetentionDuration = Duration(minutes: 5);
+
   // selectedMap 内存缓存：记录每个代理组当前选中的节点
   final Map<String, String> _selectedMap = {};
 
@@ -119,10 +124,6 @@ class ClashProvider extends ChangeNotifier {
       orElse: () => proxyGroups.first,
     );
   }
-
-  // 代理列表加载状态
-  bool _isLoadingProxies = false;
-  bool get isLoadingProxies => _isLoadingProxies;
 
   // 并发保护：使用 Completer 确保同一时间只有一个加载操作
   Completer<void>? _loadProxiesCompleter;
@@ -168,6 +169,9 @@ class ClashProvider extends ChangeNotifier {
 
     // 监听 ClashManager 的变化
     _clashManager.addListener(_onClashManagerChanged);
+
+    // 注册应用生命周期监听
+    WidgetsBinding.instance.addObserver(this);
   }
 
   // 初始化（加载配置文件中的代理信息）
@@ -251,6 +255,21 @@ class ClashProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  // 应用生命周期状态变化时触发
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+
+    // 当应用从后台恢复时，刷新代理状态以同步外部控制器的节点切换
+    if (state == AppLifecycleState.resumed) {
+      Logger.debug('应用恢复，刷新代理数据（全局）');
+      if (isCoreRunning) {
+        // 刷新代理状态以同步外部控制器的节点切换
+        refreshProxiesFromClash();
+      }
+    }
+  }
+
   // 检查延迟测试是否可用
   // 用于 UI 显示提示信息
   bool get isDelayTestAvailable => isCoreRunning;
@@ -267,9 +286,7 @@ class ClashProvider extends ChangeNotifier {
   // 启动 Clash 核心（不触碰系统代理）
   // 调用者需要自行决定是否启用系统代理
   Future<bool> start({String? configPath}) async {
-    _isLoadingProxies = true;
     _errorMessage = null;
-    notifyListeners();
 
     try {
       // 获取覆写配置（如果有回调）
@@ -299,18 +316,13 @@ class ClashProvider extends ChangeNotifier {
       _errorMessage = '启动 Clash 失败：$e';
       Logger.error(_errorMessage!);
       return false;
-    } finally {
-      _isLoadingProxies = false;
-      notifyListeners();
     }
   }
 
   // 停止 Clash 核心（不触碰系统代理）
   // 调用者需要自行决定是否禁用系统代理
   Future<bool> stop({String? configPath}) async {
-    _isLoadingProxies = true;
     _errorMessage = null;
-    notifyListeners();
 
     try {
       // 先停止配置文件监听
@@ -326,9 +338,6 @@ class ClashProvider extends ChangeNotifier {
       _errorMessage = '停止 Clash 失败：$e';
       Logger.error(_errorMessage!);
       return false;
-    } finally {
-      _isLoadingProxies = false;
-      notifyListeners();
     }
   }
 
@@ -434,9 +443,7 @@ class ClashProvider extends ChangeNotifier {
       '加载前状态：代理组=${_allProxyGroups.length}，节点=${_proxyNodes.length}',
     );
 
-    _isLoadingProxies = true;
     _errorMessage = null;
-    notifyListeners();
 
     try {
       // 【性能监控】API 调用耗时
@@ -571,18 +578,14 @@ class ClashProvider extends ChangeNotifier {
       _errorMessage = '加载代理列表失败：$e';
       Logger.error(_errorMessage!);
     } finally {
-      _isLoadingProxies = false;
-      notifyListeners();
-
       totalStopwatch.stop();
       Logger.info('加载代理列表完成（总耗时：${totalStopwatch.elapsedMilliseconds}ms）');
     }
   }
 
-  // 从 Clash 刷新代理状态的实际逻辑（不恢复本地选择，而是将 Clash 的当前状态保存到本地）
+  // 从 Clash 刷新代理状态（不恢复本地选择，而是将 Clash 的当前状态保存到本地）
+  // 用于应用从后台恢复时同步外部控制器的节点切换
   Future<void> _doRefreshProxiesFromClash() async {
-    Logger.info('开始从 Clash 刷新代理状态');
-
     final totalStopwatch = Stopwatch()..start();
 
     if (!isCoreRunning) {
@@ -594,9 +597,7 @@ class ClashProvider extends ChangeNotifier {
       '刷新前状态：代理组=${_allProxyGroups.length}，节点=${_proxyNodes.length}',
     );
 
-    _isLoadingProxies = true;
     _errorMessage = null;
-    notifyListeners();
 
     try {
       // 从 Clash API 获取代理数据
@@ -649,10 +650,19 @@ class ClashProvider extends ChangeNotifier {
 
       // 解析节点
       final parseStopwatch = Stopwatch()..start();
+      final oldProxyNodes = _proxyNodes; // 保存旧节点数据
       _proxyNodes = {};
       proxies.forEach((name, data) {
         final node = ProxyNode.fromJson(name, data);
-        _proxyNodes[name] = node;
+
+        // 保留旧节点的延迟值和过期定时器
+        final oldNode = oldProxyNodes[name];
+        if (oldNode != null && oldNode.delay != null && oldNode.delay! != 0) {
+          _proxyNodes[name] = node.copyWith(delay: oldNode.delay);
+          // 注意：定时器中使用节点名查找，因此不需要重新创建定时器
+        } else {
+          _proxyNodes[name] = node;
+        }
       });
       _proxyNodesUpdateCount++;
       parseStopwatch.stop();
@@ -722,10 +732,10 @@ class ClashProvider extends ChangeNotifier {
         '刷新完成: ${_allProxyGroups.length} 个代理组（${proxyGroups.length} 可见），${_proxyNodes.length} 个节点',
       );
     } catch (e) {
+      // 设置错误信息
       _errorMessage = '刷新代理状态失败：$e';
       Logger.error(_errorMessage!);
     } finally {
-      _isLoadingProxies = false;
       notifyListeners();
 
       totalStopwatch.stop();
@@ -925,6 +935,14 @@ class ClashProvider extends ChangeNotifier {
         );
 
         if (reloadSuccess) {
+          // 取消正在进行的延迟测试
+          cancelBatchDelayTest();
+
+          // 清空所有延迟结果
+          clearAllDelayResults();
+
+          Logger.info('配置已重载，延迟测试已取消并清空结果');
+
           // 2. 重新加载代理列表（显示新节点）
           await loadProxies();
         } else {
@@ -1134,6 +1152,30 @@ class ClashProvider extends ChangeNotifier {
               if (node != null) {
                 _proxyNodes[nodeName] = node.copyWith(delay: delayMs);
                 hasPendingUpdates = true;
+
+                // 如果延迟测试完成（无论成功或超时），设置 5 分钟过期定时器
+                if (delayMs != 0) {
+                  // 取消该节点之前的过期定时器（如果有）
+                  _delayExpireTimers[nodeName]?.cancel();
+
+                  // 设置新的过期定时器（5 分钟后清空延迟值）
+                  _delayExpireTimers[nodeName] = Timer(
+                    _delayRetentionDuration,
+                    () {
+                      final node = _proxyNodes[nodeName];
+                      if (node != null &&
+                          node.delay != null &&
+                          node.delay! != 0) {
+                        _proxyNodes[nodeName] = node.copyWith(delay: 0);
+                        _proxyNodes = Map<String, ProxyNode>.from(_proxyNodes);
+                        _proxyNodesUpdateCount++;
+                        notifyListeners();
+                        Logger.debug('节点 $nodeName 延迟值已过期（5 分钟）');
+                      }
+                      _delayExpireTimers.remove(nodeName);
+                    },
+                  );
+                }
               }
 
               // 从测试集合中移除
@@ -1219,6 +1261,39 @@ class ClashProvider extends ChangeNotifier {
     }
   }
 
+  // 取消批量延迟测试
+  void cancelBatchDelayTest() {
+    if (_isBatchTestingDelay) {
+      Logger.info('取消批量延迟测试');
+      _isBatchTestingDelay = false;
+      _testingNodes.clear();
+      notifyListeners();
+    }
+  }
+
+  // 清空所有延迟测试结果
+  void clearAllDelayResults() {
+    Logger.info('清空所有延迟测试结果');
+
+    // 取消所有过期定时器
+    for (final timer in _delayExpireTimers.values) {
+      timer.cancel();
+    }
+    _delayExpireTimers.clear();
+
+    // 清空延迟值（包括成功和超时的延迟值）
+    for (final nodeName in _proxyNodes.keys.toList()) {
+      final node = _proxyNodes[nodeName];
+      if (node != null && node.delay != null && node.delay! != 0) {
+        _proxyNodes[nodeName] = node.copyWith(delay: 0);
+      }
+    }
+
+    _proxyNodes = Map<String, ProxyNode>.from(_proxyNodes);
+    _proxyNodesUpdateCount++;
+    notifyListeners();
+  }
+
   // ========== 系统代理和 TUN 模式控制 ==========
 
   /// 获取 TUN 模式状态
@@ -1264,6 +1339,16 @@ class ClashProvider extends ChangeNotifier {
   void dispose() {
     _stopConfigWatcher();
     _clashManager.removeListener(_onClashManagerChanged);
+
+    // 移除应用生命周期监听
+    WidgetsBinding.instance.removeObserver(this);
+
+    // 清理所有延迟过期定时器
+    for (final timer in _delayExpireTimers.values) {
+      timer.cancel();
+    }
+    _delayExpireTimers.clear();
+
     super.dispose();
   }
 }

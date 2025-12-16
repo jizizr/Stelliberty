@@ -31,7 +31,6 @@ class ProxySwitchCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final trans = context.translate;
 
-    // 使用 Selector 只在相关状态变化时重建，避免 isLoadingProxies 变化导致的闪烁
     return Selector<ClashProvider, ({bool isCoreRunning, bool isProxyEnabled})>(
       selector: (_, provider) => (
         isCoreRunning: provider.isCoreRunning,

@@ -57,7 +57,6 @@ class _ProxyActionBarState extends State<ProxyActionBar> {
   Widget build(BuildContext context) {
     return Selector<ClashProvider, _ActionBarState>(
       selector: (_, provider) => _ActionBarState(
-        isLoadingProxies: provider.isLoadingProxies,
         isCoreRunning: provider.isCoreRunning,
         isBatchTestingDelay: provider.isBatchTestingDelay,
       ),
@@ -171,11 +170,11 @@ class _ProxyActionBarState extends State<ProxyActionBar> {
           ),
         ),
         const SizedBox(width: 8),
-        // 布局切换按钮
+        // 布局切换按钮（测试延迟时禁用）
         _ActionButton(
           icon: Icons.view_agenda,
           tooltip: trans.proxy.switchToVerticalLayout,
-          onPressed: widget.onLayoutModeChanged,
+          onPressed: state.isBatchTestingDelay ? null : widget.onLayoutModeChanged,
         ),
       ],
     );
@@ -187,7 +186,6 @@ class _ProxyActionBarState extends State<ProxyActionBar> {
 
     return Selector<ClashProvider, _ActionBarState>(
       selector: (_, provider) => _ActionBarState(
-        isLoadingProxies: provider.isLoadingProxies,
         isCoreRunning: provider.isCoreRunning,
         isBatchTestingDelay: provider.isBatchTestingDelay,
       ),
@@ -220,11 +218,11 @@ class _ProxyActionBarState extends State<ProxyActionBar> {
               onPressed: _handleSortModeChange,
             ),
             const Spacer(),
-            // 布局切换按钮
+            // 布局切换按钮（测试延迟时禁用）
             _ActionButton(
               icon: Icons.view_list,
               tooltip: trans.proxy.switchToHorizontalLayout,
-              onPressed: widget.onLayoutModeChanged,
+              onPressed: state.isBatchTestingDelay ? null : widget.onLayoutModeChanged,
             ),
           ],
         );
@@ -432,32 +430,25 @@ class _ActionButtonState extends State<_ActionButton> {
 
 // 操作栏状态数据类
 class _ActionBarState {
-  final bool isLoadingProxies;
   final bool isCoreRunning;
   final bool isBatchTestingDelay;
 
   _ActionBarState({
-    required this.isLoadingProxies,
     required this.isCoreRunning,
     required this.isBatchTestingDelay,
   });
 
-  bool get canTestDelays =>
-      !isLoadingProxies && isCoreRunning && !isBatchTestingDelay;
-  bool get canLocate => !isLoadingProxies;
+  bool get canTestDelays => isCoreRunning && !isBatchTestingDelay;
+  bool get canLocate => true; // 定位是纯 UI 操作，始终可用
 
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       other is _ActionBarState &&
           runtimeType == other.runtimeType &&
-          isLoadingProxies == other.isLoadingProxies &&
           isCoreRunning == other.isCoreRunning &&
           isBatchTestingDelay == other.isBatchTestingDelay;
 
   @override
-  int get hashCode =>
-      isLoadingProxies.hashCode ^
-      isCoreRunning.hashCode ^
-      isBatchTestingDelay.hashCode;
+  int get hashCode => isCoreRunning.hashCode ^ isBatchTestingDelay.hashCode;
 }
