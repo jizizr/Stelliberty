@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'package:flutter/foundation.dart';
 
 // Clash 默认配置常量
@@ -19,10 +18,11 @@ class ClashDefaults {
   static const int apiReadyMaxRetries = 30; // API 就绪重试次数（总超时 6s）
   static const int apiReadyCheckTimeout = 300; // API 单次检查超时（ms）
   static const int apiReadyRetryInterval = 200; // API 重试间隔（ms）
-  static const int ipcReadyMaxRetries = 10; // IPC 就绪重试次数
+  static const int ipcReadyMaxRetries = 50; // IPC 就绪重试次数（总超时 10s）
   static const int ipcReadyRetryInterval = 200; // IPC 重试间隔（ms）
   static const int processKillTimeout = 5; // 进程停止超时（s）
   static const int subscriptionDownloadTimeout = 10; // 订阅下载超时（s）
+  static const int overrideDownloadTimeout = 10; // 覆写文件下载超时（s）
   static const int proxyDelayTestTimeout = 8000; // 延迟测试超时（ms）
   static const int apiRequestTimeout = 10; // API 请求超时（s）
   static const int apiLongRequestTimeout = 15; // API 长请求超时（s）
@@ -31,16 +31,8 @@ class ClashDefaults {
   static const int delayTestConcurrency = 5; // 延迟测试并发数
   static const int subscriptionUpdateConcurrency = 3; // 订阅更新并发数
 
-  // 动态延迟测试并发数（CPU 核心数 × 15，上限 300）
-  // 延迟测试是 I/O 密集型任务，可以使用较高并发
-  static int get dynamicDelayTestConcurrency {
-    try {
-      final cpuCores = Platform.numberOfProcessors;
-      return (cpuCores * 15).clamp(20, 300);
-    } catch (e) {
-      return 50; // 异常时使用保守值
-    }
-  }
+  // 延迟测试并发数
+  static const int dynamicDelayTestConcurrency = 20;
 
   // ==================== 其他配置 ====================
   static const String defaultTestUrl = 'https://www.gstatic.com/generate_204';

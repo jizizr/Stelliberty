@@ -59,7 +59,6 @@ class _TunModeCardState extends State<TunModeCard> {
       );
     }
 
-    // 使用 Selector 只在 tunEnabled 变化时重建，避免 isLoadingProxies 变化导致的闪烁
     return Selector<ClashProvider, bool>(
       selector: (_, provider) => provider.tunEnabled,
       builder: (context, tunEnabled, child) {

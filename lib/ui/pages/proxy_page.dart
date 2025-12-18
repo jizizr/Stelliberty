@@ -55,8 +55,7 @@ class ProxyPage extends StatefulWidget {
   State<ProxyPage> createState() => _ProxyPageWidgetState();
 }
 
-class _ProxyPageWidgetState extends State<ProxyPage>
-    with WidgetsBindingObserver {
+class _ProxyPageWidgetState extends State<ProxyPage> {
   late ScrollController _nodeListScrollController;
   final ScrollController _tabScrollController = ScrollController();
   late ProxyNotifier _viewModel;
@@ -92,7 +91,6 @@ class _ProxyPageWidgetState extends State<ProxyPage>
     // 加载布局模式
     _loadLayoutMode();
 
-    WidgetsBinding.instance.addObserver(this);
     _nodeListScrollController.addListener(_updateScrollOffset);
 
     // 在第一帧之前初始化并恢复位置
@@ -235,26 +233,11 @@ class _ProxyPageWidgetState extends State<ProxyPage>
     // 在 dispose 前同步保存滚动位置
     _saveScrollPositionSync();
 
-    WidgetsBinding.instance.removeObserver(this);
     _nodeListScrollController.removeListener(_updateScrollOffset);
     _nodeListScrollController.dispose();
     _tabScrollController.dispose();
     _viewModel.dispose();
     super.dispose();
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    super.didChangeAppLifecycleState(state);
-
-    // 当应用从后台恢复时，从 Clash 刷新代理状态以同步外部控制器的节点切换
-    if (state == AppLifecycleState.resumed) {
-      Logger.debug('应用恢复，刷新代理数据');
-      final clashProvider = context.read<ClashProvider>();
-      if (clashProvider.isCoreRunning) {
-        clashProvider.refreshProxiesFromClash();
-      }
-    }
   }
 
   @override

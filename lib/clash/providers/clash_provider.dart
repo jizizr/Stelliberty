@@ -1,21 +1,22 @@
 import 'dart:async';
-import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:stelliberty/clash/manager/manager.dart';
 import 'package:stelliberty/clash/data/clash_model.dart';
 import 'package:stelliberty/clash/data/traffic_data_model.dart';
 import 'package:stelliberty/clash/storage/preferences.dart';
+import 'package:stelliberty/clash/config/clash_defaults.dart';
 import 'package:stelliberty/utils/logger.dart';
 import 'package:stelliberty/clash/utils/config_parser.dart';
 import 'package:stelliberty/clash/services/config_watcher.dart';
 import 'package:stelliberty/clash/services/config_management_service.dart';
 import 'package:stelliberty/clash/services/delay_test_service.dart';
-import 'package:stelliberty/clash/utils/delay_tester.dart';
+import 'package:stelliberty/src/bindings/signals/signals.dart' as signals;
 
 // Clash 状态 Provider
 // 管理 Clash 的运行状态、代理列表等
 //
 // 注意：使用 ClashManager 单例实例，确保全局只有一个 Clash 进程
-class ClashProvider extends ChangeNotifier {
+class ClashProvider extends ChangeNotifier with WidgetsBindingObserver {
   // 使用 ClashManager 单例实例
   ClashManager get _clashManager => ClashManager.instance;
 
@@ -104,6 +105,11 @@ class ClashProvider extends ChangeNotifier {
   // UI 更新节流间隔（毫秒）
   static const int _notifyThrottleMs = 100;
 
+  // 延迟值过期定时器（节点名 → Timer）
+  final Map<String, Timer> _delayExpireTimers = {};
+  // 延迟值保留时长（5 分钟）
+  static const Duration _delayRetentionDuration = Duration(minutes: 5);
+
   // selectedMap 内存缓存：记录每个代理组当前选中的节点
   final Map<String, String> _selectedMap = {};
 
@@ -118,10 +124,6 @@ class ClashProvider extends ChangeNotifier {
       orElse: () => proxyGroups.first,
     );
   }
-
-  // 代理列表加载状态
-  bool _isLoadingProxies = false;
-  bool get isLoadingProxies => _isLoadingProxies;
 
   // 并发保护：使用 Completer 确保同一时间只有一个加载操作
   Completer<void>? _loadProxiesCompleter;
@@ -146,12 +148,30 @@ class ClashProvider extends ChangeNotifier {
         lowerType == 'fallback';
   }
 
+  // 检查是否为 IPC 未就绪错误
+  // 这类错误在 Clash 启动期间或系统唤醒后是正常的临时状态
+  static bool _isIpcNotReadyError(String errorMessage) {
+    // Windows: os error 2 (系统找不到指定的文件)
+    // Linux: os error 111 (ECONNREFUSED)
+    // macOS: os error 61 (ECONNREFUSED)
+    return errorMessage.contains('os error 2') ||
+        errorMessage.contains('os error 111') ||
+        errorMessage.contains('os error 61') ||
+        (errorMessage.contains('系统找不到指定的文件') &&
+            errorMessage.contains('pipe')) ||
+        (errorMessage.contains('Connection refused') &&
+            errorMessage.contains('IPC'));
+  }
+
   ClashProvider() {
     // 初始化服务类
     _configService = ConfigManagementService(_clashManager);
 
     // 监听 ClashManager 的变化
     _clashManager.addListener(_onClashManagerChanged);
+
+    // 注册应用生命周期监听
+    WidgetsBinding.instance.addObserver(this);
   }
 
   // 初始化（加载配置文件中的代理信息）
@@ -208,9 +228,17 @@ class ClashProvider extends ChangeNotifier {
       );
       notifyListeners();
     } catch (e) {
+      final errorMsg = e.toString();
+
+      // 检查是否为 IPC 相关错误（正常情况下不应该发生，因为这是从文件加载）
+      final isIpcError = _isIpcNotReadyError(errorMsg);
+
+      // 从配置文件加载时的 IPC 错误不应该向 UI 传递（这不是用户配置文件的问题）
+      if (!isIpcError) {
+        _errorMessage = '从配置文件加载代理信息失败：$e';
+        notifyListeners();
+      }
       Logger.error('从配置文件加载代理信息失败：$e');
-      _errorMessage = '从配置文件加载代理信息失败：$e';
-      notifyListeners();
     }
   }
 
@@ -227,18 +255,29 @@ class ClashProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  // 应用生命周期状态变化时触发
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+
+    // 当应用从后台恢复时，刷新代理状态以同步外部控制器的节点切换
+    if (state == AppLifecycleState.resumed) {
+      Logger.debug('应用恢复，刷新代理数据（全局）');
+      if (isCoreRunning) {
+        // 刷新代理状态以同步外部控制器的节点切换
+        refreshProxiesFromClash();
+      }
+    }
+  }
+
   // 检查延迟测试是否可用
   // 用于 UI 显示提示信息
-  bool get isDelayTestAvailable => DelayTester.isAvailable;
+  bool get isDelayTestAvailable => isCoreRunning;
 
   // 获取延迟测试状态描述（用于调试和用户提示）
   String getDelayTestStatus() {
     if (!isCoreRunning) {
       return 'Clash 未运行，请先启动 Clash';
-    }
-
-    if (!isDelayTestAvailable) {
-      return 'Clash API 未就绪，请稍候或重启 Clash';
     }
 
     return '延迟测试已就绪';
@@ -247,9 +286,7 @@ class ClashProvider extends ChangeNotifier {
   // 启动 Clash 核心（不触碰系统代理）
   // 调用者需要自行决定是否启用系统代理
   Future<bool> start({String? configPath}) async {
-    _isLoadingProxies = true;
     _errorMessage = null;
-    notifyListeners();
 
     try {
       // 获取覆写配置（如果有回调）
@@ -261,14 +298,6 @@ class ClashProvider extends ChangeNotifier {
       );
 
       if (success) {
-        // 初始化 DelayTester 的 API 客户端
-        final apiClient = _clashManager.apiClient;
-        if (apiClient != null) {
-          DelayTester.setApiClient(apiClient);
-        } else {
-          Logger.error('无法获取 Clash API 客户端，统一延迟测试不可用');
-        }
-
         // 启动后必须从 API 重新加载代理列表
         Logger.info('Clash 已启动，从 API 重新加载代理列表');
         await loadProxies();
@@ -287,18 +316,13 @@ class ClashProvider extends ChangeNotifier {
       _errorMessage = '启动 Clash 失败：$e';
       Logger.error(_errorMessage!);
       return false;
-    } finally {
-      _isLoadingProxies = false;
-      notifyListeners();
     }
   }
 
   // 停止 Clash 核心（不触碰系统代理）
   // 调用者需要自行决定是否禁用系统代理
   Future<bool> stop({String? configPath}) async {
-    _isLoadingProxies = true;
     _errorMessage = null;
-    notifyListeners();
 
     try {
       // 先停止配置文件监听
@@ -314,9 +338,6 @@ class ClashProvider extends ChangeNotifier {
       _errorMessage = '停止 Clash 失败：$e';
       Logger.error(_errorMessage!);
       return false;
-    } finally {
-      _isLoadingProxies = false;
-      notifyListeners();
     }
   }
 
@@ -422,9 +443,7 @@ class ClashProvider extends ChangeNotifier {
       '加载前状态：代理组=${_allProxyGroups.length}，节点=${_proxyNodes.length}',
     );
 
-    _isLoadingProxies = true;
     _errorMessage = null;
-    notifyListeners();
 
     try {
       // 【性能监控】API 调用耗时
@@ -432,21 +451,38 @@ class ClashProvider extends ChangeNotifier {
 
       // 添加重试逻辑，避免因 Clash API 繁忙导致超时
       Map<String, dynamic>? proxies;
-      int retryCount = 0;
+      int attemptNumber = 0;
       const maxRetries = 2;
 
-      while (retryCount <= maxRetries) {
+      while (attemptNumber <= maxRetries) {
+        attemptNumber++;
         try {
           proxies = await _clashManager.getProxies();
           break; // 成功则跳出循环
         } catch (e) {
-          retryCount++;
-          if (retryCount <= maxRetries) {
-            Logger.warning('获取代理数据失败（尝试 $retryCount/$maxRetries），1秒后重试：$e');
+          final errorMsg = e.toString();
+          final isLastAttempt = attemptNumber > maxRetries;
+
+          // 检查是否为 IPC 未就绪错误（启动时的正常情况）
+          final isIpcNotReady = _isIpcNotReadyError(errorMsg);
+
+          if (!isLastAttempt) {
+            // 还有重试机会
+            if (isIpcNotReady) {
+              Logger.debug('IPC 尚未就绪（第 $attemptNumber 次尝试），1秒后重试');
+            } else {
+              Logger.warning('获取代理数据失败（第 $attemptNumber 次尝试），1秒后重试：$e');
+            }
             await Future.delayed(const Duration(seconds: 1));
           } else {
-            Logger.error('获取代理数据失败，已重试 $maxRetries 次：$e');
-            rethrow;
+            // 最后一次尝试失败
+            if (isIpcNotReady) {
+              Logger.debug('IPC 仍未就绪，稍后自动重试（不显示错误）');
+              return; // 静默失败，不设置 errorMessage
+            } else {
+              Logger.error('获取代理数据失败，已尝试 $attemptNumber 次：$e');
+              rethrow; // 真正的错误才抛出
+            }
           }
         }
       }
@@ -457,7 +493,7 @@ class ClashProvider extends ChangeNotifier {
 
       apiStopwatch.stop();
       Logger.debug(
-        '从 Clash API 获取代理数据完成：${proxies.length} 项（耗时：${apiStopwatch.elapsedMilliseconds}ms，重试次数：$retryCount）',
+        '从 Clash API 获取代理数据完成：${proxies.length} 项（耗时：${apiStopwatch.elapsedMilliseconds}ms，尝试次数：$attemptNumber）',
       );
 
       // 【性能监控】解析节点耗时
@@ -542,18 +578,14 @@ class ClashProvider extends ChangeNotifier {
       _errorMessage = '加载代理列表失败：$e';
       Logger.error(_errorMessage!);
     } finally {
-      _isLoadingProxies = false;
-      notifyListeners();
-
       totalStopwatch.stop();
       Logger.info('加载代理列表完成（总耗时：${totalStopwatch.elapsedMilliseconds}ms）');
     }
   }
 
-  // 从 Clash 刷新代理状态的实际逻辑（不恢复本地选择，而是将 Clash 的当前状态保存到本地）
+  // 从 Clash 刷新代理状态（不恢复本地选择，而是将 Clash 的当前状态保存到本地）
+  // 用于应用从后台恢复时同步外部控制器的节点切换
   Future<void> _doRefreshProxiesFromClash() async {
-    Logger.info('开始从 Clash 刷新代理状态');
-
     final totalStopwatch = Stopwatch()..start();
 
     if (!isCoreRunning) {
@@ -565,29 +597,44 @@ class ClashProvider extends ChangeNotifier {
       '刷新前状态：代理组=${_allProxyGroups.length}，节点=${_proxyNodes.length}',
     );
 
-    _isLoadingProxies = true;
     _errorMessage = null;
-    notifyListeners();
 
     try {
       // 从 Clash API 获取代理数据
       final apiStopwatch = Stopwatch()..start();
       Map<String, dynamic>? proxies;
-      int retryCount = 0;
+      int attemptNumber = 0;
       const maxRetries = 2;
 
-      while (retryCount <= maxRetries) {
+      while (attemptNumber <= maxRetries) {
+        attemptNumber++;
         try {
           proxies = await _clashManager.getProxies();
           break;
         } catch (e) {
-          retryCount++;
-          if (retryCount <= maxRetries) {
-            Logger.warning('获取代理数据失败（尝试 $retryCount/$maxRetries），1秒后重试：$e');
+          final errorMsg = e.toString();
+          final isLastAttempt = attemptNumber > maxRetries;
+
+          // 检查是否为 IPC 未就绪或连接失效错误
+          final isIpcNotReady = _isIpcNotReadyError(errorMsg);
+
+          if (!isLastAttempt) {
+            // 还有重试机会
+            if (isIpcNotReady) {
+              Logger.debug('IPC 连接失效（第 $attemptNumber 次尝试），1秒后重试');
+            } else {
+              Logger.warning('获取代理数据失败（第 $attemptNumber 次尝试），1秒后重试：$e');
+            }
             await Future.delayed(const Duration(seconds: 1));
           } else {
-            Logger.error('获取代理数据失败，已重试 $maxRetries 次：$e');
-            rethrow;
+            // 最后一次尝试失败
+            if (isIpcNotReady) {
+              Logger.debug('IPC 连接仍失效，稍后自动重试（不显示错误）');
+              return; // 静默失败，不设置 errorMessage
+            } else {
+              Logger.error('获取代理数据失败，已尝试 $attemptNumber 次：$e');
+              rethrow;
+            }
           }
         }
       }
@@ -598,15 +645,24 @@ class ClashProvider extends ChangeNotifier {
 
       apiStopwatch.stop();
       Logger.debug(
-        '从 Clash API 获取代理数据完成：${proxies.length} 项（耗时：${apiStopwatch.elapsedMilliseconds}ms，重试次数：$retryCount）',
+        '从 Clash API 获取代理数据完成：${proxies.length} 项（耗时：${apiStopwatch.elapsedMilliseconds}ms，尝试次数：$attemptNumber）',
       );
 
       // 解析节点
       final parseStopwatch = Stopwatch()..start();
+      final oldProxyNodes = _proxyNodes; // 保存旧节点数据
       _proxyNodes = {};
       proxies.forEach((name, data) {
         final node = ProxyNode.fromJson(name, data);
-        _proxyNodes[name] = node;
+
+        // 保留旧节点的延迟值和过期定时器
+        final oldNode = oldProxyNodes[name];
+        if (oldNode != null && oldNode.delay != null && oldNode.delay! != 0) {
+          _proxyNodes[name] = node.copyWith(delay: oldNode.delay);
+          // 注意：定时器中使用节点名查找，因此不需要重新创建定时器
+        } else {
+          _proxyNodes[name] = node;
+        }
       });
       _proxyNodesUpdateCount++;
       parseStopwatch.stop();
@@ -676,10 +732,10 @@ class ClashProvider extends ChangeNotifier {
         '刷新完成: ${_allProxyGroups.length} 个代理组（${proxyGroups.length} 可见），${_proxyNodes.length} 个节点',
       );
     } catch (e) {
+      // 设置错误信息
       _errorMessage = '刷新代理状态失败：$e';
       Logger.error(_errorMessage!);
     } finally {
-      _isLoadingProxies = false;
       notifyListeners();
 
       totalStopwatch.stop();
@@ -879,6 +935,14 @@ class ClashProvider extends ChangeNotifier {
         );
 
         if (reloadSuccess) {
+          // 取消正在进行的延迟测试
+          cancelBatchDelayTest();
+
+          // 清空所有延迟结果
+          clearAllDelayResults();
+
+          Logger.info('配置已重载，延迟测试已取消并清空结果');
+
           // 2. 重新加载代理列表（显示新节点）
           await loadProxies();
         } else {
@@ -1059,84 +1123,121 @@ class ClashProvider extends ChangeNotifier {
     bool hasPendingUpdates = false;
 
     try {
-      Logger.info('开始测试所有节点延迟，共 ${allProxyNames.length} 个节点');
-
-      // 直接批量测试所有去重后的节点（不遍历代理组，避免重复测试）
+      // 使用 Rust 层批量测试
       final proxyNamesList = allProxyNames.toList();
 
-      // 使用滑动窗口并发测试
-      const windowSize = 300;
+      // 使用动态并发数
+      final concurrency = ClashDefaults.dynamicDelayTestConcurrency;
+      final timeoutMs = ClashDefaults.proxyDelayTestTimeout;
+      final url = testUrl ?? ClashDefaults.defaultTestUrl;
+
+      Logger.info(
+        '开始批量测试所有节点延迟，共 ${proxyNamesList.length} 个节点，并发数：$concurrency',
+      );
+
+      // 订阅 Rust 层进度信号
+      StreamSubscription? progressSubscription;
+      StreamSubscription? completeSubscription;
       final completer = Completer<void>();
-      int activeTests = 0;
-      int currentIndex = 0;
-      int successCount = 0;
 
-      Future<void> testNext() async {
-        if (currentIndex >= proxyNamesList.length) {
-          if (activeTests == 0) {
-            completer.complete();
-          }
-          return;
-        }
+      try {
+        // 订阅进度信号（流式更新）
+        progressSubscription = signals.DelayTestProgress.rustSignalStream
+            .listen((result) {
+              final nodeName = result.message.nodeName;
+              final delayMs = result.message.delayMs;
 
-        final nodeName = proxyNamesList[currentIndex];
-        currentIndex++;
-        activeTests++;
+              // 更新节点延迟
+              final node = _proxyNodes[nodeName];
+              if (node != null) {
+                _proxyNodes[nodeName] = node.copyWith(delay: delayMs);
+                hasPendingUpdates = true;
 
-        try {
-          final delay = await DelayTestService.testProxyDelay(
-            nodeName,
-            _proxyNodes,
-            _allProxyGroups,
-            _selectedMap,
-            testUrl: testUrl,
-          );
+                // 如果延迟测试完成（无论成功或超时），设置 5 分钟过期定时器
+                if (delayMs != 0) {
+                  // 取消该节点之前的过期定时器（如果有）
+                  _delayExpireTimers[nodeName]?.cancel();
 
-          // 节点测试完成，立即更新延迟值
-          final node = _proxyNodes[nodeName];
-          if (node != null) {
-            _proxyNodes[nodeName] = node.copyWith(delay: delay);
-            hasPendingUpdates = true;
+                  // 设置新的过期定时器（5 分钟后清空延迟值）
+                  _delayExpireTimers[nodeName] = Timer(
+                    _delayRetentionDuration,
+                    () {
+                      final node = _proxyNodes[nodeName];
+                      if (node != null &&
+                          node.delay != null &&
+                          node.delay! != 0) {
+                        _proxyNodes[nodeName] = node.copyWith(delay: 0);
+                        _proxyNodes = Map<String, ProxyNode>.from(_proxyNodes);
+                        _proxyNodesUpdateCount++;
+                        notifyListeners();
+                        Logger.debug('节点 $nodeName 延迟值已过期（5 分钟）');
+                      }
+                      _delayExpireTimers.remove(nodeName);
+                    },
+                  );
+                }
+              }
 
-            if (delay > 0) {
-              successCount++;
-            }
-          }
+              // 从测试集合中移除
+              _testingNodes.remove(nodeName);
 
-          // 从测试集合中移除
-          _testingNodes.remove(nodeName);
+              // 节流通知 UI 更新（每 100ms 最多一次）
+              final now = DateTime.now();
+              if (hasPendingUpdates &&
+                  (_lastNotifyTime == null ||
+                      now.difference(_lastNotifyTime!).inMilliseconds >=
+                          _notifyThrottleMs)) {
+                // 仅在有更新时才创建新 Map（触发 Selector 重建）
+                _proxyNodes = Map<String, ProxyNode>.from(_proxyNodes);
+                _proxyNodesUpdateCount++;
+                notifyListeners();
+                _lastNotifyTime = now;
+                hasPendingUpdates = false;
+              }
+            });
 
-          // 节流通知 UI 更新（每 100ms 最多一次）
-          final now = DateTime.now();
-          if (hasPendingUpdates &&
-              (_lastNotifyTime == null ||
-                  now.difference(_lastNotifyTime!).inMilliseconds >=
-                      _notifyThrottleMs)) {
-            // 仅在有更新时才创建新 Map（触发 Selector 重建）
-            _proxyNodes = Map<String, ProxyNode>.from(_proxyNodes);
-            _proxyNodesUpdateCount++;
-            notifyListeners();
-            _lastNotifyTime = now;
-            hasPendingUpdates = false;
-          }
-        } catch (e) {
-          Logger.error('测试节点 $nodeName 失败：$e');
-          _testingNodes.remove(nodeName);
-        } finally {
-          activeTests--;
-          // 继续测试下一个
-          testNext();
-        }
+        // 订阅完成信号
+        completeSubscription = signals.BatchDelayTestComplete.rustSignalStream
+            .listen((result) {
+              final message = result.message;
+              if (message.success) {
+                Logger.info(
+                  '所有节点延迟测试完成，成功：${message.successCount}/${message.totalCount}',
+                );
+                completer.complete();
+              } else {
+                Logger.error(
+                  '批量延迟测试失败（Rust 层）：${message.errorMessage ?? "未知错误"}',
+                );
+                completer.completeError(
+                  Exception(message.errorMessage ?? '批量延迟测试失败'),
+                );
+              }
+            });
+
+        // 发送批量测试请求到 Rust 层
+        signals.BatchDelayTestRequest(
+          nodeNames: proxyNamesList,
+          testUrl: url,
+          timeoutMs: timeoutMs,
+          concurrency: concurrency,
+        ).sendSignalToRust();
+
+        // 等待测试完成（最多等待：节点数 × 单个超时 + 10秒缓冲）
+        final maxWaitTime = Duration(
+          milliseconds: (proxyNamesList.length * timeoutMs) + 10000,
+        );
+        await completer.future.timeout(
+          maxWaitTime,
+          onTimeout: () {
+            throw Exception('批量延迟测试超时');
+          },
+        );
+      } finally {
+        // 取消订阅
+        await progressSubscription?.cancel();
+        await completeSubscription?.cancel();
       }
-
-      // 启动初始批次
-      for (int i = 0; i < windowSize && i < proxyNamesList.length; i++) {
-        testNext();
-      }
-
-      // 等待所有测试完成
-      await completer.future;
-      Logger.info('所有节点延迟测试完成，成功：$successCount/${proxyNamesList.length}');
     } finally {
       // 确保最后一次更新（包含所有节点的最终结果）
       if (hasPendingUpdates) {
@@ -1158,6 +1259,39 @@ class ClashProvider extends ChangeNotifier {
       _proxyNodesUpdateCount++;
       notifyListeners();
     }
+  }
+
+  // 取消批量延迟测试
+  void cancelBatchDelayTest() {
+    if (_isBatchTestingDelay) {
+      Logger.info('取消批量延迟测试');
+      _isBatchTestingDelay = false;
+      _testingNodes.clear();
+      notifyListeners();
+    }
+  }
+
+  // 清空所有延迟测试结果
+  void clearAllDelayResults() {
+    Logger.info('清空所有延迟测试结果');
+
+    // 取消所有过期定时器
+    for (final timer in _delayExpireTimers.values) {
+      timer.cancel();
+    }
+    _delayExpireTimers.clear();
+
+    // 清空延迟值（包括成功和超时的延迟值）
+    for (final nodeName in _proxyNodes.keys.toList()) {
+      final node = _proxyNodes[nodeName];
+      if (node != null && node.delay != null && node.delay! != 0) {
+        _proxyNodes[nodeName] = node.copyWith(delay: 0);
+      }
+    }
+
+    _proxyNodes = Map<String, ProxyNode>.from(_proxyNodes);
+    _proxyNodesUpdateCount++;
+    notifyListeners();
   }
 
   // ========== 系统代理和 TUN 模式控制 ==========
@@ -1205,6 +1339,16 @@ class ClashProvider extends ChangeNotifier {
   void dispose() {
     _stopConfigWatcher();
     _clashManager.removeListener(_onClashManagerChanged);
+
+    // 移除应用生命周期监听
+    WidgetsBinding.instance.removeObserver(this);
+
+    // 清理所有延迟过期定时器
+    for (final timer in _delayExpireTimers.values) {
+      timer.cancel();
+    }
+    _delayExpireTimers.clear();
+
     super.dispose();
   }
 }

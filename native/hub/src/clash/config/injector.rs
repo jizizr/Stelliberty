@@ -262,75 +262,77 @@ fn inject_dns_config(config_map: &mut Mapping, params: &RuntimeConfigParams) -> 
         .and_then(|v| v.as_str())
         .unwrap_or("fake-ip");
 
-    // 只有在 enhanced-mode 是 fake-ip 或未设置时才修改 DNS 配置
-    if current_mode == "fake-ip"
-        || !dns_config.contains_key(YamlValue::String("enhanced-mode".to_string()))
+    // 如果不是 fake-ip 且已设置 enhanced-mode，跳过注入
+    if current_mode != "fake-ip"
+        && dns_config.contains_key(YamlValue::String("enhanced-mode".to_string()))
     {
-        // 注入基本 DNS 配置
+        return Ok(());
+    }
+
+    // 注入基本 DNS 配置
+    dns_config.insert(
+        YamlValue::String("enable".to_string()),
+        YamlValue::Bool(true),
+    );
+    dns_config.insert(
+        YamlValue::String("ipv6".to_string()),
+        YamlValue::Bool(params.is_ipv6_enabled),
+    );
+
+    if !dns_config.contains_key(YamlValue::String("enhanced-mode".to_string())) {
         dns_config.insert(
-            YamlValue::String("enable".to_string()),
-            YamlValue::Bool(true),
-        );
-        dns_config.insert(
-            YamlValue::String("ipv6".to_string()),
-            YamlValue::Bool(params.is_ipv6_enabled),
-        );
-
-        if !dns_config.contains_key(YamlValue::String("enhanced-mode".to_string())) {
-            dns_config.insert(
-                YamlValue::String("enhanced-mode".to_string()),
-                YamlValue::String("fake-ip".to_string()),
-            );
-        }
-
-        if !dns_config.contains_key(YamlValue::String("fake-ip-range".to_string())) {
-            dns_config.insert(
-                YamlValue::String("fake-ip-range".to_string()),
-                YamlValue::String("198.18.0.1/16".to_string()),
-            );
-        }
-
-        // 如果用户配置没有 nameserver，添加默认值
-        if !dns_config.contains_key(YamlValue::String("nameserver".to_string()))
-            || dns_config
-                .get(YamlValue::String("nameserver".to_string()))
-                .and_then(|v| v.as_sequence())
-                .is_none_or(|s| s.is_empty())
-        {
-            let nameservers = vec![
-                YamlValue::String("8.8.8.8".to_string()),
-                YamlValue::String("https://doh.pub/dns-query".to_string()),
-                YamlValue::String("https://dns.alidns.com/dns-query".to_string()),
-            ];
-            dns_config.insert(
-                YamlValue::String("nameserver".to_string()),
-                YamlValue::Sequence(nameservers),
-            );
-        }
-
-        // 如果用户配置没有 default-nameserver，添加默认值
-        if !dns_config.contains_key(YamlValue::String("default-nameserver".to_string()))
-            || dns_config
-                .get(YamlValue::String("default-nameserver".to_string()))
-                .and_then(|v| v.as_sequence())
-                .is_none_or(|s| s.is_empty())
-        {
-            let default_nameservers = vec![
-                YamlValue::String("system".to_string()),
-                YamlValue::String("223.6.6.6".to_string()),
-                YamlValue::String("8.8.8.8".to_string()),
-            ];
-            dns_config.insert(
-                YamlValue::String("default-nameserver".to_string()),
-                YamlValue::Sequence(default_nameservers),
-            );
-        }
-
-        config_map.insert(
-            YamlValue::String("dns".to_string()),
-            YamlValue::Mapping(dns_config),
+            YamlValue::String("enhanced-mode".to_string()),
+            YamlValue::String("fake-ip".to_string()),
         );
     }
+
+    if !dns_config.contains_key(YamlValue::String("fake-ip-range".to_string())) {
+        dns_config.insert(
+            YamlValue::String("fake-ip-range".to_string()),
+            YamlValue::String("198.18.0.1/16".to_string()),
+        );
+    }
+
+    // 如果用户配置没有 nameserver，添加默认值
+    if !dns_config.contains_key(YamlValue::String("nameserver".to_string()))
+        || dns_config
+            .get(YamlValue::String("nameserver".to_string()))
+            .and_then(|v| v.as_sequence())
+            .is_none_or(|s| s.is_empty())
+    {
+        let nameservers = vec![
+            YamlValue::String("8.8.8.8".to_string()),
+            YamlValue::String("https://doh.pub/dns-query".to_string()),
+            YamlValue::String("https://dns.alidns.com/dns-query".to_string()),
+        ];
+        dns_config.insert(
+            YamlValue::String("nameserver".to_string()),
+            YamlValue::Sequence(nameservers),
+        );
+    }
+
+    // 如果用户配置没有 default-nameserver，添加默认值
+    if !dns_config.contains_key(YamlValue::String("default-nameserver".to_string()))
+        || dns_config
+            .get(YamlValue::String("default-nameserver".to_string()))
+            .and_then(|v| v.as_sequence())
+            .is_none_or(|s| s.is_empty())
+    {
+        let default_nameservers = vec![
+            YamlValue::String("system".to_string()),
+            YamlValue::String("223.6.6.6".to_string()),
+            YamlValue::String("8.8.8.8".to_string()),
+        ];
+        dns_config.insert(
+            YamlValue::String("default-nameserver".to_string()),
+            YamlValue::Sequence(default_nameservers),
+        );
+    }
+
+    config_map.insert(
+        YamlValue::String("dns".to_string()),
+        YamlValue::Mapping(dns_config),
+    );
 
     Ok(())
 }

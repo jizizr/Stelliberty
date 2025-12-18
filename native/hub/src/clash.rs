@@ -8,18 +8,18 @@ use rinf::{DartSignal, RustSignal};
 use tokio::spawn;
 
 pub mod config;
-pub mod core_update;
+pub mod core_updater;
+pub mod delay_test;
 pub mod network;
 pub mod overrides;
 pub mod process;
 pub mod service;
-pub mod signals;
 pub mod subscription;
 
+pub use process::{ClashProcessResult, StartClashProcess, StopClashProcess};
 pub use service::{
     GetServiceStatus, InstallService, SendServiceHeartbeat, StartClash, StopClash, UninstallService,
 };
-pub use signals::{StartClashProcess, StopClashProcess};
 
 /// 初始化 Clash 模块
 ///
@@ -44,7 +44,7 @@ pub fn init() {
             {
                 log::error!("启动进程的任务执行失败（可能线程池耗尽）：{}", e);
                 // 向 Dart 发送错误响应
-                signals::ClashProcessResult {
+                ClashProcessResult {
                     success: false,
                     error_message: Some(format!("任务执行失败：{}", e)),
                     pid: None,
@@ -66,7 +66,7 @@ pub fn init() {
             {
                 log::error!("停止进程的任务执行失败（可能线程池耗尽）：{}", e);
                 // 向 Dart 发送错误响应
-                signals::ClashProcessResult {
+                ClashProcessResult {
                     success: false,
                     error_message: Some(format!("任务执行失败：{}", e)),
                     pid: None,
@@ -154,5 +154,8 @@ pub fn init() {
     subscription::init_message_listeners();
 
     // 启动核心更新监听器
-    core_update::init_message_listeners();
+    core_updater::init_message_listeners();
+
+    // 启动延迟测试监听器
+    delay_test::init_message_listeners();
 }

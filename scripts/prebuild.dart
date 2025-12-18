@@ -159,7 +159,9 @@ String getCurrentArch() {
 
   if (selectedProxy != null) {
     // 移除协议前缀，只保留 host:port
-    final proxyHost = selectedProxy.replaceFirst(RegExp(r'https?://'), '');
+    final proxyHost = selectedProxy
+        .replaceFirst(RegExp(r'https?://'), '')
+        .replaceFirst(RegExp(r'/$'), '');
     client.findProxy = (uri) => 'PROXY $proxyHost';
 
     // 只在第一次尝试时返回日志信息
@@ -225,18 +227,8 @@ Future<void> main(List<String> args) async {
     log('🌐 $proxyInfo');
   }
 
-  // 处理 --installer 参数（先检查平台支持）
+  // 处理 --installer 参数（移到任务最后，避免影响核心下载）
   final setupInstaller = argResults['installer'] as bool;
-  if (setupInstaller) {
-    if (Platform.isWindows) {
-      await setupInnoSetup(projectRoot: projectRoot);
-    } else if (Platform.isLinux) {
-      await setupLinuxPackagingTools(projectRoot: projectRoot);
-    } else {
-      log('❌ 错误: --installer 仅支持 Windows 和 Linux 平台');
-      exit(1);
-    }
-  }
 
   final isAndroid = argResults['android'] as bool;
 
@@ -256,23 +248,13 @@ Future<void> main(List<String> args) async {
   log('🖥️  检测到平台: $rawPlatform ($targetArch)');
 
   try {
-    // Step 0: 清理资源
-    log('▶️  [1/5] 正在清理资源目录...');
+    // Step 1: 清理资源
+    log('▶️  [1/6] 正在清理资源目录...');
     await cleanAssetsDirectory(projectRoot: projectRoot);
     log('✅ 资源清理完成。');
 
-    // Step 1
-    log('▶️  [2/5] 正在编译 Stelliberty Service...');
-    await buildStelliibertyService(projectRoot: projectRoot);
-    log('✅ Service 编译完成。');
-
-    // Step 2
-    log('▶️  [3/5] 正在复制所需资源...');
-    await copyTrayIcons(projectRoot: projectRoot, platform: targetPlatform);
-    log('✅ 资源复制完成。');
-
-    // Step 3
-    log('▶️  [4/5] 正在获取最新的 Mihomo 核心...');
+    // Step 2: 获取 Mihomo 核心
+    log('▶️  [2/6] 正在获取最新的 Mihomo 核心...');
     await downloadAndSetupCore(
       targetDir: coreAssetDir,
       platform: targetPlatform,
@@ -280,11 +262,32 @@ Future<void> main(List<String> args) async {
     );
     log('✅ 核心准备完成。');
 
-    // Step 4
-    log('▶️  [5/5] 正在下载最新的 GeoIP 数据文件...');
+    // Step 3: 下载 GeoIP 数据
+    log('▶️  [3/6] 正在下载最新的 GeoIP 数据文件...');
     final geoDataDir = p.join(coreAssetDir, 'data');
     await downloadGeoData(targetDir: geoDataDir);
     log('✅ GeoIP 数据下载完成。');
+
+    // Step 4: 编译 Stelliberty Service
+    log('▶️  [4/6] 正在编译 Stelliberty Service...');
+    await buildStelliibertyService(projectRoot: projectRoot);
+    log('✅ Service 编译完成。');
+
+    // Step 5: 复制所需资源
+    log('▶️  [5/6] 正在复制所需资源...');
+    await copyTrayIcons(projectRoot: projectRoot, platform: targetPlatform);
+    log('✅ 资源复制完成。');
+
+    // Step 6: 安装打包工具（如果指定）
+    if (setupInstaller) {
+      log('▶️  [6/6] 正在安装打包工具...');
+      if (Platform.isWindows) {
+        await setupInnoSetup(projectRoot: projectRoot);
+      } else if (Platform.isLinux) {
+        await setupLinuxPackagingTools(projectRoot: projectRoot);
+      }
+      log('✅ 打包工具安装完成。');
+    }
 
     final endTime = DateTime.now();
     final duration = endTime.difference(startTime);
@@ -311,8 +314,8 @@ Future<void> cleanAssetsDirectory({required String projectRoot}) async {
   await for (final entity in assetsDir.list()) {
     final name = p.basename(entity.path);
 
-    // 跳过 test 和 tools 文件夹
-    if (name == 'test' || name == 'tools') {
+    // 跳过 test 文件夹
+    if (name == 'test') {
       log('  ⏭️  保留: $name');
       continue;
     }

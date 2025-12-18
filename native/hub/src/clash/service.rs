@@ -2,7 +2,7 @@
 //
 // 通过 Windows Service/systemd 以管理员权限运行 Clash 核心
 
-use crate::clash::signals::ClashProcessResult;
+use crate::clash::process::ClashProcessResult;
 use anyhow::{Context, Result};
 use rinf::{DartSignal, RustSignal};
 use serde::{Deserialize, Serialize};
@@ -182,14 +182,17 @@ impl ServiceManager {
             self.run_elevated_command("install").await?;
 
             // 走到这里说明用户确认了权限，安装成功
-            // 现在可以安全地停止核心了
-            if clash_was_running {
-                log::info!("权限确认成功，停止 Clash 核心...");
-                if let Err(e) = self.stop_clash().await {
-                    log::warn!("停止 Clash 核心失败：{}，但服务已安装", e);
-                } else {
-                    log::info!("Clash 核心已停止");
-                }
+            // 如果核心未运行，无需停止
+            if !clash_was_running {
+                return Ok(());
+            }
+
+            // 核心正在运行，现在可以安全地停止了
+            log::info!("权限确认成功，停止 Clash 核心...");
+            if let Err(e) = self.stop_clash().await {
+                log::warn!("停止 Clash 核心失败：{}，但服务已安装", e);
+            } else {
+                log::info!("Clash 核心已停止");
             }
         }
 
@@ -342,7 +345,9 @@ impl ServiceManager {
         let private_service_exe = app_data_dir.join("stelliberty-service");
 
         // 检查是否需要复制（通过文件大小和修改时间判断）
-        let need_copy = if private_service_exe.exists() {
+        if !private_service_exe.exists() {
+            log::info!("私有目录中不存在服务程序，需要复制");
+        } else {
             match (
                 std::fs::metadata(&source_service_exe),
                 std::fs::metadata(&private_service_exe),
@@ -357,27 +362,18 @@ impl ServiceManager {
                         .map(|(s, p)| s > p)
                         .unwrap_or(true);
 
-                    if size_different || time_different {
-                        log::info!("检测到服务程序更新（大小或时间不同），将覆盖私有目录中的文件");
-                        true
-                    } else {
+                    if !size_different && !time_different {
                         log::info!("私有目录中的服务程序已是最新版本，跳过复制");
-                        false
+                        return Ok(());
                     }
+
+                    log::info!("检测到服务程序更新（大小或时间不同），将覆盖私有目录中的文件");
                 }
                 _ => {
                     // 元数据获取失败，安全起见重新复制
                     log::warn!("无法获取文件元数据，将重新复制");
-                    true
                 }
             }
-        } else {
-            log::info!("私有目录中不存在服务程序，需要复制");
-            true
-        };
-
-        if !need_copy {
-            return Ok(());
         }
 
         // 确保私有目录存在

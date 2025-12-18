@@ -7,16 +7,15 @@ use tokio::spawn;
 
 pub mod interfaces;
 pub mod proxy;
-pub mod signals;
 
 #[allow(unused_imports)]
-pub use interfaces::{get_hostname, get_network_addresses};
+pub use interfaces::{
+    GetNetworkInterfaces, NetworkInterfacesInfo, get_hostname, get_network_addresses,
+};
 #[allow(unused_imports)]
-pub use proxy::{ProxyInfo, ProxyResult, disable_proxy, enable_proxy, get_proxy_info};
-#[allow(unused_imports)]
-pub use signals::{
-    DisableSystemProxy, EnableSystemProxy, GetNetworkInterfaces, GetSystemProxy,
-    NetworkInterfacesInfo, SystemProxyInfo, SystemProxyResult,
+pub use proxy::{
+    DisableSystemProxy, EnableSystemProxy, GetSystemProxy, ProxyInfo, ProxyResult, SystemProxyInfo,
+    SystemProxyResult, disable_proxy, enable_proxy, get_proxy_info,
 };
 
 // 初始化网络模块
