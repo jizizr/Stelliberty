@@ -3,7 +3,7 @@ name: 测试版构建
 on:
   push:
     branches:
-      - '**'
+      - personal-main
     tags-ignore:
       - 'v[0-9]+.[0-9]+.[0-9]+'
       - 'v[0-9]+.[0-9]+.[0-9]+-*'
