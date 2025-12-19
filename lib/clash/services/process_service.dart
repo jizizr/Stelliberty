@@ -67,7 +67,7 @@ class ProcessService {
     final resultReceiver = ClashProcessResult.rustSignalStream;
     final result = await resultReceiver.first;
 
-    if (!result.message.success) {
+    if (!result.message.isSuccessful) {
       final error = result.message.errorMessage ?? '未知错误';
       Logger.error('Clash 进程启动失败：$error');
       throw Exception('启动 Clash 进程失败：$error');
@@ -92,7 +92,7 @@ class ProcessService {
     final resultReceiver = ClashProcessResult.rustSignalStream;
     final result = await resultReceiver.first;
 
-    if (!result.message.success) {
+    if (!result.message.isSuccessful) {
       final error = result.message.errorMessage ?? '未知错误';
       Logger.warning('Clash 进程停止失败：$error');
     }
@@ -365,7 +365,7 @@ class ProcessService {
         },
       );
 
-      if (signal.message.success) {
+      if (signal.message.isSuccessful) {
         Logger.info('服务已成功停止 Clash');
         return true;
       } else {

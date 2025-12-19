@@ -61,11 +61,11 @@ class ClashProvider extends ChangeNotifier with WidgetsBindingObserver {
       'direct' => [], // 直连模式：不显示任何代理组
       'global' =>
         _allProxyGroups // 全局模式：显示所有非隐藏组 + GLOBAL 组
-            .where((group) => !group.hidden || group.name == 'GLOBAL')
+            .where((group) => !group.isHidden || group.name == 'GLOBAL')
             .toList(),
       _ =>
         _allProxyGroups // 规则模式（默认）：只显示非隐藏的代理组，过滤掉 GLOBAL
-            .where((group) => !group.hidden)
+            .where((group) => !group.isHidden)
             .where((group) => group.name != 'GLOBAL')
             .toList(),
     };
@@ -1200,7 +1200,7 @@ class ClashProvider extends ChangeNotifier with WidgetsBindingObserver {
         completeSubscription = signals.BatchDelayTestComplete.rustSignalStream
             .listen((result) {
               final message = result.message;
-              if (message.success) {
+              if (message.isSuccessful) {
                 Logger.info(
                   '所有节点延迟测试完成，成功：${message.successCount}/${message.totalCount}',
                 );
@@ -1297,7 +1297,7 @@ class ClashProvider extends ChangeNotifier with WidgetsBindingObserver {
   // ========== 系统代理和 TUN 模式控制 ==========
 
   /// 获取 TUN 模式状态
-  bool get tunEnabled => _clashManager.tunEnabled;
+  bool get isTunEnabled => _clashManager.isTunEnabled;
 
   /// 切换 TUN 模式
   Future<bool> setTunMode(bool enabled) async {

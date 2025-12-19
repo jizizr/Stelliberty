@@ -92,7 +92,7 @@ class ServiceProvider {
             },
           );
 
-      if (signal.message.success) {
+      if (signal.message.isSuccessful) {
         Logger.info('服务安装成功');
         _lastOperationSuccess = true;
 
@@ -176,7 +176,7 @@ class ServiceProvider {
       final currentConfigPath = ClashManager.instance.currentConfigPath;
 
       // 检查并禁用虚拟网卡（普通模式不支持虚拟网卡，需提前禁用并持久化）
-      if (ClashManager.instance.tunEnabled) {
+      if (ClashManager.instance.isTunEnabled) {
         Logger.info('检测到虚拟网卡已启用，卸载服务前先禁用虚拟网卡...');
         try {
           await ClashManager.instance.setTunEnabled(false);
@@ -199,7 +199,7 @@ class ServiceProvider {
             },
           );
 
-      if (signal.message.success) {
+      if (signal.message.isSuccessful) {
         Logger.info('服务卸载成功');
         _lastOperationSuccess = true;
 

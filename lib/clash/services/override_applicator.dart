@@ -82,7 +82,7 @@ class OverrideApplicator {
       final response = await ApplyOverridesResponse.rustSignalStream.first;
       final result = response.message;
 
-      if (!result.success) {
+      if (!result.isSuccessful) {
         Logger.error('Rust 覆写处理失败：${result.errorMessage}');
         throw Exception('Rust 覆写处理失败：${result.errorMessage}');
       }
@@ -146,7 +146,7 @@ class OverrideApplicator {
       final response = await ApplyOverridesResponse.rustSignalStream.first;
       final result = response.message;
 
-      if (!result.success) {
+      if (!result.isSuccessful) {
         Logger.error('Rust YAML 覆写失败：${result.errorMessage}');
         throw Exception('Rust YAML 覆写失败：${result.errorMessage}');
       }

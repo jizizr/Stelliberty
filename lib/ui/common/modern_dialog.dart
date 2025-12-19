@@ -40,7 +40,7 @@ class ModernDialog extends StatefulWidget {
   final String? subtitle;
 
   // 是否隐藏副标题（即使 subtitle 有值也不显示）
-  final bool hideSubtitle;
+  final bool shouldHideSubtitle;
 
   // 标题下方的自定义区域（如搜索框等）
   final Widget? headerWidget;
@@ -57,10 +57,10 @@ class ModernDialog extends StatefulWidget {
   final Color? titleIconColor;
 
   // 是否显示关闭按钮
-  final bool showCloseButton;
+  final bool shouldShowCloseButton;
 
   // 是否显示分隔线
-  final bool showDividers;
+  final bool shouldShowDividers;
 
   // 是否显示"已修改"标签
   final bool? isModified;
@@ -97,15 +97,15 @@ class ModernDialog extends StatefulWidget {
     this.title,
     this.titleWidget,
     this.subtitle,
-    this.hideSubtitle = false,
+    this.shouldHideSubtitle = false,
     this.headerWidget,
     this.searchController,
     this.searchHint,
     this.onSearchChanged,
     this.titleIcon,
     this.titleIconColor,
-    this.showCloseButton = true,
-    this.showDividers = true,
+    this.shouldShowCloseButton = true,
+    this.shouldShowDividers = true,
     this.isModified,
     this.modifiedLabel,
     required this.content,
@@ -341,7 +341,7 @@ class _ModernDialogState extends State<ModernDialog>
             : Colors.white.withValues(alpha: 0.3),
         // 根据 showDividers 决定是否显示底部边框
         border:
-            widget.showDividers &&
+            widget.shouldShowDividers &&
                 widget.headerWidget == null &&
                 widget.searchController == null
             ? Border(
@@ -409,7 +409,7 @@ class _ModernDialogState extends State<ModernDialog>
                     ],
                   ],
                 ),
-                if (widget.subtitle != null && !widget.hideSubtitle) ...[
+                if (widget.subtitle != null && !widget.shouldHideSubtitle) ...[
                   const SizedBox(height: 2),
                   Text(
                     widget.subtitle!,
@@ -424,7 +424,7 @@ class _ModernDialogState extends State<ModernDialog>
             ),
           ),
           // 关闭按钮（可选）
-          if (widget.showCloseButton)
+          if (widget.shouldShowCloseButton)
             Material(
               color: Colors.transparent,
               child: InkWell(
@@ -467,7 +467,7 @@ class _ModernDialogState extends State<ModernDialog>
               ? Colors.white.withValues(alpha: 0.06)
               : Colors.white.withValues(alpha: 0.3),
           // 根据 showDividers 决定是否显示顶部边框
-          border: widget.showDividers
+          border: widget.shouldShowDividers
               ? Border(
                   top: BorderSide(
                     color: Colors.white.withValues(alpha: isDark ? 0.1 : 0.3),

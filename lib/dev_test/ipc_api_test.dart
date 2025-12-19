@@ -37,7 +37,7 @@ class IpcApiTest {
         configPath: testConfigPath,
         httpPort: 17890,
         isIpv6Enabled: false,
-        tunEnabled: false,
+        isTunEnabled: false,
         tunStack: 'mixed',
         tunDevice: 'Stelliberty-Test',
         isTunAutoRouteEnabled: false,
@@ -158,7 +158,7 @@ class IpcApiTest {
       // 1. 监听流启动结果
       resultSubscription = StreamResult.rustSignalStream.listen((signal) {
         final result = signal.message;
-        if (result.success) {
+        if (result.isSuccessful) {
           Logger.info('  ✓ 流量监控 WebSocket 已连接');
         } else {
           throw Exception('流量监控启动失败: ${result.errorMessage}');
@@ -209,7 +209,7 @@ class IpcApiTest {
       // 1. 监听流启动结果
       resultSubscription = StreamResult.rustSignalStream.listen((signal) {
         final result = signal.message;
-        if (result.success) {
+        if (result.isSuccessful) {
           Logger.info('  ✓ 日志监控 WebSocket 已连接');
           connectionEstablished = true;
         } else {

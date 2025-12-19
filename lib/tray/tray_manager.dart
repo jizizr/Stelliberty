@@ -50,7 +50,7 @@ class AppTrayManager {
       final manager = ClashManager.instance;
       _proxyStateCache = provider.isCoreRunning; // 初始化缓存
       _systemProxyStateCache = manager.isSystemProxyEnabled;
-      _tunStateCache = manager.tunEnabled;
+      _tunStateCache = manager.isTunEnabled;
       _outboundModeCache = manager.outboundMode; // 初始化出站模式缓存
 
       // 获取订阅状态
@@ -59,7 +59,7 @@ class AppTrayManager {
       _subscriptionStateCache = hasSubscription;
 
       _updateTrayMenu(provider.isCoreRunning, hasSubscription);
-      _updateTrayIcon(manager.isSystemProxyEnabled, manager.tunEnabled);
+      _updateTrayIcon(manager.isSystemProxyEnabled, manager.isTunEnabled);
     }
   }
 
@@ -94,7 +94,7 @@ class AppTrayManager {
       // 获取系统代理和 TUN 状态
       final manager = ClashManager.instance;
       final isSystemProxyEnabled = manager.isSystemProxyEnabled;
-      final isTunEnabled = manager.tunEnabled;
+      final isTunEnabled = manager.isTunEnabled;
 
       // 清除 TUN 可用性缓存，强制重新检查（用于服务安装/卸载后）
       _tunAvailableCache = null;
@@ -120,7 +120,7 @@ class AppTrayManager {
       // 缓存 ClashManager 实例减少重复访问
       final manager = ClashManager.instance;
       final currentSystemProxyState = manager.isSystemProxyEnabled;
-      final currentTunState = manager.tunEnabled;
+      final currentTunState = manager.isTunEnabled;
       final currentOutboundMode = manager.outboundMode;
       final currentSubscriptionState =
           _subscriptionProvider!.getSubscriptionConfigPath() != null;
@@ -212,7 +212,7 @@ class AppTrayManager {
       // 获取系统代理实际状态
       final manager = ClashManager.instance;
       final isSystemProxyEnabled = manager.isSystemProxyEnabled;
-      final isTunEnabled = manager.tunEnabled;
+      final isTunEnabled = manager.isTunEnabled;
 
       // 检查虚拟网卡模式是否可用(需管理员权限或服务模式)
       final isTunAvailable = await _checkTunAvailable();

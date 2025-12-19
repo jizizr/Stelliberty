@@ -107,7 +107,7 @@ class OverrideTest {
 
     final result = response.message;
 
-    if (!result.success) {
+    if (!result.isSuccessful) {
       throw Exception('订阅解析失败: ${result.errorMessage}');
     }
 
@@ -188,7 +188,7 @@ class OverrideTest {
 
     final result = response.message;
 
-    if (!result.success) {
+    if (!result.isSuccessful) {
       throw Exception('Rust 覆写处理失败: ${result.errorMessage}');
     }
 

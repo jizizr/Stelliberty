@@ -201,7 +201,7 @@ class ConfigParser {
                 type: type,
                 now: proxies.isNotEmpty ? proxies.first : null,
                 all: proxies,
-                hidden: hidden,
+                isHidden: hidden,
               ),
             );
           }

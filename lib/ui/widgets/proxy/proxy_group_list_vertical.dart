@@ -249,7 +249,7 @@ class _ProxyGroupListVerticalState extends State<ProxyGroupListVertical> {
   // 动态计算列数（基于宽度）
   int _calculateColumns(double width) {
     const minCardWidth = 280.0;
-    return (width / minCardWidth).floor().clamp(1, 4);
+    return (width / minCardWidth).floor().clamp(2, 999);
   }
 
   // 计算单个代理组的高度

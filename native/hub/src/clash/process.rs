@@ -21,7 +21,7 @@ pub struct StopClashProcess;
 // Rust → Dart：Clash 进程操作结果
 #[derive(Serialize, RustSignal)]
 pub struct ClashProcessResult {
-    pub success: bool,
+    pub is_successful: bool,
     pub error_message: Option<String>,
     pub pid: Option<u32>,
 }
@@ -265,7 +265,7 @@ impl StartClashProcess {
         if manager.is_some() {
             log::warn!("Clash 进程已在运行");
             ClashProcessResult {
-                success: false,
+                is_successful: false,
                 error_message: Some("进程已在运行".to_string()),
                 pid: None,
             }
@@ -281,7 +281,7 @@ impl StartClashProcess {
 
                 log::info!("Clash 进程启动成功，PID：{}", pid);
                 ClashProcessResult {
-                    success: true,
+                    is_successful: true,
                     error_message: None,
                     pid: Some(pid),
                 }
@@ -290,7 +290,7 @@ impl StartClashProcess {
             Err(e) => {
                 log::error!("启动 Clash 进程失败：{}", e);
                 ClashProcessResult {
-                    success: false,
+                    is_successful: false,
                     error_message: Some(e),
                     pid: None,
                 }
@@ -323,7 +323,7 @@ impl StopClashProcess {
                     });
 
                     ClashProcessResult {
-                        success: true,
+                        is_successful: true,
                         error_message: None,
                         pid: None,
                     }
@@ -332,7 +332,7 @@ impl StopClashProcess {
                 Err(e) => {
                     log::error!("停止 Clash 进程失败：{}", e);
                     ClashProcessResult {
-                        success: false,
+                        is_successful: false,
                         error_message: Some(e),
                         pid: None,
                     }
@@ -342,7 +342,7 @@ impl StopClashProcess {
             None => {
                 log::warn!("没有运行中的 Clash 进程");
                 ClashProcessResult {
-                    success: true,
+                    is_successful: true,
                     error_message: None,
                     pid: None,
                 }

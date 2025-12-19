@@ -28,13 +28,13 @@ pub struct GetAutoStartStatus;
 // Dart → Rust：设置开机自启状态
 #[derive(Deserialize, DartSignal)]
 pub struct SetAutoStartStatus {
-    pub enabled: bool,
+    pub is_enabled: bool,
 }
 
 // Rust → Dart：开机自启状态响应
 #[derive(Serialize, RustSignal)]
 pub struct AutoStartStatusResult {
-    pub enabled: bool,
+    pub is_enabled: bool,
     pub error_message: Option<String>,
 }
 
@@ -54,7 +54,7 @@ impl GetAutoStartStatus {
         };
 
         let response = AutoStartStatusResult {
-            enabled,
+            is_enabled: enabled,
             error_message,
         };
 
@@ -67,9 +67,9 @@ impl SetAutoStartStatus {
     //
     // 目的：启用或禁用应用程序的开机自启动
     pub fn handle(&self) {
-        log::info!("收到设置开机自启动状态请求：enabled={}", self.enabled);
+        log::info!("收到设置开机自启动状态请求：enabled={}", self.is_enabled);
 
-        let (enabled, error_message) = match set_auto_start_status(self.enabled) {
+        let (enabled, error_message) = match set_auto_start_status(self.is_enabled) {
             Ok(status) => (status, None),
             Err(err) => {
                 log::error!("设置开机自启状态失败：{}", err);
@@ -78,7 +78,7 @@ impl SetAutoStartStatus {
         };
 
         let response = AutoStartStatusResult {
-            enabled,
+            is_enabled: enabled,
             error_message,
         };
 

@@ -16,20 +16,23 @@ use tokio::spawn;
 // Dart → Rust：设置应用日志开关请求
 #[derive(Deserialize, DartSignal)]
 pub struct SetAppLogEnabled {
-    pub enabled: bool,
+    pub is_enabled: bool,
 }
 
 // Rust → Dart：设置应用日志开关响应
 #[derive(Serialize, RustSignal)]
 pub struct SetAppLogEnabledResult {
-    pub success: bool,
+    pub is_successful: bool,
 }
 
 impl SetAppLogEnabled {
     // 处理设置应用日志开关请求
     pub fn handle(&self) {
-        set_app_log_enabled(self.enabled);
-        SetAppLogEnabledResult { success: true }.send_signal_to_dart();
+        set_app_log_enabled(self.is_enabled);
+        SetAppLogEnabledResult {
+            is_successful: true,
+        }
+        .send_signal_to_dart();
     }
 }
 

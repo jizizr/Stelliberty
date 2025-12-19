@@ -32,8 +32,8 @@ class UwpLoopbackCard extends StatelessWidget {
           },
         ),
       ),
-      enableHover: true,
-      enableTap: false,
+      isHoverEnabled: true,
+      isTapEnabled: false,
     );
   }
 }

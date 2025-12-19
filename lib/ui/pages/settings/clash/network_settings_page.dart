@@ -203,8 +203,8 @@ class _NetworkSettingsPageState extends State<NetworkSettingsPage> {
     return ModernFeatureCard(
       isSelected: false,
       onTap: () {},
-      enableHover: true,
-      enableTap: false,
+      isHoverEnabled: true,
+      isTapEnabled: false,
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         crossAxisAlignment: CrossAxisAlignment.center,

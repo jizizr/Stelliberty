@@ -266,7 +266,7 @@ class SubscriptionProvider extends ChangeNotifier {
     required String url,
     AutoUpdateMode autoUpdateMode = AutoUpdateMode.disabled,
     int intervalMinutes = 60,
-    bool updateOnStartup = false,
+    bool shouldUpdateOnStartup = false,
     bool downloadNow = true,
     SubscriptionProxyMode proxyMode = SubscriptionProxyMode.direct,
     String? userAgent,
@@ -292,7 +292,7 @@ class SubscriptionProvider extends ChangeNotifier {
         url: url,
         autoUpdateMode: autoUpdateMode,
         intervalMinutes: intervalMinutes,
-        updateOnStartup: updateOnStartup,
+        shouldUpdateOnStartup: shouldUpdateOnStartup,
         proxyMode: proxyMode,
         userAgent: effectiveUserAgent,
       );
@@ -447,7 +447,7 @@ class SubscriptionProvider extends ChangeNotifier {
       // 更新列表（确保清除错误信息和配置失败标记）
       _subscriptions[index] = updatedSubscription.copyWith(
         lastError: null,
-        configLoadFailed: false, // 更新成功后清除配置失败标记
+        hasConfigLoadFailed: false, // 更新成功后清除配置失败标记
       );
       await _service.saveSubscriptionList(_subscriptions);
 
@@ -579,6 +579,19 @@ class SubscriptionProvider extends ChangeNotifier {
     Logger.info(
       '批量更新完成: 成功=${_subscriptions.length - errors.length}, 失败=${errors.length}',
     );
+
+    // 如果更新的订阅中包含当前选中的订阅，重新加载配置
+    if (_currentSubscriptionId != null &&
+        _subscriptions.any((s) => s.id == _currentSubscriptionId)) {
+      Logger.info('批量更新包含当前订阅，重新加载配置...');
+      _clashProvider?.pauseConfigWatcher();
+      try {
+        await _reloadCurrentSubscriptionConfig(reason: '批量更新包含当前订阅');
+      } finally {
+        await _clashProvider?.resumeConfigWatcher();
+      }
+    }
+
     return errors;
   }
 
@@ -696,7 +709,7 @@ class SubscriptionProvider extends ChangeNotifier {
 
     // 找到所有启用了"启动时更新"的订阅（排除本地文件）
     final startupUpdateSubscriptions = _subscriptions
-        .where((s) => s.updateOnStartup && !s.isLocalFile)
+        .where((s) => s.shouldUpdateOnStartup && !s.isLocalFile)
         .toList();
 
     if (startupUpdateSubscriptions.isEmpty) {
@@ -956,7 +969,7 @@ class SubscriptionProvider extends ChangeNotifier {
     String? url,
     AutoUpdateMode? autoUpdateMode,
     int? intervalMinutes,
-    bool? updateOnStartup,
+    bool? shouldUpdateOnStartup,
     SubscriptionProxyMode? proxyMode,
     String? userAgent,
   }) async {
@@ -975,7 +988,8 @@ class SubscriptionProvider extends ChangeNotifier {
         url: url ?? subscription.url,
         autoUpdateMode: autoUpdateMode ?? subscription.autoUpdateMode,
         intervalMinutes: intervalMinutes ?? subscription.intervalMinutes,
-        updateOnStartup: updateOnStartup ?? subscription.updateOnStartup,
+        shouldUpdateOnStartup:
+            shouldUpdateOnStartup ?? subscription.shouldUpdateOnStartup,
         proxyMode: proxyMode ?? subscription.proxyMode,
         userAgent: userAgent ?? subscription.userAgent,
       );
@@ -986,7 +1000,7 @@ class SubscriptionProvider extends ChangeNotifier {
       // 如果修改了自动更新配置，重新计算定时器
       if (autoUpdateMode != null ||
           intervalMinutes != null ||
-          updateOnStartup != null) {
+          shouldUpdateOnStartup != null) {
         _restartAutoUpdateTimer();
       }
 
@@ -1074,9 +1088,9 @@ class SubscriptionProvider extends ChangeNotifier {
 
       // 清除配置失败标记（无论是否当前选中）
       final index = _subscriptions.indexWhere((s) => s.id == subscriptionId);
-      if (index != -1 && _subscriptions[index].configLoadFailed) {
+      if (index != -1 && _subscriptions[index].hasConfigLoadFailed) {
         _subscriptions[index] = _subscriptions[index].copyWith(
-          configLoadFailed: false,
+          hasConfigLoadFailed: false,
         );
         await _service.saveSubscriptionList(_subscriptions);
         notifyListeners();
@@ -1271,7 +1285,7 @@ class SubscriptionProvider extends ChangeNotifier {
           );
           if (index != -1) {
             _subscriptions[index] = failedSubscription.copyWith(
-              configLoadFailed: true,
+              hasConfigLoadFailed: true,
             );
             await _service.saveSubscriptionList(_subscriptions);
           }
@@ -1341,13 +1355,13 @@ class SubscriptionProvider extends ChangeNotifier {
 
         // 清除配置失败标记（如果之前失败过）
         if (currentSubscription != null &&
-            currentSubscription!.configLoadFailed) {
+            currentSubscription!.hasConfigLoadFailed) {
           final index = _subscriptions.indexWhere(
             (s) => s.id == currentSubscription!.id,
           );
           if (index != -1) {
             _subscriptions[index] = currentSubscription!.copyWith(
-              configLoadFailed: false,
+              hasConfigLoadFailed: false,
             );
             await _service.saveSubscriptionList(_subscriptions);
             notifyListeners();

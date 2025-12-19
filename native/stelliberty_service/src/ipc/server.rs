@@ -359,7 +359,7 @@ fn create_permissive_security_attributes() -> std::result::Result<SecurityDescri
 // 使用安全描述符创建 Named Pipe
 fn create_named_pipe_with_security(
     path: &str,
-    first_instance: bool,
+    is_first_instance: bool,
     security_descriptor: &SecurityDescriptorWrapper,
 ) -> std::result::Result<tokio::net::windows::named_pipe::NamedPipeServer, String> {
     use windows::Win32::Foundation::ERROR_PIPE_BUSY;
@@ -381,7 +381,7 @@ fn create_named_pipe_with_security(
         bInheritHandle: false.into(),
     };
 
-    let open_mode = if first_instance {
+    let open_mode = if is_first_instance {
         PIPE_ACCESS_DUPLEX | FILE_FLAG_OVERLAPPED | FILE_FLAG_FIRST_PIPE_INSTANCE
     } else {
         PIPE_ACCESS_DUPLEX | FILE_FLAG_OVERLAPPED

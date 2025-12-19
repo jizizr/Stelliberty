@@ -57,7 +57,7 @@ class BackupService {
           },
         );
 
-        if (!result.success) {
+        if (!result.isSuccessful) {
           throw Exception(result.errorMessage ?? '备份创建失败');
         }
 
@@ -110,7 +110,7 @@ class BackupService {
           },
         );
 
-        if (!result.success) {
+        if (!result.isSuccessful) {
           throw Exception(result.errorMessage ?? '备份还原失败');
         }
 

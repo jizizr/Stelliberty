@@ -128,8 +128,8 @@ class _PerformancePageState extends State<PerformancePage> {
                   ModernFeatureCard(
                     isSelected: false,
                     onTap: () {},
-                    enableHover: true,
-                    enableTap: false,
+                    isHoverEnabled: true,
+                    isTapEnabled: false,
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
@@ -208,8 +208,8 @@ class _PerformancePageState extends State<PerformancePage> {
                   ModernFeatureCard(
                     isSelected: false,
                     onTap: () {},
-                    enableHover: true,
-                    enableTap: false,
+                    isHoverEnabled: true,
+                    isTapEnabled: false,
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [

@@ -425,6 +425,21 @@ class OverrideProvider extends ChangeNotifier {
       Logger.info(
         '批量更新完成: 成功=${remoteOverrides.length - errors.length}, 失败=${errors.length}',
       );
+
+      // 批量更新完成后，检查当前订阅是否使用了任何已更新的覆写
+      if (_onOverrideContentUpdated != null) {
+        final updatedOverrideIds = remoteOverrides
+            .where((o) => !errors.any((err) => err.contains(o.name)))
+            .map((o) => o.id)
+            .toList();
+
+        if (updatedOverrideIds.isNotEmpty) {
+          Logger.info('批量更新成功 ${updatedOverrideIds.length} 个覆写，触发配置重载检查');
+          for (final overrideId in updatedOverrideIds) {
+            await _onOverrideContentUpdated!(overrideId);
+          }
+        }
+      }
     } finally {
       _stateManager.setIdle(reason: '批量更新完成');
       notifyListeners();

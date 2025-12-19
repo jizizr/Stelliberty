@@ -84,7 +84,7 @@ class _ProxyNodeCardState extends State<ProxyNodeCard> {
             color: widget.isSelected
                 ? colorScheme.primary.withValues(alpha: isDark ? 0.7 : 0.6)
                 : colorScheme.outline.withValues(alpha: 0.4),
-            width: widget.isSelected ? 2 : 1,
+            width: widget.isSelected ? 3 : 1,
           ),
           boxShadow: [
             BoxShadow(
@@ -101,20 +101,6 @@ class _ProxyNodeCardState extends State<ProxyNodeCard> {
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             child: Row(
               children: [
-                // 选中指示器
-                AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  width: 4,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    color: widget.isSelected
-                        ? colorScheme.primary
-                        : Colors.transparent,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-                const SizedBox(width: 12),
-
                 // 标题和类型
                 Expanded(
                   child: Column(
@@ -135,9 +121,9 @@ class _ProxyNodeCardState extends State<ProxyNodeCard> {
                         overflow: TextOverflow.ellipsis,
                         maxLines: 1,
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 6),
                       Transform.translate(
-                        offset: const Offset(-6, 0),
+                        offset: const Offset(-3, 0),
                         child: Container(
                           padding: const EdgeInsets.symmetric(
                             horizontal: 6,

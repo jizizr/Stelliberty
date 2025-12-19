@@ -140,7 +140,7 @@ class _ProxyNodeGridWidgetState extends State<ProxyNodeGrid> {
                   builder: (context, constraints) {
                     final int crossAxisCount = (constraints.maxWidth / 280)
                         .floor()
-                        .clamp(2, 4);
+                        .clamp(2, 999);
 
                     // 只在列数变化时调用回调
                     if (crossAxisCount != _crossAxisCountCache) {

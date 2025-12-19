@@ -20,7 +20,7 @@ class BaseCard extends StatelessWidget {
   final Widget child;
 
   // 是否显示标题栏（默认显示）
-  final bool showHeader;
+  final bool shouldShowHeader;
 
   const BaseCard({
     super.key,
@@ -28,7 +28,7 @@ class BaseCard extends StatelessWidget {
     required this.title,
     required this.child,
     this.trailing,
-    this.showHeader = true,
+    this.shouldShowHeader = true,
   });
 
   @override
@@ -55,7 +55,7 @@ class BaseCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
-            if (showHeader) ...[
+            if (shouldShowHeader) ...[
               _buildHeader(context),
               const SizedBox(height: 16),
             ],

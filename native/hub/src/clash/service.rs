@@ -75,7 +75,7 @@ impl ServiceManager {
             // 服务正在运行，获取详细状态
             match self.ipc_client.send_command(IpcCommand::GetStatus).await {
                 Ok(IpcResponse::Status {
-                    clash_running: _,
+                    is_clash_running: _,
                     clash_pid,
                     service_uptime,
                 }) => {
@@ -110,7 +110,7 @@ impl ServiceManager {
                 if Self::is_systemd_service_active() {
                     // 服务正在运行，尝试 IPC 获取详细状态
                     if let Ok(IpcResponse::Status {
-                        clash_running: _,
+                        is_clash_running: _,
                         clash_pid,
                         service_uptime,
                     }) = self.ipc_client.send_command(IpcCommand::GetStatus).await
@@ -141,7 +141,7 @@ impl ServiceManager {
             {
                 if self.ipc_client.is_service_running().await
                     && let Ok(IpcResponse::Status {
-                        clash_running: _,
+                        is_clash_running: _,
                         clash_pid,
                         service_uptime,
                     }) = self.ipc_client.send_command(IpcCommand::GetStatus).await
@@ -544,7 +544,7 @@ impl ServiceManager {
         // 问题 12：使用轮询代替固定等待，更精确地检测操作完成
         // 每 200ms 检查一次服务状态，最多检查 20 次（4 秒超时）
         let is_install = operation == "install";
-        let mut operation_completed = false;
+        let mut is_operation_completed = false;
 
         for i in 0..20 {
             tokio::time::sleep(std::time::Duration::from_millis(200)).await;
@@ -559,12 +559,12 @@ impl ServiceManager {
                     operation_name,
                     (i + 1) * 200
                 );
-                operation_completed = true;
+                is_operation_completed = true;
                 break;
             }
         }
 
-        if !operation_completed {
+        if !is_operation_completed {
             log::warn!(
                 "服务{}操作未在 4 秒内完成状态检测，可能需要更多时间",
                 operation
@@ -852,7 +852,7 @@ pub struct ServiceStatusResponse {
 // Rust → Dart：服务操作结果
 #[derive(Serialize, RustSignal)]
 pub struct ServiceOperationResult {
-    pub success: bool,
+    pub is_successful: bool,
     pub error_message: Option<String>,
 }
 
@@ -910,7 +910,7 @@ impl InstallService {
             Err(e) => {
                 log::error!("创建 ServiceManager 失败：{}", e);
                 ServiceOperationResult {
-                    success: false,
+                    is_successful: false,
                     error_message: Some(format!("创建服务管理器失败：{}", e)),
                 }
                 .send_signal_to_dart();
@@ -922,7 +922,7 @@ impl InstallService {
             Ok(()) => {
                 log::info!("服务安装成功");
                 ServiceOperationResult {
-                    success: true,
+                    is_successful: true,
                     error_message: None,
                 }
                 .send_signal_to_dart();
@@ -930,7 +930,7 @@ impl InstallService {
             Err(e) => {
                 log::error!("服务安装失败：{}", e);
                 ServiceOperationResult {
-                    success: false,
+                    is_successful: false,
                     error_message: Some(e.to_string()),
                 }
                 .send_signal_to_dart();
@@ -946,7 +946,7 @@ impl UninstallService {
             Err(e) => {
                 log::error!("创建 ServiceManager 失败：{}", e);
                 ServiceOperationResult {
-                    success: false,
+                    is_successful: false,
                     error_message: Some(format!("创建服务管理器失败：{}", e)),
                 }
                 .send_signal_to_dart();
@@ -958,7 +958,7 @@ impl UninstallService {
             Ok(()) => {
                 log::info!("服务卸载成功");
                 ServiceOperationResult {
-                    success: true,
+                    is_successful: true,
                     error_message: None,
                 }
                 .send_signal_to_dart();
@@ -966,7 +966,7 @@ impl UninstallService {
             Err(e) => {
                 log::error!("服务卸载失败：{}", e);
                 ServiceOperationResult {
-                    success: false,
+                    is_successful: false,
                     error_message: Some(e.to_string()),
                 }
                 .send_signal_to_dart();
@@ -982,7 +982,7 @@ impl StartClash {
             Err(e) => {
                 log::error!("创建 ServiceManager 失败：{}", e);
                 ClashProcessResult {
-                    success: false,
+                    is_successful: false,
                     error_message: Some(format!("创建服务管理器失败：{}", e)),
                     pid: None,
                 }
@@ -1003,7 +1003,7 @@ impl StartClash {
             Ok(pid) => {
                 log::info!("通过服务启动 Clash 成功，PID：{:?}", pid);
                 ClashProcessResult {
-                    success: true,
+                    is_successful: true,
                     error_message: None,
                     pid,
                 }
@@ -1012,7 +1012,7 @@ impl StartClash {
             Err(e) => {
                 log::error!("通过服务启动 Clash 失败：{}", e);
                 ClashProcessResult {
-                    success: false,
+                    is_successful: false,
                     error_message: Some(e.to_string()),
                     pid: None,
                 }
@@ -1029,7 +1029,7 @@ impl StopClash {
             Err(e) => {
                 log::error!("创建 ServiceManager 失败：{}", e);
                 ClashProcessResult {
-                    success: false,
+                    is_successful: false,
                     error_message: Some(format!("创建服务管理器失败：{}", e)),
                     pid: None,
                 }
@@ -1050,7 +1050,7 @@ impl StopClash {
                 });
 
                 ClashProcessResult {
-                    success: true,
+                    is_successful: true,
                     error_message: None,
                     pid: None,
                 }
@@ -1059,7 +1059,7 @@ impl StopClash {
             Err(e) => {
                 log::error!("通过服务停止 Clash 失败：{}", e);
                 ClashProcessResult {
-                    success: false,
+                    is_successful: false,
                     error_message: Some(e.to_string()),
                     pid: None,
                 }

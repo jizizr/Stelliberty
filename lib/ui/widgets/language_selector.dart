@@ -30,8 +30,8 @@ class _LanguageSelectorState extends State<LanguageSelector> {
       child: ModernFeatureCard(
         isSelected: false,
         onTap: () {},
-        enableHover: false,
-        enableTap: false,
+        isHoverEnabled: false,
+        isTapEnabled: false,
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           crossAxisAlignment: CrossAxisAlignment.center,

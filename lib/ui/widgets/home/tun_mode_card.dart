@@ -60,14 +60,14 @@ class _TunModeCardState extends State<TunModeCard> {
     }
 
     return Selector<ClashProvider, bool>(
-      selector: (_, provider) => provider.tunEnabled,
-      builder: (context, tunEnabled, child) {
+      selector: (_, provider) => provider.isTunEnabled,
+      builder: (context, isTunEnabled, child) {
         return BaseCard(
           icon: Icons.router_outlined,
           title: trans.proxy.tunMode,
           // 右边只有开关
           trailing: ModernSwitch(
-            value: tunEnabled,
+            value: isTunEnabled,
             onChanged: !canEnableTun
                 ? null
                 : (value) async {

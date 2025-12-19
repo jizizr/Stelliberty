@@ -95,7 +95,7 @@ class SubscriptionDialog extends StatefulWidget {
         initialUrl: subscription.url,
         initialAutoUpdateMode: subscription.autoUpdateMode,
         initialIntervalMinutes: subscription.intervalMinutes,
-        initialUpdateOnStartup: subscription.updateOnStartup,
+        initialUpdateOnStartup: subscription.shouldUpdateOnStartup,
         initialProxyMode: subscription.proxyMode,
         initialUserAgent: subscription.userAgent,
         confirmText: trans.subscriptionDialog.saveButton,
@@ -725,7 +725,7 @@ class _SubscriptionDialogState extends State<SubscriptionDialog> {
             : null,
         autoUpdateMode: _autoUpdateMode,
         intervalMinutes: int.tryParse(_intervalController.text.trim()) ?? 60,
-        updateOnStartup: _updateOnStartup,
+        shouldUpdateOnStartup: _updateOnStartup,
         isLocalImport: _importMethod == SubscriptionImportMethod.localFile,
         localFilePath: _selectedFile?.file.path,
         proxyMode: _proxyMode,
@@ -796,7 +796,7 @@ class SubscriptionDialogResult {
   final String? url;
   final AutoUpdateMode autoUpdateMode;
   final int intervalMinutes;
-  final bool updateOnStartup;
+  final bool shouldUpdateOnStartup;
   final bool isLocalImport;
   final String? localFilePath;
   final SubscriptionProxyMode proxyMode;
@@ -807,7 +807,7 @@ class SubscriptionDialogResult {
     this.url,
     required this.autoUpdateMode,
     this.intervalMinutes = 60,
-    this.updateOnStartup = false,
+    this.shouldUpdateOnStartup = false,
     this.isLocalImport = false,
     this.localFilePath,
     this.proxyMode = SubscriptionProxyMode.direct,

@@ -71,12 +71,12 @@ pub fn create_handler(
                     let status = manager.get_status();
                     log::debug!(
                         "Clash 状态: running={}, pid={:?}, uptime={}s",
-                        status.running,
+                        status.is_running,
                         status.pid,
                         status.uptime
                     );
                     IpcResponse::Status {
-                        clash_running: status.running,
+                        is_clash_running: status.is_running,
                         clash_pid: status.pid,
                         service_uptime: status.uptime,
                     }

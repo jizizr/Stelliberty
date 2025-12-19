@@ -4,7 +4,7 @@ class ProxyGroup {
   final String type; // Selector、URLTest、Fallback、LoadBalance
   final String? now; // 当前选中的节点
   final List<String> all; // 所有可用节点
-  final bool hidden; // 是否隐藏
+  final bool isHidden; // 是否隐藏
   final String? icon; // 代理组图标 URL
 
   ProxyGroup({
@@ -12,7 +12,7 @@ class ProxyGroup {
     required this.type,
     this.now,
     required this.all,
-    this.hidden = false,
+    this.isHidden = false,
     this.icon,
   });
 
@@ -22,7 +22,7 @@ class ProxyGroup {
       type: json['type'] ?? '',
       now: json['now'],
       all: List<String>.from(json['all'] ?? []),
-      hidden: json['hidden'] ?? false,
+      isHidden: json['hidden'] ?? false,
       icon: json['icon'],
     );
   }
@@ -33,7 +33,7 @@ class ProxyGroup {
       'type': type,
       'now': now,
       'all': all,
-      'hidden': hidden,
+      'hidden': isHidden,
       'icon': icon,
     };
   }
@@ -43,7 +43,7 @@ class ProxyGroup {
     String? type,
     String? now,
     List<String>? all,
-    bool? hidden,
+    bool? isHidden,
     String? icon,
   }) {
     return ProxyGroup(
@@ -51,7 +51,7 @@ class ProxyGroup {
       type: type ?? this.type,
       now: now ?? this.now,
       all: all ?? this.all,
-      hidden: hidden ?? this.hidden,
+      isHidden: isHidden ?? this.isHidden,
       icon: icon ?? this.icon,
     );
   }

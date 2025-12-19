@@ -68,8 +68,8 @@ class _LogLevelCardState extends State<LogLevelCard> {
     return ModernFeatureCard(
       isSelected: false,
       onTap: () {},
-      enableHover: false,
-      enableTap: false,
+      isHoverEnabled: false,
+      isTapEnabled: false,
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         crossAxisAlignment: CrossAxisAlignment.center,

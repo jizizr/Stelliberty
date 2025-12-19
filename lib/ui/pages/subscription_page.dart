@@ -375,7 +375,7 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
           url: result.url!,
           autoUpdateMode: result.autoUpdateMode,
           intervalMinutes: result.intervalMinutes,
-          updateOnStartup: result.updateOnStartup,
+          shouldUpdateOnStartup: result.shouldUpdateOnStartup,
           proxyMode: result.proxyMode,
           userAgent: result.userAgent,
         );
@@ -403,7 +403,7 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
     Logger.debug('当前代理模式：${latestSubscription.proxyMode.value}');
     Logger.debug('自动更新模式：${latestSubscription.autoUpdateMode.value}');
     Logger.debug('更新间隔：${latestSubscription.intervalMinutes} 分钟');
-    Logger.debug('启动时更新：${latestSubscription.updateOnStartup}');
+    Logger.debug('启动时更新：${latestSubscription.shouldUpdateOnStartup}');
 
     final result = await SubscriptionDialog.showEditDialog(
       context,
@@ -420,7 +420,7 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
         url: result.url,
         autoUpdateMode: result.autoUpdateMode,
         intervalMinutes: result.intervalMinutes,
-        updateOnStartup: result.updateOnStartup,
+        shouldUpdateOnStartup: result.shouldUpdateOnStartup,
         proxyMode: result.proxyMode,
         userAgent: result.userAgent,
       );
@@ -716,7 +716,7 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
       ) {
         if (completer.isCompleted) return;
 
-        if (rustResult.message.success) {
+        if (rustResult.message.isSuccessful) {
           completer.complete(rustResult.message.parsedConfig);
         } else {
           completer.completeError(Exception(rustResult.message.errorMessage));
@@ -816,7 +816,7 @@ class _SubscriptionListState {
           a[i].url != b[i].url ||
           a[i].autoUpdateMode != b[i].autoUpdateMode ||
           a[i].intervalMinutes != b[i].intervalMinutes ||
-          a[i].updateOnStartup != b[i].updateOnStartup ||
+          a[i].shouldUpdateOnStartup != b[i].shouldUpdateOnStartup ||
           a[i].proxyMode != b[i].proxyMode ||
           a[i].isUpdating != b[i].isUpdating ||
           a[i].isLocalFile != b[i].isLocalFile ||

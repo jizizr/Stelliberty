@@ -54,7 +54,7 @@ class _OverridePageState extends State<OverridePage> {
               ModernIconTooltip(
                 message: trans.common.cancel,
                 icon: Icons.arrow_back,
-                filled: false,
+                isFilled: false,
                 onPressed: () {
                   context.read<ContentProvider>().switchView(
                     ContentView.subscriptions,

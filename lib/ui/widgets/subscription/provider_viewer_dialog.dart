@@ -256,7 +256,7 @@ class _ProviderViewerDialogState extends State<ProviderViewerDialog> {
     }
 
     // 统计结果
-    final successCount = allResults.where((r) => r.$2).length;
+    final isSuccessfulCount = allResults.where((r) => r.$2).length;
     final failedResults = allResults.where((r) => !r.$2).toList();
 
     // 如果有失败的，等待更长时间让 Clash 完成处理
@@ -277,7 +277,7 @@ class _ProviderViewerDialogState extends State<ProviderViewerDialog> {
         ModernToast.success(
           context,
           trans.provider.allSyncComplete
-              .replaceAll('{success}', successCount.toString())
+              .replaceAll('{success}', isSuccessfulCount.toString())
               .replaceAll('{total}', httpProviders.length.toString()),
         );
       } else {
@@ -286,7 +286,7 @@ class _ProviderViewerDialogState extends State<ProviderViewerDialog> {
           context,
           trans.provider.partialSyncFailed
               .replaceAll('{names}', failedNames)
-              .replaceAll('{success}', successCount.toString())
+              .replaceAll('{success}', isSuccessfulCount.toString())
               .replaceAll('{failed}', failedResults.length.toString()),
         );
       }
@@ -395,7 +395,7 @@ class _ProviderViewerDialogState extends State<ProviderViewerDialog> {
 
     // 5. 显示结果反馈
     if (mounted) {
-      if (syncResult.success) {
+      if (syncResult.isSuccessful) {
         ModernToast.success(
           context,
           trans.provider.syncSuccess.replaceAll('{name}', provider.name),
@@ -734,7 +734,7 @@ class _ProviderViewerDialogState extends State<ProviderViewerDialog> {
       if (apiClient == null) {
         return _SyncResult(
           updatedProvider: provider.copyWith(isUpdating: false),
-          success: false,
+          isSuccessful: false,
           errorMessage: 'Clash 未运行',
         );
       }
@@ -756,12 +756,12 @@ class _ProviderViewerDialogState extends State<ProviderViewerDialog> {
       if (updatedData != null) {
         return _SyncResult(
           updatedProvider: Provider.fromClashApi(provider.name, updatedData),
-          success: true,
+          isSuccessful: true,
         );
       } else {
         return _SyncResult(
           updatedProvider: provider.copyWith(isUpdating: false),
-          success: false,
+          isSuccessful: false,
           errorMessage: '获取更新数据失败',
         );
       }
@@ -769,7 +769,7 @@ class _ProviderViewerDialogState extends State<ProviderViewerDialog> {
       Logger.error('同步提供者失败 ${provider.name}: $e');
       return _SyncResult(
         updatedProvider: provider.copyWith(isUpdating: false),
-        success: false,
+        isSuccessful: false,
         errorMessage: e.toString(),
       );
     }
@@ -779,12 +779,12 @@ class _ProviderViewerDialogState extends State<ProviderViewerDialog> {
 // 同步结果数据类
 class _SyncResult {
   final Provider updatedProvider;
-  final bool success;
+  final bool isSuccessful;
   final String? errorMessage;
 
   _SyncResult({
     required this.updatedProvider,
-    required this.success,
+    required this.isSuccessful,
     this.errorMessage,
   });
 }

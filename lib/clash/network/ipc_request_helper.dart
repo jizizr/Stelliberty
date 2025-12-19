@@ -138,7 +138,7 @@ class IpcRequestHelper {
         // 等待响应（8秒超时 - 快速查询）
         final response = await completer.future.timeout(_IpcTimeouts.quick);
 
-        if (!response.success) {
+        if (!response.isSuccessful) {
           throw Exception(response.errorMessage ?? 'IPC 请求失败');
         }
 
@@ -187,7 +187,7 @@ class IpcRequestHelper {
         // 等待响应（15秒超时 - 普通操作）
         final response = await completer.future.timeout(_IpcTimeouts.normal);
 
-        if (!response.success) {
+        if (!response.isSuccessful) {
           throw Exception(response.errorMessage ?? 'IPC 请求失败');
         }
 
@@ -234,7 +234,7 @@ class IpcRequestHelper {
         // 等待响应（30秒超时 - 长操作，用于配置更新）
         final response = await completer.future.timeout(_IpcTimeouts.long);
 
-        if (!response.success) {
+        if (!response.isSuccessful) {
           throw Exception(response.errorMessage ?? 'IPC 请求失败');
         }
 
@@ -281,7 +281,7 @@ class IpcRequestHelper {
         // 等待响应（15秒超时 - 普通操作）
         final response = await completer.future.timeout(_IpcTimeouts.normal);
 
-        if (!response.success) {
+        if (!response.isSuccessful) {
           throw Exception(response.errorMessage ?? 'IPC 请求失败');
         }
 
@@ -320,7 +320,7 @@ class IpcRequestHelper {
         // 等待响应（15秒超时 - 普通操作）
         final response = await completer.future.timeout(_IpcTimeouts.normal);
 
-        if (!response.success) {
+        if (!response.isSuccessful) {
           throw Exception(response.errorMessage ?? 'IPC 请求失败');
         }
 

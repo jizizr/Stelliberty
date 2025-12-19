@@ -174,7 +174,9 @@ class _ProxyActionBarState extends State<ProxyActionBar> {
         _ActionButton(
           icon: Icons.view_agenda,
           tooltip: trans.proxy.switchToVerticalLayout,
-          onPressed: state.isBatchTestingDelay ? null : widget.onLayoutModeChanged,
+          onPressed: state.isBatchTestingDelay
+              ? null
+              : widget.onLayoutModeChanged,
         ),
       ],
     );
@@ -222,7 +224,9 @@ class _ProxyActionBarState extends State<ProxyActionBar> {
             _ActionButton(
               icon: Icons.view_list,
               tooltip: trans.proxy.switchToHorizontalLayout,
-              onPressed: state.isBatchTestingDelay ? null : widget.onLayoutModeChanged,
+              onPressed: state.isBatchTestingDelay
+                  ? null
+                  : widget.onLayoutModeChanged,
             ),
           ],
         );

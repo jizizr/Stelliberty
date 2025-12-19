@@ -33,7 +33,7 @@ class UwpApp {
       packageFamilyName: info.packageFamilyName,
       sid: info.sid,
       sidString: info.sidString,
-      isLoopbackEnabled: info.loopbackEnabled,
+      isLoopbackEnabled: info.isLoopbackEnabled,
     );
   }
 }
@@ -461,7 +461,7 @@ class _UwpLoopbackDialogState extends State<UwpLoopbackDialog> {
           .first
           .timeout(const Duration(seconds: 10));
 
-      if (result.message.success) {
+      if (result.message.isSuccessful) {
         // 成功，显示提示并关闭对话框
         if (mounted) {
           ModernToast.success(context, trans.uwpLoopback.saveSuccess);

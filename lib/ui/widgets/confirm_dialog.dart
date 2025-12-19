@@ -36,8 +36,8 @@ class ConfirmDialog extends StatelessWidget {
 
     return ModernDialog(
       title: title,
-      showCloseButton: false, // 不显示关闭按钮
-      showDividers: false, // 不显示分隔线
+      shouldShowCloseButton: false, // 不显示关闭按钮
+      shouldShowDividers: false, // 不显示分隔线
       maxWidth: 420,
       maxHeightRatio: 0.5,
       // 内容区：带背景色（与顶栏一致）

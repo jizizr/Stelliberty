@@ -27,7 +27,7 @@ pub struct GetLatestCoreVersionRequest {}
 // Rust → Dart：获取最新核心版本信息响应
 #[derive(Serialize, RustSignal)]
 pub struct GetLatestCoreVersionResponse {
-    pub success: bool,
+    pub is_successful: bool,
     pub version: Option<String>,
     pub error_message: Option<String>,
 }
@@ -51,7 +51,7 @@ pub struct DownloadCoreProgress {
 // Rust → Dart：下载核心响应
 #[derive(Serialize, RustSignal)]
 pub struct DownloadCoreResponse {
-    pub success: bool,
+    pub is_successful: bool,
     pub version: Option<String>,
     pub core_bytes: Option<Vec<u8>>,
     pub error_message: Option<String>,
@@ -68,7 +68,7 @@ pub struct ReplaceCoreRequest {
 // Rust → Dart：替换核心响应
 #[derive(Serialize, RustSignal)]
 pub struct ReplaceCoreResponse {
-    pub success: bool,
+    pub is_successful: bool,
     pub error_message: Option<String>,
 }
 
@@ -86,13 +86,13 @@ impl GetLatestCoreVersionRequest {
                     .map(|s| s.to_string());
 
                 GetLatestCoreVersionResponse {
-                    success: true,
+                    is_successful: true,
                     version,
                     error_message: None,
                 }
             }
             Err(e) => GetLatestCoreVersionResponse {
-                success: false,
+                is_successful: false,
                 version: None,
                 error_message: Some(e.to_string()),
             },
@@ -107,7 +107,7 @@ impl DownloadCoreRequest {
         match download_core(&self.platform, &self.arch).await {
             Ok((version, core_bytes)) => {
                 let response = DownloadCoreResponse {
-                    success: true,
+                    is_successful: true,
                     version: Some(version),
                     core_bytes: Some(core_bytes),
                     error_message: None,
@@ -116,7 +116,7 @@ impl DownloadCoreRequest {
             }
             Err(e) => {
                 let response = DownloadCoreResponse {
-                    success: false,
+                    is_successful: false,
                     version: None,
                     core_bytes: None,
                     error_message: Some(e.to_string()),
@@ -131,11 +131,11 @@ impl ReplaceCoreRequest {
     pub async fn handle(self) {
         let response = match replace_core(&self.core_dir, &self.core_bytes, &self.platform).await {
             Ok(_) => ReplaceCoreResponse {
-                success: true,
+                is_successful: true,
                 error_message: None,
             },
             Err(e) => ReplaceCoreResponse {
-                success: false,
+                is_successful: false,
                 error_message: Some(e.to_string()),
             },
         };

@@ -77,72 +77,67 @@ class SubscriptionCard extends StatelessWidget {
 
         return Stack(
           children: [
-            // 整个卡片（更新时置灰）
-            Opacity(
-              opacity: isUpdating ? 0.5 : 1.0,
-              child: Container(
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(16),
-                  color: Color.alphaBlend(
-                    mixColor.withValues(alpha: mixOpacity),
-                    isSelected
-                        ? colorScheme.primaryContainer.withValues(alpha: 0.2)
-                        : colorScheme.surface.withValues(
-                            alpha: isDark ? 0.7 : 0.85,
-                          ),
+            // 整个卡片
+            Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(16),
+                color: Color.alphaBlend(
+                  mixColor.withValues(alpha: mixOpacity),
+                  colorScheme.surface.withValues(
+                    alpha: isDark ? 0.7 : 0.85,
                   ),
-                  border: Border.all(
-                    color: isSelected
-                        ? colorScheme.primary.withValues(
-                            alpha: isDark ? 0.7 : 0.6,
-                          )
-                        : colorScheme.outline.withValues(alpha: 0.4),
-                    width: 2,
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.1),
-                      blurRadius: isSelected ? 12 : 8,
-                      offset: Offset(0, isSelected ? 3 : 2),
-                    ),
-                  ],
                 ),
-                child: Material(
-                  color: Colors.transparent,
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(16),
-                    onTap: isUpdating ? null : onTap,
-                    child: Padding(
-                      padding: const EdgeInsets.all(10.0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          // 标题行
-                          _buildTitleRow(context, isUpdating, isBatchUpdating),
+                border: Border.all(
+                  color: isSelected
+                      ? colorScheme.primary.withValues(
+                          alpha: isDark ? 0.7 : 0.6,
+                        )
+                      : colorScheme.outline.withValues(alpha: 0.4),
+                  width: 2,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.1),
+                    blurRadius: isSelected ? 12 : 8,
+                    offset: Offset(0, isSelected ? 3 : 2),
+                  ),
+                ],
+              ),
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(16),
+                  onTap: isUpdating ? null : onTap,
+                  child: Padding(
+                    padding: const EdgeInsets.all(10.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // 标题行
+                        _buildTitleRow(context, isUpdating, isBatchUpdating),
 
-                          const SizedBox(height: 4),
+                        const SizedBox(height: 4),
 
-                          // URL
-                          _buildUrlText(),
+                        // URL
+                        _buildUrlText(),
 
-                          // 弹性空间，让状态标签推到底部
-                          const Spacer(),
+                        // 弹性空间，让状态标签推到底部
+                        const Spacer(),
 
-                          // 状态标签与流量进度条并排（只有真正有流量数据时才显示进度条）
-                          if (subscription.info != null &&
-                              subscription.info!.total > 0)
-                            _buildStatusWithTraffic(context)
-                          else
-                            _buildStatusChips(context),
-                        ],
-                      ),
+                        // 状态标签与流量进度条并排（只有真正有流量数据时才显示进度条）
+                        if (subscription.info != null &&
+                            subscription.info!.total > 0)
+                          _buildStatusWithTraffic(context)
+                        else
+                          _buildStatusChips(context),
+                      ],
                     ),
                   ),
                 ),
               ),
             ),
             // 配置失败警告标记（右下角）
-            if (subscription.configLoadFailed)
+            if (subscription.hasConfigLoadFailed)
               Positioned(
                 right: 12,
                 bottom: 8,
@@ -356,7 +351,7 @@ class SubscriptionCard extends StatelessWidget {
             icon: Icons.delete,
             label: trans.subscription.menu.delete,
             onPressed: onDelete,
-            danger: true,
+            isDangerous: true,
           ),
         ],
       ),

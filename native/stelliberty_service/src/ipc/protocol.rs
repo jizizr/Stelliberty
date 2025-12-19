@@ -66,7 +66,7 @@ pub enum IpcResponse {
     // 服务状态
     Status {
         // Clash 是否正在运行
-        clash_running: bool,
+        is_clash_running: bool,
         // Clash 进程 PID
         clash_pid: Option<u32>,
         // 服务启动时间（Unix 时间戳）

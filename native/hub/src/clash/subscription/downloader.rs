@@ -28,7 +28,7 @@ pub struct DownloadSubscriptionRequest {
 // Rust → Dart：下载订阅响应
 #[derive(Serialize, RustSignal)]
 pub struct DownloadSubscriptionResponse {
-    pub success: bool,
+    pub is_successful: bool,
     pub content: String,                                 // 下载的配置内容
     pub subscription_info: Option<SubscriptionInfoData>, // 订阅信息
     pub error_message: Option<String>,
@@ -66,7 +66,7 @@ impl DownloadSubscriptionRequest {
             Ok((content, info)) => {
                 log::info!("订阅下载成功，内容长度：{} 字节", content.len());
                 DownloadSubscriptionResponse {
-                    success: true,
+                    is_successful: true,
                     content,
                     subscription_info: info,
                     error_message: None,
@@ -75,7 +75,7 @@ impl DownloadSubscriptionRequest {
             Err(e) => {
                 log::error!("订阅下载失败：{}", e);
                 DownloadSubscriptionResponse {
-                    success: false,
+                    is_successful: false,
                     content: String::new(),
                     subscription_info: None,
                     error_message: Some(e.to_string()),

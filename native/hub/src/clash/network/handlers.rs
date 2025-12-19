@@ -66,7 +66,7 @@ pub struct IpcResponse {
     // 响应体（JSON 字符串）
     pub body: String,
     // 是否成功
-    pub success: bool,
+    pub is_successful: bool,
     // 错误消息（如果有）
     pub error_message: Option<String>,
 }
@@ -106,7 +106,7 @@ pub struct IpcTrafficData {
 // Rust → Dart：流操作结果
 #[derive(Serialize, RustSignal)]
 pub struct StreamResult {
-    pub success: bool,
+    pub is_successful: bool,
     pub error_message: Option<String>,
 }
 
@@ -146,7 +146,7 @@ async fn handle_ipc_request_with_retry(
     path: &str,
     body: Option<&str>,
     request_id: i64,
-    log_response: bool,
+    should_log_response: bool,
 ) {
     const MAX_RETRIES: usize = 2;
 
@@ -166,7 +166,7 @@ async fn handle_ipc_request_with_retry(
                     request_id,
                     status_code: 0,
                     body: String::new(),
-                    success: false,
+                    is_successful: false,
                     error_message: Some(format!("获取连接失败：{}", e)),
                 }
                 .send_signal_to_dart();
@@ -181,7 +181,7 @@ async fn handle_ipc_request_with_retry(
                 release_connection(ipc_conn).await;
 
                 // 特殊日志处理（仅 GET 请求）
-                if log_response {
+                if should_log_response {
                     if response.body.len() > 200 {
                         let preview = response.body.chars().take(100).collect::<String>();
                         log::trace!(
@@ -198,7 +198,7 @@ async fn handle_ipc_request_with_retry(
                     request_id,
                     status_code: response.status_code,
                     body: response.body,
-                    success: true,
+                    is_successful: true,
                     error_message: None,
                 }
                 .send_signal_to_dart();
@@ -237,7 +237,7 @@ async fn handle_ipc_request_with_retry(
                     request_id,
                     status_code: 0,
                     body: String::new(),
-                    success: false,
+                    is_successful: false,
                     error_message: Some(format!("IPC 请求失败：{}", e)),
                 }
                 .send_signal_to_dart();
@@ -540,7 +540,7 @@ impl IpcPutRequest {
                         request_id: self.request_id,
                         status_code: 0,
                         body: String::new(),
-                        success: false,
+                        is_successful: false,
                         error_message: Some(format!("获取配置更新信号量失败：{}", e)),
                     }
                     .send_signal_to_dart();
@@ -690,7 +690,7 @@ impl StartTrafficStream {
                     *id_guard = Some(connection_id);
 
                     StreamResult {
-                        success: true,
+                        is_successful: true,
                         error_message: None,
                     }
                     .send_signal_to_dart();
@@ -698,7 +698,7 @@ impl StartTrafficStream {
                 Err(e) => {
                     log::error!("流量监控 WebSocket 连接失败：{}", e);
                     StreamResult {
-                        success: false,
+                        is_successful: false,
                         error_message: Some(e),
                     }
                     .send_signal_to_dart();
@@ -726,7 +726,7 @@ impl StopTrafficStream {
         }
 
         StreamResult {
-            success: true,
+            is_successful: true,
             error_message: None,
         }
         .send_signal_to_dart();
@@ -772,7 +772,7 @@ impl StartLogStream {
                     *id_guard = Some(connection_id);
 
                     StreamResult {
-                        success: true,
+                        is_successful: true,
                         error_message: None,
                     }
                     .send_signal_to_dart();
@@ -780,7 +780,7 @@ impl StartLogStream {
                 Err(e) => {
                     log::error!("日志监控 WebSocket 连接失败：{}", e);
                     StreamResult {
-                        success: false,
+                        is_successful: false,
                         error_message: Some(e),
                     }
                     .send_signal_to_dart();
@@ -808,7 +808,7 @@ impl StopLogStream {
         }
 
         StreamResult {
-            success: true,
+            is_successful: true,
             error_message: None,
         }
         .send_signal_to_dart();

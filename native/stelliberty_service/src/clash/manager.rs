@@ -7,7 +7,7 @@ use std::sync::Mutex;
 #[derive(Debug, Clone)]
 pub struct ClashStatus {
     // 是否正在运行
-    pub running: bool,
+    pub is_running: bool,
     // 进程 PID
     pub pid: Option<u32>,
     // 运行时长（秒）
@@ -337,7 +337,7 @@ impl ClashManager {
         };
 
         ClashStatus {
-            running,
+            is_running: running,
             pid,
             uptime,
         }

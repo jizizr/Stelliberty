@@ -31,7 +31,7 @@ pub struct GetAppContainers;
 #[derive(Deserialize, DartSignal)]
 pub struct SetLoopback {
     pub package_family_name: String,
-    pub enabled: bool,
+    pub is_enabled: bool,
 }
 
 // Dart → Rust：保存配置（使用 SID 字符串）
@@ -54,13 +54,13 @@ pub struct AppContainerInfo {
     pub package_family_name: String,
     pub sid: Vec<u8>,
     pub sid_string: String,
-    pub loopback_enabled: bool,
+    pub is_loopback_enabled: bool,
 }
 
 // Rust → Dart：设置回环豁免结果
 #[derive(Serialize, RustSignal)]
 pub struct SetLoopbackResult {
-    pub success: bool,
+    pub is_successful: bool,
     pub error_message: Option<String>,
 }
 
@@ -71,7 +71,7 @@ pub struct AppContainersComplete;
 // Rust → Dart：保存配置结果
 #[derive(Serialize, RustSignal)]
 pub struct SaveLoopbackConfigurationResult {
-    pub success: bool,
+    pub is_successful: bool,
     pub error_message: Option<String>,
 }
 
@@ -94,7 +94,7 @@ impl GetAppContainers {
                         package_family_name: c.package_family_name,
                         sid: c.sid,
                         sid_string: c.sid_string,
-                        loopback_enabled: c.is_loopback_enabled,
+                        is_loopback_enabled: c.is_loopback_enabled,
                     }
                     .send_signal_to_dart();
                 }
@@ -121,14 +121,14 @@ impl SetLoopback {
         log::info!(
             "处理设置回环豁免请求：{} - {}",
             self.package_family_name,
-            self.enabled
+            self.is_enabled
         );
 
-        match set_loopback_exemption(&self.package_family_name, self.enabled) {
+        match set_loopback_exemption(&self.package_family_name, self.is_enabled) {
             Ok(()) => {
                 log::info!("回环豁免设置成功");
                 SetLoopbackResult {
-                    success: true,
+                    is_successful: true,
                     error_message: None,
                 }
                 .send_signal_to_dart();
@@ -136,7 +136,7 @@ impl SetLoopback {
             Err(e) => {
                 log::error!("回环豁免设置失败：{}", e);
                 SetLoopbackResult {
-                    success: false,
+                    is_successful: false,
                     error_message: Some(e),
                 }
                 .send_signal_to_dart();
@@ -158,7 +158,7 @@ impl SaveLoopbackConfiguration {
             Err(e) => {
                 log::error!("枚举容器失败：{}", e);
                 SaveLoopbackConfigurationResult {
-                    success: false,
+                    is_successful: false,
                     error_message: Some(format!("无法枚举容器：{}", e)),
                 }
                 .send_signal_to_dart();
@@ -231,7 +231,7 @@ impl SaveLoopbackConfiguration {
 
         if errors.is_empty() {
             SaveLoopbackConfigurationResult {
-                success: true,
+                is_successful: true,
                 error_message: if message_parts.is_empty() {
                     Some("配置保存成功（无需修改）".to_string())
                 } else {
@@ -242,7 +242,7 @@ impl SaveLoopbackConfiguration {
         } else {
             message_parts.push(format!("失败：{}个", errors.len()));
             SaveLoopbackConfigurationResult {
-                success: false,
+                is_successful: false,
                 error_message: Some(format!(
                     "{}。\n错误详情：\n{}",
                     message_parts.join("，"),

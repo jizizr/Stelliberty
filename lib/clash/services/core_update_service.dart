@@ -155,7 +155,6 @@ class CoreUpdateService {
           onProgress?.call(progress.clamp(0.05, 0.95), '下载核心中');
         },
       );
-
       onProgress?.call(0.95, '解压核心中');
       final coreBytes = await _extractCore(fileName, fileBytes);
 
@@ -206,7 +205,6 @@ class CoreUpdateService {
             const Duration(seconds: 10),
             onTimeout: () => throw TimeoutException('获取版本信息超时'),
           );
-
       if (response.statusCode != 200) {
         throw Exception('获取发布信息失败: HTTP ${response.statusCode}');
       }

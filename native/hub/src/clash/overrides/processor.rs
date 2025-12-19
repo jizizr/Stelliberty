@@ -34,7 +34,7 @@ pub struct ApplyOverridesRequest {
 // Rust → Dart：应用覆写响应
 #[derive(Serialize, RustSignal)]
 pub struct ApplyOverridesResponse {
-    pub success: bool,
+    pub is_successful: bool,
     pub result_config: String,
     pub error_message: String,
     pub logs: Vec<String>,
@@ -49,7 +49,7 @@ pub struct ParseSubscriptionRequest {
 // Rust → Dart：解析订阅响应
 #[derive(Serialize, RustSignal)]
 pub struct ParseSubscriptionResponse {
-    pub success: bool,
+    pub is_successful: bool,
     pub parsed_config: String,
     pub error_message: String,
 }
@@ -67,7 +67,7 @@ pub struct DownloadOverrideRequest {
 // Rust → Dart：下载覆写文件响应
 #[derive(Serialize, RustSignal)]
 pub struct DownloadOverrideResponse {
-    pub success: bool,
+    pub is_successful: bool,
     pub content: String,
     pub error_message: Option<String>,
 }
@@ -82,7 +82,7 @@ impl ApplyOverridesRequest {
             Err(e) => {
                 log::error!("初始化覆写处理器失败：{}", e);
                 let response = ApplyOverridesResponse {
-                    success: false,
+                    is_successful: false,
                     result_config: String::new(),
                     error_message: format!("初始化处理器失败：{}", e),
                     logs: vec![],
@@ -98,7 +98,7 @@ impl ApplyOverridesRequest {
             Err(e) => {
                 log::error!("订阅解析失败：{}", e);
                 let response = ApplyOverridesResponse {
-                    success: false,
+                    is_successful: false,
                     result_config: String::new(),
                     error_message: format!("订阅解析失败：{}", e),
                     logs: vec![],
@@ -114,7 +114,7 @@ impl ApplyOverridesRequest {
             Ok(result) => {
                 log::info!("覆写处理成功");
                 let response = ApplyOverridesResponse {
-                    success: true,
+                    is_successful: true,
                     result_config: result,
                     error_message: String::new(),
                     logs: vec!["处理成功".to_string()],
@@ -124,7 +124,7 @@ impl ApplyOverridesRequest {
             Err(e) => {
                 log::error!("覆写处理失败：{}", e);
                 let response = ApplyOverridesResponse {
-                    success: false,
+                    is_successful: false,
                     result_config: String::new(),
                     error_message: e,
                     logs: vec![],
@@ -144,7 +144,7 @@ impl ParseSubscriptionRequest {
             Ok(parsed_config) => {
                 log::info!("订阅解析成功，配置长度：{}字节", parsed_config.len());
                 let response = ParseSubscriptionResponse {
-                    success: true,
+                    is_successful: true,
                     parsed_config,
                     error_message: String::new(),
                 };
@@ -153,7 +153,7 @@ impl ParseSubscriptionRequest {
             Err(e) => {
                 log::error!("订阅解析失败：{}", e);
                 let response = ParseSubscriptionResponse {
-                    success: false,
+                    is_successful: false,
                     parsed_config: String::new(),
                     error_message: e,
                 };
@@ -181,7 +181,7 @@ impl DownloadOverrideRequest {
             Ok(content) => {
                 log::info!("覆写文件下载成功，内容长度：{} 字节", content.len());
                 DownloadOverrideResponse {
-                    success: true,
+                    is_successful: true,
                     content,
                     error_message: None,
                 }
@@ -189,7 +189,7 @@ impl DownloadOverrideRequest {
             Err(e) => {
                 log::error!("覆写文件下载失败：{}", e);
                 DownloadOverrideResponse {
-                    success: false,
+                    is_successful: false,
                     content: String::new(),
                     error_message: Some(e.to_string()),
                 }

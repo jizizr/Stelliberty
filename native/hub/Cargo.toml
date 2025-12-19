@@ -37,16 +37,18 @@ env_logger = "^0.11.8"
 once_cell = "^1.21.3"
 chrono = "^0.4.39"
 network-interface = "^2.0.3"
-auto-launch = "^0.5.0"
 rand = "^0.9"
-command-group = "^5.0.1"  # 进程组管理
-stelliberty-service = { path = "../stelliberty_service" }
+command-group = "^5.0.1"
 anyhow = "^1.0"
 regex = "^1.12.2"
 webbrowser = "^1.0.6"
 reqwest = { version = "^0.12", features = ["json", "stream"] }
 zip = "^6.0"
 flate2 = "^1.1"
+
+[target.'cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))'.dependencies]
+stelliberty-service = { path = "../stelliberty_service" }
+auto-launch = "^0.5.0"
 
 [target.'cfg(unix)'.dependencies]
 nix = { version = "^0.30.1", features = ["signal", "process", "user"] }

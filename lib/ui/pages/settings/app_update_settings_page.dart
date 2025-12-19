@@ -198,8 +198,8 @@ class _AppUpdateSettingsPageState extends State<AppUpdateSettingsPage> {
             value: _autoUpdate,
             onChanged: _saveAutoUpdate,
           ),
-          enableHover: true,
-          enableTap: false,
+          isHoverEnabled: true,
+          isTapEnabled: false,
         );
       },
     );
@@ -214,8 +214,8 @@ class _AppUpdateSettingsPageState extends State<AppUpdateSettingsPage> {
       title: trans.appUpdate.checkIntervalTitle,
       subtitle: trans.appUpdate.checkIntervalDescription,
       trailing: _buildIntervalDropdown(),
-      enableHover: true,
-      enableTap: false,
+      isHoverEnabled: true,
+      isTapEnabled: false,
     );
   }
 

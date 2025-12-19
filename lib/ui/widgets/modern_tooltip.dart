@@ -8,7 +8,7 @@ class ModernTooltip extends StatelessWidget {
   final EdgeInsetsGeometry? padding;
   final EdgeInsetsGeometry? margin;
   final double? verticalOffset;
-  final bool enableFeedback;
+  final bool isFeedbackEnabled;
 
   const ModernTooltip({
     super.key,
@@ -18,7 +18,7 @@ class ModernTooltip extends StatelessWidget {
     this.padding,
     this.margin,
     this.verticalOffset,
-    this.enableFeedback = true,
+    this.isFeedbackEnabled = true,
   });
 
   @override
@@ -55,7 +55,7 @@ class ModernTooltip extends StatelessWidget {
       margin: margin ?? const EdgeInsets.all(8),
       preferBelow: preferBelow,
       verticalOffset: verticalOffset ?? 16,
-      enableFeedback: enableFeedback,
+      enableFeedback: isFeedbackEnabled,
       child: child,
     );
   }
@@ -67,7 +67,7 @@ class ModernIconTooltip extends StatelessWidget {
   final IconData icon;
   final VoidCallback? onPressed;
   final double iconSize;
-  final bool filled;
+  final bool isFilled;
 
   const ModernIconTooltip({
     super.key,
@@ -75,14 +75,14 @@ class ModernIconTooltip extends StatelessWidget {
     required this.icon,
     this.onPressed,
     this.iconSize = 20,
-    this.filled = true,
+    this.isFilled = true,
   });
 
   @override
   Widget build(BuildContext context) {
     return ModernTooltip(
       message: message,
-      child: filled
+      child: isFilled
           ? IconButton.filledTonal(
               icon: Icon(icon),
               onPressed: onPressed,

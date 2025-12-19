@@ -12,7 +12,7 @@ pub struct OpenUrl {
 // Rust → Dart：打开 URL 结果
 #[derive(Serialize, RustSignal)]
 pub struct OpenUrlResult {
-    pub success: bool,
+    pub is_successful: bool,
     pub error_message: Option<String>,
 }
 
@@ -23,7 +23,7 @@ impl OpenUrl {
     pub fn handle(&self) {
         log::info!("收到打开 URL 请求：{}", self.url);
 
-        let (success, error_message) = match open_url(&self.url) {
+        let (is_successful, error_message) = match open_url(&self.url) {
             Ok(()) => (true, None),
             Err(err) => {
                 log::error!("打开 URL 失败：{}", err);
@@ -32,7 +32,7 @@ impl OpenUrl {
         };
 
         let response = OpenUrlResult {
-            success,
+            is_successful,
             error_message,
         };
 
