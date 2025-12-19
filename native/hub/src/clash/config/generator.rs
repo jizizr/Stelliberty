@@ -24,7 +24,7 @@ pub struct GenerateRuntimeConfigRequest {
 // Rust → Dart：生成运行时配置响应
 #[derive(Debug, Clone, Serialize, Deserialize, RustSignal)]
 pub struct GenerateRuntimeConfigResponse {
-    pub success: bool,
+    pub is_successful: bool,
     pub result_config: String,
     pub error_message: String,
 }
@@ -41,14 +41,14 @@ impl GenerateRuntimeConfigRequest {
             &self.runtime_params,
         ) {
             Ok(config) => GenerateRuntimeConfigResponse {
-                success: true,
+                is_successful: true,
                 result_config: config,
                 error_message: String::new(),
             },
             Err(e) => {
                 log::error!("生成运行时配置失败：{}", e);
                 GenerateRuntimeConfigResponse {
-                    success: false,
+                    is_successful: false,
                     result_config: String::new(),
                     error_message: e,
                 }

@@ -28,7 +28,7 @@ pub struct RestoreBackupRequest {
 // Rust → Dart：备份操作响应
 #[derive(Serialize, RustSignal)]
 pub struct BackupOperationResult {
-    pub success: bool,
+    pub is_successful: bool,
     pub message: String,
     pub error_message: Option<String>,
 }
@@ -44,7 +44,7 @@ impl CreateBackupRequest {
             Ok(path) => {
                 log::info!("备份创建成功：{}", path);
                 BackupOperationResult {
-                    success: true,
+                    is_successful: true,
                     message: path,
                     error_message: None,
                 }
@@ -52,7 +52,7 @@ impl CreateBackupRequest {
             Err(e) => {
                 log::error!("备份创建失败：{}", e);
                 BackupOperationResult {
-                    success: false,
+                    is_successful: false,
                     message: String::new(),
                     error_message: Some(e.to_string()),
                 }
@@ -74,7 +74,7 @@ impl RestoreBackupRequest {
             Ok(()) => {
                 log::info!("备份还原成功");
                 BackupOperationResult {
-                    success: true,
+                    is_successful: true,
                     message: "备份还原成功".to_string(),
                     error_message: None,
                 }
@@ -82,7 +82,7 @@ impl RestoreBackupRequest {
             Err(e) => {
                 log::error!("备份还原失败：{}", e);
                 BackupOperationResult {
-                    success: false,
+                    is_successful: false,
                     message: String::new(),
                     error_message: Some(e.to_string()),
                 }

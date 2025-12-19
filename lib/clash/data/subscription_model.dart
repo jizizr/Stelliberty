@@ -121,7 +121,7 @@ class Subscription {
   final String url; // 订阅链接
   final AutoUpdateMode autoUpdateMode; // 自动更新模式
   final int intervalMinutes; // 间隔更新时长（分钟，仅当模式为 interval 时有效）
-  final bool updateOnStartup; // 启动时更新（禁用自动更新时可选）
+  final bool shouldUpdateOnStartup; // 启动时更新（禁用自动更新时可选）
   final DateTime? lastUpdateTime; // 上次更新时间
   final SubscriptionInfo? info; // 订阅信息
   final bool isUpdating; // 是否正在更新
@@ -132,7 +132,7 @@ class Subscription {
   final List<String> overrideSortPreference; // 规则覆写排序偏好（完整顺序，包括未选中的）
   final List<String> failedOverrideIds; // 失败的覆写ID列表(启动失败时记录)
   final String userAgent; // User-Agent（仅远程订阅有效，默认为 clash.meta）
-  final bool configLoadFailed; // 配置加载失败标记（用于 UI 显示警告）
+  final bool hasConfigLoadFailed; // 配置加载失败标记（用于 UI 显示警告）
 
   const Subscription({
     required this.id,
@@ -140,7 +140,7 @@ class Subscription {
     required this.url,
     this.autoUpdateMode = AutoUpdateMode.disabled,
     this.intervalMinutes = 60,
-    this.updateOnStartup = false,
+    this.shouldUpdateOnStartup = false,
     this.lastUpdateTime,
     this.info,
     this.isUpdating = false,
@@ -151,7 +151,7 @@ class Subscription {
     this.overrideSortPreference = const [],
     this.failedOverrideIds = const [],
     this.userAgent = ClashDefaults.defaultUserAgent,
-    this.configLoadFailed = false,
+    this.hasConfigLoadFailed = false,
   });
 
   // 创建新订阅
@@ -200,7 +200,7 @@ class Subscription {
     String? url,
     AutoUpdateMode? autoUpdateMode,
     int? intervalMinutes,
-    bool? updateOnStartup,
+    bool? shouldUpdateOnStartup,
     DateTime? lastUpdateTime,
     SubscriptionInfo? info,
     bool? isUpdating,
@@ -211,7 +211,7 @@ class Subscription {
     List<String>? overrideSortPreference,
     List<String>? failedOverrideIds,
     String? userAgent,
-    bool? configLoadFailed,
+    bool? hasConfigLoadFailed,
   }) {
     return Subscription(
       id: id ?? this.id,
@@ -219,7 +219,8 @@ class Subscription {
       url: url ?? this.url,
       autoUpdateMode: autoUpdateMode ?? this.autoUpdateMode,
       intervalMinutes: intervalMinutes ?? this.intervalMinutes,
-      updateOnStartup: updateOnStartup ?? this.updateOnStartup,
+      shouldUpdateOnStartup:
+          shouldUpdateOnStartup ?? this.shouldUpdateOnStartup,
       lastUpdateTime: lastUpdateTime ?? this.lastUpdateTime,
       info: info ?? this.info,
       isUpdating: isUpdating ?? this.isUpdating,
@@ -231,7 +232,7 @@ class Subscription {
           overrideSortPreference ?? this.overrideSortPreference,
       failedOverrideIds: failedOverrideIds ?? this.failedOverrideIds,
       userAgent: userAgent ?? this.userAgent,
-      configLoadFailed: configLoadFailed ?? this.configLoadFailed,
+      hasConfigLoadFailed: hasConfigLoadFailed ?? this.hasConfigLoadFailed,
     );
   }
 
@@ -241,7 +242,7 @@ class Subscription {
     'url': url,
     'autoUpdateMode': autoUpdateMode.value,
     'intervalMinutes': intervalMinutes,
-    'updateOnStartup': updateOnStartup,
+    'shouldUpdateOnStartup': shouldUpdateOnStartup,
     'lastUpdateTime': lastUpdateTime?.toIso8601String(),
     'info': info?.toJson(),
     'isLocalFile': isLocalFile,
@@ -251,7 +252,7 @@ class Subscription {
     'overrideSortPreference': overrideSortPreference,
     'failedOverrideIds': failedOverrideIds,
     'userAgent': userAgent,
-    'configLoadFailed': configLoadFailed,
+    'hasConfigLoadFailed': hasConfigLoadFailed,
   };
 
   factory Subscription.fromJson(Map<String, dynamic> json) {
@@ -263,7 +264,7 @@ class Subscription {
         json['autoUpdateMode'] as String? ?? 'disabled',
       ),
       intervalMinutes: json['intervalMinutes'] as int? ?? 60,
-      updateOnStartup: json['updateOnStartup'] as bool? ?? false,
+      shouldUpdateOnStartup: json['shouldUpdateOnStartup'] as bool? ?? false,
       lastUpdateTime: json['lastUpdateTime'] != null
           ? DateTime.parse(json['lastUpdateTime'] as String)
           : null,
@@ -285,7 +286,7 @@ class Subscription {
           ? List<String>.from(json['failedOverrideIds'] as List)
           : const [],
       userAgent: json['userAgent'] as String? ?? ClashDefaults.defaultUserAgent,
-      configLoadFailed: json['configLoadFailed'] as bool? ?? false,
+      hasConfigLoadFailed: json['hasConfigLoadFailed'] as bool? ?? false,
     );
   }
 

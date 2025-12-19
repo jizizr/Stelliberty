@@ -13,14 +13,14 @@ class ModernTextField extends StatefulWidget {
   final Widget? suffixIcon;
   final String? suffixText;
   final Widget? suffixWidget;
-  final bool showDropdownIcon;
+  final bool shouldShowDropdownIcon;
   final VoidCallback? onDropdownTap;
   final TextInputType? keyboardType;
   final ValueChanged<String>? onChanged;
   final ValueChanged<String>? onSubmitted;
   final int? maxLines;
   final bool enabled;
-  final bool obscureText;
+  final bool shouldObscureText;
   final EdgeInsetsGeometry? contentPadding;
   final double? height;
 
@@ -35,14 +35,14 @@ class ModernTextField extends StatefulWidget {
     this.suffixIcon,
     this.suffixText,
     this.suffixWidget,
-    this.showDropdownIcon = false,
+    this.shouldShowDropdownIcon = false,
     this.onDropdownTap,
     this.keyboardType,
     this.onChanged,
     this.onSubmitted,
     this.maxLines = 1,
     this.enabled = true,
-    this.obscureText = false,
+    this.shouldObscureText = false,
     this.contentPadding,
     this.height,
   });
@@ -96,7 +96,7 @@ class _ModernTextFieldState extends State<ModernTextField> {
     Widget? suffixWidget;
     if (widget.suffixWidget != null) {
       suffixWidget = widget.suffixWidget;
-    } else if (widget.showDropdownIcon) {
+    } else if (widget.shouldShowDropdownIcon) {
       suffixWidget = GestureDetector(
         onTap: widget.onDropdownTap,
         child: Container(
@@ -156,7 +156,7 @@ class _ModernTextFieldState extends State<ModernTextField> {
                       onSubmitted: widget.onSubmitted,
                       maxLines: widget.maxLines,
                       enabled: widget.enabled,
-                      obscureText: widget.obscureText,
+                      obscureText: widget.shouldObscureText,
                       style: theme.textTheme.bodyMedium?.copyWith(
                         color: widget.enabled
                             ? colorScheme.onSurface

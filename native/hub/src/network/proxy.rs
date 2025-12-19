@@ -11,7 +11,7 @@ pub struct EnableSystemProxy {
     pub host: String,
     pub port: u16,
     pub bypass_domains: Vec<String>,
-    pub use_pac_mode: bool,
+    pub should_use_pac_mode: bool,
     pub pac_script: String,
     pub pac_file_path: String,
 }
@@ -27,14 +27,14 @@ pub struct GetSystemProxy;
 // Rust → Dart：代理操作结果
 #[derive(Serialize, RustSignal)]
 pub struct SystemProxyResult {
-    pub success: bool,
+    pub is_successful: bool,
     pub error_message: Option<String>,
 }
 
 // Rust → Dart：系统代理状态信息
 #[derive(Serialize, RustSignal)]
 pub struct SystemProxyInfo {
-    pub enabled: bool,
+    pub is_enabled: bool,
     pub server: Option<String>,
 }
 
@@ -48,7 +48,7 @@ pub enum ProxyResult {
 // 系统代理配置信息
 #[derive(Debug, Clone)]
 pub struct ProxyInfo {
-    pub enabled: bool,
+    pub is_enabled: bool,
     pub server: Option<String>,
 }
 
@@ -57,7 +57,7 @@ impl EnableSystemProxy {
     //
     // 目的：配置系统级代理设置，使所有网络流量经过指定代理服务器
     pub async fn handle(self) {
-        if self.use_pac_mode {
+        if self.should_use_pac_mode {
             log::info!("收到启用代理请求 (PAC 模式)");
         } else {
             log::info!("收到启用代理请求：{}:{}", self.host, self.port);
@@ -67,7 +67,7 @@ impl EnableSystemProxy {
             &self.host,
             self.port,
             self.bypass_domains,
-            self.use_pac_mode,
+            self.should_use_pac_mode,
             &self.pac_script,
             &self.pac_file_path,
         )
@@ -75,13 +75,13 @@ impl EnableSystemProxy {
 
         let response = match result {
             ProxyResult::Success => SystemProxyResult {
-                success: true,
+                is_successful: true,
                 error_message: None,
             },
             ProxyResult::Error(msg) => {
                 log::error!("启用代理失败：{}", msg);
                 SystemProxyResult {
-                    success: false,
+                    is_successful: false,
                     error_message: Some(msg),
                 }
             }
@@ -102,13 +102,13 @@ impl DisableSystemProxy {
 
         let response = match result {
             ProxyResult::Success => SystemProxyResult {
-                success: true,
+                is_successful: true,
                 error_message: None,
             },
             ProxyResult::Error(msg) => {
                 log::error!("禁用代理失败：{}", msg);
                 SystemProxyResult {
-                    success: false,
+                    is_successful: false,
                     error_message: Some(msg),
                 }
             }
@@ -128,7 +128,7 @@ impl GetSystemProxy {
         let proxy_info = get_proxy_info().await;
 
         let response = SystemProxyInfo {
-            enabled: proxy_info.enabled,
+            is_enabled: proxy_info.is_enabled,
             server: proxy_info.server,
         };
 
@@ -160,11 +160,11 @@ mod windows_impl {
         host: &str,
         port: u16,
         bypass_domains: Vec<String>,
-        use_pac_mode: bool,
+        should_use_pac_mode: bool,
         pac_script: &str,
         pac_file_path: &str,
     ) -> ProxyResult {
-        if use_pac_mode {
+        if should_use_pac_mode {
             log::info!("正在设置系统代理 (PAC 模式)");
             return enable_proxy_pac(host, port, pac_script, pac_file_path);
         }
@@ -463,7 +463,7 @@ mod windows_impl {
                 Err(_) => {
                     log::warn!("查询系统代理设置失败");
                     return ProxyInfo {
-                        enabled: false,
+                        is_enabled: false,
                         server: None,
                     };
                 }
@@ -475,7 +475,7 @@ mod windows_impl {
 
             if !is_proxy_enabled {
                 return ProxyInfo {
-                    enabled: false,
+                    is_enabled: false,
                     server: None,
                 };
             }
@@ -484,7 +484,7 @@ mod windows_impl {
             let server_ptr = *(&options[1].Value as *const _ as *const PWSTR);
             if server_ptr.is_null() {
                 return ProxyInfo {
-                    enabled: true,
+                    is_enabled: true,
                     server: None,
                 };
             }
@@ -505,7 +505,7 @@ mod windows_impl {
             log::info!("当前系统代理：{}", server_string);
 
             ProxyInfo {
-                enabled: true,
+                is_enabled: true,
                 server: Some(server_string),
             }
         }
@@ -547,7 +547,7 @@ mod macos_impl {
         host: &str,
         port: u16,
         bypass_domains: Vec<String>,
-        _use_pac_mode: bool,
+        _should_use_pac_mode: bool,
         _pac_script: &str,
         _pac_file_path: &str,
     ) -> ProxyResult {
@@ -648,7 +648,7 @@ mod macos_impl {
             Ok(d) => d,
             Err(_) => {
                 return ProxyInfo {
-                    enabled: false,
+                    is_enabled: false,
                     server: None,
                 };
             }
@@ -688,14 +688,14 @@ mod macos_impl {
 
                 log::info!("当前 macOS 系统代理：{}", server_str);
                 return ProxyInfo {
-                    enabled: true,
+                    is_enabled: true,
                     server: Some(server_str),
                 };
             }
         }
 
         ProxyInfo {
-            enabled: false,
+            is_enabled: false,
             server: None,
         }
     }
@@ -724,7 +724,7 @@ mod linux_impl {
         host: &str,
         port: u16,
         bypass_domains: Vec<String>,
-        _use_pac_mode: bool,
+        _should_use_pac_mode: bool,
         _pac_script: &str,
         _pac_file_path: &str,
     ) -> ProxyResult {
@@ -916,7 +916,7 @@ mod linux_impl {
             Ok(o) => String::from_utf8_lossy(&o.stdout).trim().to_string(),
             Err(_) => {
                 return ProxyInfo {
-                    enabled: false,
+                    is_enabled: false,
                     server: None,
                 };
             }
@@ -924,7 +924,7 @@ mod linux_impl {
 
         if !mode.contains("manual") {
             return ProxyInfo {
-                enabled: false,
+                is_enabled: false,
                 server: None,
             };
         }
@@ -950,18 +950,18 @@ mod linux_impl {
                     let server_str = format!("{}:{}", host, port);
                     log::info!("当前 Linux GNOME 系统代理：{}", server_str);
                     return ProxyInfo {
-                        enabled: true,
+                        is_enabled: true,
                         server: Some(server_str),
                     };
                 }
 
                 ProxyInfo {
-                    enabled: false,
+                    is_enabled: false,
                     server: None,
                 }
             }
             _ => ProxyInfo {
-                enabled: false,
+                is_enabled: false,
                 server: None,
             },
         }
@@ -973,7 +973,7 @@ mod linux_impl {
             Ok(h) => h,
             Err(_) => {
                 return ProxyInfo {
-                    enabled: false,
+                    is_enabled: false,
                     server: None,
                 };
             }
@@ -997,7 +997,7 @@ mod linux_impl {
             Ok(o) => String::from_utf8_lossy(&o.stdout).trim().to_string(),
             Err(_) => {
                 return ProxyInfo {
-                    enabled: false,
+                    is_enabled: false,
                     server: None,
                 };
             }
@@ -1006,7 +1006,7 @@ mod linux_impl {
         // 1 = 手动代理
         if proxy_type != "1" {
             return ProxyInfo {
-                enabled: false,
+                is_enabled: false,
                 server: None,
             };
         }
@@ -1032,18 +1032,18 @@ mod linux_impl {
                     let server_str = proxy.trim_start_matches("http://").to_string();
                     log::info!("当前 Linux KDE 系统代理：{}", server_str);
                     return ProxyInfo {
-                        enabled: true,
+                        is_enabled: true,
                         server: Some(server_str),
                     };
                 }
 
                 ProxyInfo {
-                    enabled: false,
+                    is_enabled: false,
                     server: None,
                 }
             }
             Err(_) => ProxyInfo {
-                enabled: false,
+                is_enabled: false,
                 server: None,
             },
         }
@@ -1070,7 +1070,7 @@ pub async fn enable_proxy(
     _host: &str,
     _port: u16,
     _bypass_domains: Vec<String>,
-    _use_pac_mode: bool,
+    _should_use_pac_mode: bool,
     _pac_script: &str,
     _pac_file_path: &str,
 ) -> ProxyResult {
@@ -1085,7 +1085,7 @@ pub async fn disable_proxy() -> ProxyResult {
 #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
 pub async fn get_proxy_info() -> ProxyInfo {
     ProxyInfo {
-        enabled: false,
+        is_enabled: false,
         server: None,
     }
 }

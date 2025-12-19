@@ -57,13 +57,13 @@ class _OverrideSelectorDialogState extends State<OverrideSelectorDialog> {
     final overrideMap = {for (final o in allOverrides) o.id: o};
 
     final List<String> sourceIds;
-    final bool useSavedOrder;
+    final bool shouldUseSavedOrder;
     if (widget.initialSortPreference.isNotEmpty) {
       sourceIds = widget.initialSortPreference;
-      useSavedOrder = true;
+      shouldUseSavedOrder = true;
     } else {
       sourceIds = widget.initialSelectedIds;
-      useSavedOrder = false;
+      shouldUseSavedOrder = false;
     }
 
     final sourceIdSet = sourceIds.toSet();
@@ -76,7 +76,7 @@ class _OverrideSelectorDialogState extends State<OverrideSelectorDialog> {
 
     Logger.debug(
       '初始化覆写顺序：${_orderedOverrides.length} 个，'
-      '${useSavedOrder ? '使用已保存顺序' : '选中的在前'}',
+      '${shouldUseSavedOrder ? '使用已保存顺序' : '选中的在前'}',
     );
   }
 

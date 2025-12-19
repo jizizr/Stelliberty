@@ -19,7 +19,7 @@ pub struct RuntimeConfigParams {
     pub outbound_mode: String, // "rule" | "global" | "direct"
 
     // TUN 配置
-    pub tun_enabled: bool,
+    pub is_tun_enabled: bool,
     pub tun_stack: String,
     pub tun_device: String,
     pub is_tun_auto_route_enabled: bool,

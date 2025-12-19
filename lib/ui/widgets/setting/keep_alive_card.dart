@@ -87,8 +87,8 @@ class _KeepAliveCardState extends State<KeepAliveCard> {
     return ModernFeatureCard(
       isSelected: false,
       onTap: () {},
-      enableHover: false,
-      enableTap: false,
+      isHoverEnabled: false,
+      isTapEnabled: false,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

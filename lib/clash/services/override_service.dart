@@ -106,7 +106,7 @@ class OverrideService {
       final responseStream = signals.DownloadOverrideResponse.rustSignalStream;
       final response = await responseStream.first;
 
-      if (!response.message.success) {
+      if (!response.message.isSuccessful) {
         throw Exception(response.message.errorMessage ?? '下载失败');
       }
 

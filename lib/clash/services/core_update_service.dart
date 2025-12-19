@@ -141,7 +141,7 @@ class CoreUpdateService {
         },
       );
 
-      if (!result.success) {
+      if (!result.isSuccessful) {
         throw Exception(result.errorMessage ?? '核心下载失败');
       }
 
@@ -190,7 +190,7 @@ class CoreUpdateService {
         },
       );
 
-      if (!result.success) {
+      if (!result.isSuccessful) {
         throw Exception(result.errorMessage ?? '核心替换失败');
       }
     } catch (e) {
@@ -226,7 +226,7 @@ class CoreUpdateService {
         },
       );
 
-      if (!result.success) {
+      if (!result.isSuccessful) {
         throw Exception(result.errorMessage ?? '获取版本信息失败');
       }
 

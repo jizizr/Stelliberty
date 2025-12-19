@@ -38,7 +38,7 @@ class ConfigInjector {
     List<OverrideConfig> overrides = const [],
     required int httpPort,
     required bool isIpv6Enabled,
-    required bool tunEnabled,
+    required bool isTunEnabled,
     required String tunStack,
     required String tunDevice,
     required bool isTunAutoRouteEnabled,
@@ -97,7 +97,7 @@ class ConfigInjector {
         isTcpConcurrentEnabled: isTcpConcurrentEnabled,
         isUnifiedDelayEnabled: isUnifiedDelayEnabled,
         outboundMode: outboundMode,
-        tunEnabled: tunEnabled,
+        isTunEnabled: isTunEnabled,
         tunStack: tunStack,
         tunDevice: tunDevice,
         isTunAutoRouteEnabled: isTunAutoRouteEnabled,
@@ -137,7 +137,7 @@ class ConfigInjector {
             },
           );
 
-      if (!response.message.success) {
+      if (!response.message.isSuccessful) {
         Logger.error('Rust 配置生成失败：${response.message.errorMessage}');
         return null;
       }
@@ -150,7 +150,7 @@ class ConfigInjector {
       ).writeAsString(response.message.resultConfig);
 
       Logger.info(
-        '运行时配置已生成 (${(response.message.resultConfig.length / 1024).toStringAsFixed(1)}KB，虚拟网卡：${tunEnabled ? "启用" : "禁用"})',
+        '运行时配置已生成 (${(response.message.resultConfig.length / 1024).toStringAsFixed(1)}KB，虚拟网卡：${isTunEnabled ? "启用" : "禁用"})',
       );
 
       return runtimeConfigPath;

@@ -160,8 +160,8 @@ class _BehaviorSettingsPageState extends State<BehaviorSettingsPage> {
     return ModernFeatureCard(
       isSelected: false,
       onTap: () {},
-      enableHover: true,
-      enableTap: false,
+      isHoverEnabled: true,
+      isTapEnabled: false,
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         crossAxisAlignment: CrossAxisAlignment.center,
@@ -250,7 +250,7 @@ class _BehaviorSettingsPageState extends State<BehaviorSettingsPage> {
       await AppPreferences.instance.setAppLogEnabled(value);
 
       // 同步应用日志开关到 Rust 端
-      SetAppLogEnabled(enabled: value).sendSignalToRust();
+      SetAppLogEnabled(isEnabled: value).sendSignalToRust();
 
       Logger.info('应用日志已${value ? '启用' : '禁用'}');
     } catch (e) {

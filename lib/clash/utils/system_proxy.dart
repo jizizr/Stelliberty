@@ -70,7 +70,7 @@ class SystemProxy {
           host: host,
           port: port,
           bypassDomains: bypassDomains,
-          usePacMode: usePacMode,
+          shouldUsePacMode: usePacMode,
           pacScript: pacScript,
           pacFilePath: finalPacFilePath,
         );
@@ -108,7 +108,7 @@ class SystemProxy {
       final streamListener = SystemProxyInfo.rustSignalStream.listen((result) {
         if (!completer.isCompleted) {
           completer.complete({
-            'enabled': result.message.enabled,
+            'enabled': result.message.isEnabled,
             'server': result.message.server,
           });
         }
@@ -159,8 +159,9 @@ class SystemProxy {
         result,
       ) {
         if (!completer.isCompleted) {
-          completer.complete(result.message.success);
-          if (!result.message.success && result.message.errorMessage != null) {
+          completer.complete(result.message.isSuccessful);
+          if (!result.message.isSuccessful &&
+              result.message.errorMessage != null) {
             Logger.error('$operationName失败：${result.message.errorMessage}');
           }
         }

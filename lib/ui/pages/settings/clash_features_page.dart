@@ -40,7 +40,7 @@ class _ClashFeaturesPageState extends State<ClashFeaturesPage> {
                 ModernIconTooltip(
                   message: trans.clashFeatures.backToSettings,
                   icon: Icons.arrow_back,
-                  filled: false,
+                  isFilled: false,
                   onPressed: () =>
                       provider.switchView(ContentView.settingsOverview),
                 ),

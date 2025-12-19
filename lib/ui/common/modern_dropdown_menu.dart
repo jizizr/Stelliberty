@@ -205,19 +205,19 @@ class ModernDropdownMenu<T> extends StatefulWidget {
 class _ModernDropdownMenuState<T> extends State<ModernDropdownMenu<T>> {
   bool _isOpen = false;
   late final ValueNotifier<Offset> _targetOffsetValueNotifier;
-  late final ValueNotifier<bool> _showAboveNotifier;
+  late final ValueNotifier<bool> showAboveNotifier;
 
   @override
   void initState() {
     super.initState();
     _targetOffsetValueNotifier = ValueNotifier<Offset>(Offset.zero);
-    _showAboveNotifier = ValueNotifier<bool>(false);
+    showAboveNotifier = ValueNotifier<bool>(false);
   }
 
   @override
   void dispose() {
     _targetOffsetValueNotifier.dispose();
-    _showAboveNotifier.dispose();
+    showAboveNotifier.dispose();
     super.dispose();
   }
 
@@ -238,7 +238,7 @@ class _ModernDropdownMenuState<T> extends State<ModernDropdownMenu<T>> {
               );
             },
             offsetNotifier: _targetOffsetValueNotifier,
-            showAboveNotifier: _showAboveNotifier,
+            showAboveNotifier: showAboveNotifier,
           ),
         )
         .then((_) {
@@ -273,7 +273,7 @@ class _ModernDropdownMenuState<T> extends State<ModernDropdownMenu<T>> {
     final showAbove =
         spaceBelow < estimatedMenuHeight && spaceAbove > spaceBelow;
 
-    _showAboveNotifier.value = showAbove;
+    showAboveNotifier.value = showAbove;
 
     // 设置菜单位置（覆盖按钮，右对齐）
     // X 坐标：按钮右边缘（菜单会右对齐到这里）

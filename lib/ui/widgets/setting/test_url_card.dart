@@ -75,8 +75,8 @@ class _TestUrlCardState extends State<TestUrlCard> {
     return ModernFeatureCard(
       isSelected: false,
       onTap: () {},
-      enableHover: false,
-      enableTap: false,
+      isHoverEnabled: false,
+      isTapEnabled: false,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

@@ -139,7 +139,7 @@ class SubscriptionCard extends StatelessWidget {
               ),
             ),
             // 配置失败警告标记（右下角）
-            if (subscription.configLoadFailed)
+            if (subscription.hasConfigLoadFailed)
               Positioned(
                 right: 12,
                 bottom: 8,
@@ -353,7 +353,7 @@ class SubscriptionCard extends StatelessWidget {
             icon: Icons.delete,
             label: trans.subscription.menu.delete,
             onPressed: onDelete,
-            danger: true,
+            isDangerous: true,
           ),
         ],
       ),

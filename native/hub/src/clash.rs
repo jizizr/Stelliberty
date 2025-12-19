@@ -50,7 +50,7 @@ pub fn init() {
                 log::error!("启动进程的任务执行失败（可能线程池耗尽）：{}", e);
                 // 向 Dart 发送错误响应
                 ClashProcessResult {
-                    success: false,
+                    is_successful: false,
                     error_message: Some(format!("任务执行失败：{}", e)),
                     pid: None,
                 }
@@ -72,7 +72,7 @@ pub fn init() {
                 log::error!("停止进程的任务执行失败（可能线程池耗尽）：{}", e);
                 // 向 Dart 发送错误响应
                 ClashProcessResult {
-                    success: false,
+                    is_successful: false,
                     error_message: Some(format!("任务执行失败：{}", e)),
                     pid: None,
                 }

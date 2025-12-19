@@ -36,7 +36,7 @@ class AutoStartService {
             Logger.warning('获取状态失败：${result.message.errorMessage}');
             completer.complete(false);
           } else {
-            completer.complete(result.message.enabled);
+            completer.complete(result.message.isEnabled);
           }
         }
       });
@@ -82,14 +82,14 @@ class AutoStartService {
             Logger.error('设置状态失败：${result.message.errorMessage}');
             completer.complete(false);
           } else {
-            Logger.info('开机自启动已${result.message.enabled ? '启用' : '禁用'}');
-            completer.complete(result.message.enabled == enabled);
+            Logger.info('开机自启动已${result.message.isEnabled ? '启用' : '禁用'}');
+            completer.complete(result.message.isEnabled == enabled);
           }
         }
       });
 
       // 发送请求到 Rust
-      SetAutoStartStatus(enabled: enabled).sendSignalToRust();
+      SetAutoStartStatus(isEnabled: enabled).sendSignalToRust();
 
       // 等待响应（5 秒超时）
       final success = await completer.future.timeout(

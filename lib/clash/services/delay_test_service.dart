@@ -119,7 +119,7 @@ class DelayTestService {
       completeSubscription = signals.BatchDelayTestComplete.rustSignalStream
           .listen((result) {
             final message = result.message;
-            if (message.success) {
+            if (message.isSuccessful) {
               completer.complete();
             } else {
               Logger.error(

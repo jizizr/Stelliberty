@@ -86,8 +86,8 @@ class _SystemProxyCardState extends State<SystemProxyCard> {
         return ModernFeatureCard(
           isSelected: false,
           onTap: () {},
-          enableHover: false,
-          enableTap: false,
+          isHoverEnabled: false,
+          isTapEnabled: false,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -194,7 +194,7 @@ class _SystemProxyCardState extends State<SystemProxyCard> {
           labelText: trans.systemProxy.proxyHost,
           hintText: trans.systemProxy.proxyHostHint,
           helperText: trans.systemProxy.proxyHostHelper,
-          showDropdownIcon: true,
+          shouldShowDropdownIcon: true,
         ),
       ),
       const SizedBox(height: 16),

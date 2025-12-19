@@ -33,10 +33,10 @@ class ModernFeatureCard extends StatelessWidget {
   final double borderRadius;
 
   // 是否启用悬停效果。
-  final bool enableHover;
+  final bool isHoverEnabled;
 
   // 是否启用点击效果（包括水波纹和 onTap 回调）。
-  final bool enableTap;
+  final bool isTapEnabled;
 
   // 卡片内边距（默认使用标准间距）
   final EdgeInsets? padding;
@@ -47,8 +47,8 @@ class ModernFeatureCard extends StatelessWidget {
     required this.isSelected,
     required this.onTap,
     this.borderRadius = 12.0,
-    this.enableHover = true,
-    this.enableTap = true,
+    this.isHoverEnabled = true,
+    this.isTapEnabled = true,
     this.padding,
   });
 
@@ -67,7 +67,7 @@ class ModernFeatureCard extends StatelessWidget {
       false => theme.colorScheme.outline.withAlpha(80),
     };
 
-    final hoverColor = switch (enableHover) {
+    final hoverColor = switch (isHoverEnabled) {
       true => theme.colorScheme.primary.withAlpha(20),
       false => Colors.transparent,
     };
@@ -80,7 +80,7 @@ class ModernFeatureCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(borderRadius),
         border: Border.all(color: borderColor, width: 2),
       ),
-      child: switch (enableTap) {
+      child: switch (isTapEnabled) {
         true => Material(
           type: MaterialType.transparency,
           child: InkWell(
@@ -143,10 +143,10 @@ class ModernFeatureLayoutCard extends StatelessWidget {
   final Color? iconColor;
 
   // 是否启用悬停效果
-  final bool enableHover;
+  final bool isHoverEnabled;
 
   // 是否启用点击效果
-  final bool enableTap;
+  final bool isTapEnabled;
 
   // 点击事件
   final VoidCallback? onTap;
@@ -161,8 +161,8 @@ class ModernFeatureLayoutCard extends StatelessWidget {
     this.padding,
     this.iconSize,
     this.iconColor,
-    this.enableHover = true,
-    this.enableTap = false,
+    this.isHoverEnabled = true,
+    this.isTapEnabled = false,
     this.onTap,
   });
 
@@ -171,8 +171,8 @@ class ModernFeatureLayoutCard extends StatelessWidget {
     return ModernFeatureCard(
       isSelected: false,
       onTap: onTap ?? () {},
-      enableHover: enableHover,
-      enableTap: enableTap,
+      isHoverEnabled: isHoverEnabled,
+      isTapEnabled: isTapEnabled,
       padding: padding,
       child: Row(
         children: [
@@ -255,8 +255,8 @@ class ModernFeatureToggleCard extends StatelessWidget {
     return ModernFeatureCard(
       isSelected: false,
       onTap: () {},
-      enableHover: true,
-      enableTap: false,
+      isHoverEnabled: true,
+      isTapEnabled: false,
       padding: padding,
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,

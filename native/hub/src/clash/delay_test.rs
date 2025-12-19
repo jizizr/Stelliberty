@@ -42,7 +42,7 @@ pub struct DelayTestProgress {
 // Rust → Dart：批量测试完成
 #[derive(Serialize, RustSignal)]
 pub struct BatchDelayTestComplete {
-    pub success: bool,
+    pub is_successful: bool,
     pub total_count: u32,
     pub success_count: u32,
     pub error_message: Option<String>,
@@ -133,7 +133,7 @@ async fn handle_batch_delay_test_request(request: BatchDelayTestRequest) {
 
     // 发送完成信号
     BatchDelayTestComplete {
-        success: true,
+        is_successful: true,
         total_count,
         success_count,
         error_message: None,

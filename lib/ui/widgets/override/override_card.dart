@@ -220,7 +220,7 @@ class OverrideCard extends StatelessWidget {
                       icon: Icons.delete,
                       label: trans.kOverride.deleteItem,
                       onPressed: onDelete,
-                      danger: true,
+                      isDangerous: true,
                     ),
                   ],
                 ),

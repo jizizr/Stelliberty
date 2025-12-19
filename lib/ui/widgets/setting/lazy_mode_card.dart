@@ -52,8 +52,8 @@ class _LazyModeCardState extends State<LazyModeCard> {
     return ModernFeatureCard(
       isSelected: false,
       onTap: () {}, // 禁用整个卡片的点击
-      enableHover: true,
-      enableTap: false, // 禁用点击交互，只允许开关本身触发
+      isHoverEnabled: true,
+      isTapEnabled: false, // 禁用点击交互，只允许开关本身触发
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         crossAxisAlignment: CrossAxisAlignment.center,

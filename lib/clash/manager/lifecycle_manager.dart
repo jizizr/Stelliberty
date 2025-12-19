@@ -101,7 +101,7 @@ class LifecycleManager {
     Future<void> Function()? onOverridesFailed,
     required int mixedPort, // 混合端口
     required bool isIpv6Enabled,
-    required bool tunEnabled,
+    required bool isTunEnabled,
     required String tunStack,
     required String tunDevice,
     required bool isTunAutoRouteEnabled,
@@ -167,7 +167,7 @@ class LifecycleManager {
         overrides: overrides,
         httpPort: mixedPort, // 传递混合端口给配置注入器
         isIpv6Enabled: isIpv6Enabled,
-        tunEnabled: tunEnabled,
+        isTunEnabled: isTunEnabled,
         tunStack: tunStack,
         tunDevice: tunDevice,
         isTunAutoRouteEnabled: isTunAutoRouteEnabled,
@@ -199,19 +199,19 @@ class LifecycleManager {
       // 检查服务是否可用
       final serviceAvailable = _checkServiceAvailable();
 
-      bool startSuccess = false;
+      bool isStartSuccessful = false;
 
       if (serviceAvailable) {
         // 服务模式启动
         Logger.info('使用服务模式启动 Clash 核心');
-        startSuccess = await _startWithService(
+        isStartSuccessful = await _startWithService(
           runtimeConfigPath,
           externalController,
         );
       } else {
         // 普通模式启动
         Logger.info('使用普通模式启动 Clash 核心');
-        startSuccess = await _startWithSidecar(
+        isStartSuccessful = await _startWithSidecar(
           runtimeConfigPath,
           mixedPort, // 混合端口
           socksPort,
@@ -221,9 +221,9 @@ class LifecycleManager {
       }
 
       // 处理启动失败或配置验证失败的情况
-      bool needFallback = false; // 标记是否需要回退
+      bool shouldFallback = false; // 标记是否需要回退
 
-      if (startSuccess) {
+      if (isStartSuccessful) {
         // 启动成功，验证配置是否正确加载
         final configValid = await _validateStartupConfig();
 
@@ -232,16 +232,16 @@ class LifecycleManager {
             !_isFallbackRetry &&
             overrides.isNotEmpty) {
           Logger.error('配置验证失败，可能由覆写导致，尝试禁用覆写后重试');
-          needFallback = true;
-          startSuccess = false; // 标记为失败
+          shouldFallback = true;
+          isStartSuccessful = false; // 标记为失败
         }
       } else if (enableFallback && !_isFallbackRetry && overrides.isNotEmpty) {
         // 启动失败且有覆写
-        needFallback = true;
+        shouldFallback = true;
       }
 
       // 如果需要回退，执行回退逻辑（只调用一次回调）
-      if (needFallback) {
+      if (shouldFallback) {
         Logger.error('启动失败，检测到有覆写配置，执行回退');
 
         // 标记为回退重试
@@ -266,12 +266,12 @@ class LifecycleManager {
 
         // 重新启动（不带覆写，且禁用回退以避免无限循环）
         Logger.info('使用无覆写配置重新启动核心');
-        startSuccess = await startCore(
+        isStartSuccessful = await startCore(
           configPath: configPath,
           overrides: const [], // 不使用覆写
           mixedPort: mixedPort, // 混合端口
           isIpv6Enabled: isIpv6Enabled,
-          tunEnabled: tunEnabled,
+          isTunEnabled: isTunEnabled,
           tunStack: tunStack,
           tunDevice: tunDevice,
           isTunAutoRouteEnabled: isTunAutoRouteEnabled,
@@ -299,14 +299,14 @@ class LifecycleManager {
         // 重置回退标记
         _isFallbackRetry = false;
 
-        if (startSuccess) {
+        if (isStartSuccessful) {
           Logger.info('回退成功：无覆写配置启动成功');
         } else {
           Logger.error('回退失败：即使没有覆写也无法启动');
         }
       }
 
-      return startSuccess;
+      return isStartSuccessful;
     } catch (e) {
       Logger.error('启动 Clash 失败：$e');
       _coreStateManager.setStopped(reason: '启动失败');
@@ -366,7 +366,7 @@ class LifecycleManager {
         },
       );
 
-      if (!signal.message.success) {
+      if (!signal.message.isSuccessful) {
         final error = signal.message.errorMessage ?? '未知错误';
         throw Exception('服务启动核心失败：$error');
       }
@@ -659,7 +659,7 @@ class LifecycleManager {
         },
       );
 
-      if (!signal.message.success) {
+      if (!signal.message.isSuccessful) {
         final error = signal.message.errorMessage ?? '未知错误';
         Logger.warning('服务停止核心失败：$error');
       }

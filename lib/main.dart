@@ -191,7 +191,7 @@ Future<String> initializeOtherServices() async {
 
   // 同步应用日志开关状态到 Rust 端（避免重启后状态不一致）
   final appLogEnabled = AppPreferences.instance.getAppLogEnabled();
-  SetAppLogEnabled(enabled: appLogEnabled).sendSignalToRust();
+  SetAppLogEnabled(isEnabled: appLogEnabled).sendSignalToRust();
   Logger.info('应用日志开关已同步到 Rust 端: $appLogEnabled');
 
   // 初始化状态中枢（业务逻辑协调）

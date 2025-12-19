@@ -68,8 +68,8 @@ class _ThemeSelectorState extends State<ThemeSelector> {
               child: ModernFeatureCard(
                 isSelected: false,
                 onTap: () {},
-                enableHover: false,
-                enableTap: false,
+                isHoverEnabled: false,
+                isTapEnabled: false,
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   crossAxisAlignment: CrossAxisAlignment.center,
@@ -122,8 +122,8 @@ class _ThemeSelectorState extends State<ThemeSelector> {
                     child: ModernFeatureCard(
                       isSelected: false,
                       onTap: () {},
-                      enableHover: false,
-                      enableTap: false,
+                      isHoverEnabled: false,
+                      isTapEnabled: false,
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         crossAxisAlignment: CrossAxisAlignment.center,

@@ -113,7 +113,7 @@ class SubscriptionService {
         },
       );
 
-      if (!downloadResult.success) {
+      if (!downloadResult.isSuccessful) {
         throw Exception(downloadResult.errorMessage ?? '下载失败');
       }
 
@@ -134,7 +134,7 @@ class SubscriptionService {
           result,
         ) {
           if (!parseCompleter.isCompleted) {
-            if (result.message.success) {
+            if (result.message.isSuccessful) {
               parseCompleter.complete(result.message.parsedConfig);
             } else {
               parseCompleter.completeError(

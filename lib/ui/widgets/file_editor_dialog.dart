@@ -28,22 +28,22 @@ class FileEditorDialog extends StatefulWidget {
   final Future<bool> Function(String content)? onSave;
 
   // 是否为只读模式
-  final bool readOnly;
+  final bool isReadOnly;
 
   // 自定义标题（可选，如果提供则使用此标题而不是默认的"文件编辑器"）
   final String? customTitle;
 
   // 是否隐藏副标题（文件名）
-  final bool hideSubtitle;
+  final bool shouldHideSubtitle;
 
   const FileEditorDialog({
     super.key,
     required this.fileName,
     required this.initialContent,
     this.onSave,
-    this.readOnly = false,
+    this.isReadOnly = false,
     this.customTitle,
-    this.hideSubtitle = false,
+    this.shouldHideSubtitle = false,
   });
 
   // 显示文件编辑器对话框
@@ -63,9 +63,9 @@ class FileEditorDialog extends StatefulWidget {
         fileName: fileName,
         initialContent: initialContent,
         onSave: onSave,
-        readOnly: readOnly,
+        isReadOnly: readOnly,
         customTitle: customTitle,
-        hideSubtitle: hideSubtitle,
+        shouldHideSubtitle: hideSubtitle,
       ),
     );
   }
@@ -283,7 +283,7 @@ class _FileEditorDialogState extends State<FileEditorDialog> {
   // 内容变化回调
   void _onContentChanged() {
     // 只读模式下不跟踪修改
-    if (_disposed || widget.readOnly) return;
+    if (_disposed || widget.isReadOnly) return;
     final isModified = _controller.text != widget.initialContent;
     if (isModified != _isModified) {
       SchedulerBinding.instance.addPostFrameCallback((_) {
@@ -322,7 +322,7 @@ class _FileEditorDialogState extends State<FileEditorDialog> {
     return ModernDialog(
       title: widget.customTitle ?? trans.fileEditor.title,
       subtitle: widget.fileName,
-      hideSubtitle: widget.hideSubtitle,
+      shouldHideSubtitle: widget.shouldHideSubtitle,
       titleIcon: Icons.code,
       isModified: _isModified,
       maxWidth: 900,
@@ -339,7 +339,7 @@ class _FileEditorDialogState extends State<FileEditorDialog> {
         ),
       ),
       actionsRight: [
-        if (!widget.readOnly) ...[
+        if (!widget.isReadOnly) ...[
           DialogActionButton(
             label: trans.fileEditor.cancelButton,
             isPrimary: false,
@@ -505,7 +505,7 @@ class _FileEditorDialogState extends State<FileEditorDialog> {
               curve: Curves.easeIn,
               child: CodeEditor(
                 controller: _controller,
-                readOnly: widget.readOnly,
+                readOnly: widget.isReadOnly,
                 padding: const EdgeInsets.only(
                   left: 5,
                   right: 0,

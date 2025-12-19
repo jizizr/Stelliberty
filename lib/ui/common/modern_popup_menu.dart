@@ -34,13 +34,13 @@ class PopupMenuItemData {
     this.icon,
     required this.label,
     required this.onPressed,
-    this.danger = false,
+    this.isDangerous = false,
   });
 
   final String label;
   final VoidCallback? onPressed;
   final IconData? icon;
-  final bool danger;
+  final bool isDangerous;
 }
 
 // 现代化弹出路由
@@ -285,7 +285,7 @@ class ModernPopupMenu extends StatelessWidget {
     final onPressed = item.onPressed;
     final disabled = onPressed == null;
     final colorScheme = Theme.of(context).colorScheme;
-    final color = item.danger ? colorScheme.error : colorScheme.onSurface;
+    final color = item.isDangerous ? colorScheme.error : colorScheme.onSurface;
     final foregroundColor = disabled ? color.withValues(alpha: 0.3) : color;
 
     return Padding(
@@ -303,7 +303,7 @@ class ModernPopupMenu extends StatelessWidget {
               : null,
           borderRadius: BorderRadius.circular(_PopupMenuStyle.itemBorderRadius),
           splashFactory: InkRipple.splashFactory,
-          hoverColor: item.danger
+          hoverColor: item.isDangerous
               ? colorScheme.error.withValues(alpha: 0.1)
               : null,
           child: Container(

@@ -73,7 +73,7 @@ class ClashManager extends ChangeNotifier {
   bool get isExternalControllerEnabled =>
       _configManager.isExternalControllerEnabled;
   String get testUrl => _configManager.testUrl;
-  bool get tunEnabled => _configManager.tunEnabled;
+  bool get isTunEnabled => _configManager.isTunEnabled;
   String get tunStack => _configManager.tunStack;
   String get tunDevice => _configManager.tunDevice;
   bool get isTunAutoRouteEnabled => _configManager.isTunAutoRouteEnabled;
@@ -195,7 +195,7 @@ class ClashManager extends ChangeNotifier {
       onOverridesFailed: onOverridesFailed,
       mixedPort: _configManager.mixedPort, // 传递混合端口
       isIpv6Enabled: _configManager.isIpv6Enabled,
-      tunEnabled: _configManager.tunEnabled,
+      isTunEnabled: _configManager.isTunEnabled,
       tunStack: _configManager.tunStack,
       tunDevice: _configManager.tunDevice,
       isTunAutoRouteEnabled: _configManager.isTunAutoRouteEnabled,
