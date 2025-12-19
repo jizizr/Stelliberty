@@ -513,10 +513,10 @@ var
 begin
   // taskkill /F /IM 会终止所有匹配的进程实例
   Exec('cmd.exe', '/c taskkill /F /IM ' + ProcessName, '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-  
+
   // 等待进程完全停止
   Sleep(500);
-  
+
   // 重试最多 3 次，确保所有实例都被终止
   Retries := 0;
   while IsProcessRunning(ProcessName) and (Retries < 3) do
@@ -531,45 +531,66 @@ function InitializeSetup(): Boolean;
 var
   ResultCode: Integer;
   MsgText: String;
+  AppRunning: Boolean;
+  ClashRunning: Boolean;
 begin
-  // 检查是否已有实例在运行
-  if CheckForMutexes('Global\\StelliibertyMutex') then
-  begin
-    if MsgBox('{#MyAppName} is currently running.' #13#10#13#10 'Please close the application before continuing.', mbError, MB_OK) = IDOK then
-    begin
-      Result := False;
-      Exit;
-    end;
-  end;
-  
+  // 检查主程序是否在运行
+  AppRunning := CheckForMutexes('Global\\StelliibertyMutex') or IsProcessRunning('{#MyAppExeName}');
+
   // 检查 clash-core.exe 是否在运行
-  if IsProcessRunning('clash-core.exe') then
+  ClashRunning := IsProcessRunning('clash-core.exe');
+
+  // 只有在应用或 Clash 运行时才提示
+  if AppRunning or ClashRunning then
   begin
-    MsgText := 'Clash process is currently running.' #13#10#13#10 +
-               'The installer will automatically stop all instances before continuing.' #13#10#13#10 +
+    MsgText := '{#MyAppName} or Clash process is currently running.' + #13#10#13#10 +
+               'The installer will automatically:' + #13#10 +
+               '  • Stop the main application' + #13#10 +
+               '  • Stop Clash process' + #13#10#13#10 +
                'Continue with installation?';
-    
+
     if MsgBox(MsgText, mbConfirmation, MB_YESNO) = IDYES then
     begin
-      // 强制停止所有 clash-core.exe 实例
-      KillProcess('clash-core.exe');
-      
-      // 最终验证是否成功停止
-      if IsProcessRunning('clash-core.exe') then
+      // 1. 强制停止主程序
+      if AppRunning then
       begin
-        MsgBox('Failed to stop all Clash processes.' #13#10#13#10 'Please stop them manually and try again.', mbError, MB_OK);
-        Result := False;
-        Exit;
+        KillProcess('{#MyAppExeName}');
+
+        // 验证是否成功停止
+        if IsProcessRunning('{#MyAppExeName}') then
+        begin
+          MsgBox('Failed to stop {#MyAppName}.' + #13#10#13#10 + 'Please close it manually and try again.', mbError, MB_OK);
+          Result := False;
+          Exit;
+        end;
       end;
+
+      // 2. 强制停止 Clash 进程
+      if ClashRunning then
+      begin
+        KillProcess('clash-core.exe');
+
+        // 验证是否成功停止
+        if IsProcessRunning('clash-core.exe') then
+        begin
+          MsgBox('Failed to stop Clash process.' + #13#10#13#10 + 'Please stop it manually and try again.', mbError, MB_OK);
+          Result := False;
+          Exit;
+        end;
+      end;
+
+      Result := True;
     end
     else
     begin
       Result := False;
-      Exit;
     end;
+  end
+  else
+  begin
+    // 没有进程在运行，直接继续安装
+    Result := True;
   end;
-  
-  Result := True;
 end;
 
 function GetServicePath(): String;
