@@ -166,6 +166,7 @@ class _ExternalControllerCardState extends State<ExternalControllerCard> {
             labelText: trans.externalController.addressLabel,
             hintText: trans.externalController.addressHint,
             errorText: _addressError,
+            minLines: 1,
           ),
           const SizedBox(height: 12),
           // Secret 输入框
@@ -176,6 +177,7 @@ class _ExternalControllerCardState extends State<ExternalControllerCard> {
             hintText: trans.externalController.secretHint,
             errorText: _secretError,
             shouldObscureText: true,
+            minLines: 1,
           ),
           const SizedBox(height: 16),
           // 保存按钮

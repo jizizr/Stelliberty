@@ -109,6 +109,7 @@ class _TestUrlCardState extends State<TestUrlCard> {
             keyboardType: TextInputType.url,
             labelText: trans.clashFeatures.testUrl.label,
             hintText: ClashDefaults.defaultTestUrl,
+            minLines: 1,
             suffixIcon: Padding(
               padding: const EdgeInsets.only(right: 4),
               child: ModernTooltip(

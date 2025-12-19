@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:stelliberty/i18n/i18n.dart';
 import 'package:stelliberty/clash/manager/manager.dart';
@@ -217,6 +218,11 @@ class _PortSettingsCardState extends State<PortSettingsCard> {
             labelText: trans.clashFeatures.portSettings.mixedPort,
             hintText: ClashDefaults.mixedPort.toString(),
             errorText: _mixedPortError,
+            minLines: 1,
+            inputFormatters: [
+              FilteringTextInputFormatter.digitsOnly,
+              LengthLimitingTextInputFormatter(5),
+            ],
           ),
           const SizedBox(height: 12),
           ModernTextField(
@@ -225,6 +231,11 @@ class _PortSettingsCardState extends State<PortSettingsCard> {
             labelText: trans.clashFeatures.portSettings.socksPort,
             hintText: trans.clashFeatures.portSettings.emptyToDisable,
             errorText: _socksPortError,
+            minLines: 1,
+            inputFormatters: [
+              FilteringTextInputFormatter.digitsOnly,
+              LengthLimitingTextInputFormatter(5),
+            ],
           ),
           const SizedBox(height: 12),
           ModernTextField(
@@ -233,6 +244,11 @@ class _PortSettingsCardState extends State<PortSettingsCard> {
             labelText: trans.clashFeatures.portSettings.httpPort,
             hintText: trans.clashFeatures.portSettings.emptyToDisable,
             errorText: _httpPortError,
+            minLines: 1,
+            inputFormatters: [
+              FilteringTextInputFormatter.digitsOnly,
+              LengthLimitingTextInputFormatter(5),
+            ],
           ),
           const SizedBox(height: 16),
           // 保存按钮

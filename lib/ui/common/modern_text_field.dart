@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 // 现代化的文本输入框组件（基于原生 TextField 重构）
 //
@@ -18,11 +19,13 @@ class ModernTextField extends StatefulWidget {
   final TextInputType? keyboardType;
   final ValueChanged<String>? onChanged;
   final ValueChanged<String>? onSubmitted;
-  final int? maxLines;
+  final int? maxLines; // null = 无限制，动态扩展
+  final int? minLines; // 最小行数
   final bool enabled;
   final bool shouldObscureText;
   final EdgeInsetsGeometry? contentPadding;
-  final double? height;
+  final double? height; // 固定高度，如果设置则忽略 maxLines/minLines
+  final List<TextInputFormatter>? inputFormatters; // 输入格式限制
 
   const ModernTextField({
     super.key,
@@ -41,10 +44,12 @@ class ModernTextField extends StatefulWidget {
     this.onChanged,
     this.onSubmitted,
     this.maxLines = 1,
+    this.minLines,
     this.enabled = true,
     this.shouldObscureText = false,
     this.contentPadding,
     this.height,
+    this.inputFormatters,
   });
 
   @override
@@ -155,8 +160,10 @@ class _ModernTextFieldState extends State<ModernTextField> {
                       onChanged: widget.onChanged,
                       onSubmitted: widget.onSubmitted,
                       maxLines: widget.maxLines,
+                      minLines: widget.minLines,
                       enabled: widget.enabled,
                       obscureText: widget.shouldObscureText,
+                      inputFormatters: widget.inputFormatters,
                       style: theme.textTheme.bodyMedium?.copyWith(
                         color: widget.enabled
                             ? colorScheme.onSurface

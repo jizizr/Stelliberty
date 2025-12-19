@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:stelliberty/i18n/i18n.dart';
 import 'package:stelliberty/clash/manager/manager.dart';
@@ -155,6 +156,10 @@ class _KeepAliveCardState extends State<KeepAliveCard> {
                       keyboardType: TextInputType.number,
                       hintText: '30',
                       height: 36,
+                      inputFormatters: [
+                        FilteringTextInputFormatter.digitsOnly,
+                        LengthLimitingTextInputFormatter(4),
+                      ],
                     ),
                   ),
                   const SizedBox(width: 8),

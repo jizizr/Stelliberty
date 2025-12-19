@@ -778,7 +778,8 @@ class _DnsConfigCardState extends State<DnsConfigCard> {
           child: ModernTextField(
             controller: controller,
             hintText: hint,
-            // TextField 不立即保存，等待用户点击保存按钮
+            // TextField 不立即保存，等待用户点击保存按钮,
+            minLines: 1,
           ),
         ),
       ],
@@ -801,7 +802,8 @@ class _DnsConfigCardState extends State<DnsConfigCard> {
           controller: controller,
           maxLines: maxLines,
           hintText: hint,
-          // TextField 不立即保存，等待用户点击保存按钮
+          // TextField 不立即保存，等待用户点击保存按钮,
+          minLines: 1,
         ),
       ],
     );
