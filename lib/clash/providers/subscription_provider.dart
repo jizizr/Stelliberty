@@ -226,18 +226,13 @@ class SubscriptionProvider extends ChangeNotifier {
       // 尝试恢复上次选中的订阅
       final savedSubscriptionId = ClashPreferences.instance
           .getCurrentSubscriptionId();
+
       if (savedSubscriptionId != null &&
           _subscriptions.any((s) => s.id == savedSubscriptionId)) {
         _currentSubscriptionId = savedSubscriptionId;
         Logger.info('恢复上次选中的订阅：$savedSubscriptionId');
-      } else if (_subscriptions.isNotEmpty) {
-        // 如果没有保存的订阅或保存的订阅不存在，选择第一个
-        _currentSubscriptionId = _subscriptions.first.id;
-        await ClashPreferences.instance.setCurrentSubscriptionId(
-          _currentSubscriptionId,
-        );
-        Logger.info('选择默认订阅（第一个）：$_currentSubscriptionId');
       }
+      // 其他情况保持无选中状态，使用默认配置
 
       Logger.info('订阅 Provider 初始化成功，共 ${_subscriptions.length} 个订阅');
 
@@ -1288,10 +1283,11 @@ class SubscriptionProvider extends ChangeNotifier {
               hasConfigLoadFailed: true,
             );
             await _service.saveSubscriptionList(_subscriptions);
+            Logger.warning('订阅 $subscriptionName 配置加载失败');
           }
         }
 
-        // 取消选中当前订阅
+        // 取消选中当前订阅，回退到默认配置
         _currentSubscriptionId = null;
         await ClashPreferences.instance.setCurrentSubscriptionId(null);
 

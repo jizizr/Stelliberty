@@ -83,9 +83,7 @@ class SubscriptionCard extends StatelessWidget {
                 borderRadius: BorderRadius.circular(16),
                 color: Color.alphaBlend(
                   mixColor.withValues(alpha: mixOpacity),
-                  colorScheme.surface.withValues(
-                    alpha: isDark ? 0.7 : 0.85,
-                  ),
+                  colorScheme.surface.withValues(alpha: isDark ? 0.7 : 0.85),
                 ),
                 border: Border.all(
                   color: isSelected
