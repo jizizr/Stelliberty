@@ -42,6 +42,7 @@ This project incorporates open-source software components. We are grateful to al
 - `window_manager` - Desktop window management
 - `tray_manager` - System tray integration
 - `screen_retriever` - Screen information retrieval
+- `bitsdojo_window` - Window customization
 - `rinf` - Flutter ↔ Rust interop framework
 - `shared_preferences` - Local key-value storage
 - `tuple` - Tuple data structures
@@ -52,15 +53,16 @@ This project incorporates open-source software components. We are grateful to al
 - `http` - HTTP client
 - `path` - Cross-platform path manipulation
 - `path_provider` - Platform-specific path access
-- `archive` - Archive file compression/decompression
 - `yaml` - YAML parser
 - `file_picker` - File selection dialog
 - `desktop_drop` - Drag-and-drop file support
 - `package_info_plus` - Application package information
+- `device_info_plus` - Device information
 - `re_editor` - Code editor widget
 - `re_highlight` - Syntax highlighting
 - `reorderable_grid_view` - Drag-sortable grid view
 - `intl` - Internationalization utilities
+- `gpt_markdown` - Markdown rendering
 
 #### Development Dependencies
 - `flutter_lints` - Recommended lints for Flutter
@@ -163,11 +165,10 @@ Full license text: https://www.apache.org/licenses/LICENSE-2.0
 - `regex` - Regular expressions
 - `base64` - Base64 encoding
 - `encoding_rs` - Text encoding conversion
-- `libc` - C library bindings
 - `messages` - Message passing
-
-#### Terminal
-- `crossterm` - Cross-platform terminal manipulation
+- `webbrowser` - Web browser integration
+- `zip` - ZIP archive support
+- `flate2` - Compression library
 
 ### Platform-Specific Dependencies
 
@@ -261,9 +262,9 @@ We extend our sincere gratitude to all open-source contributors and maintainers.
 
 | Field | Value |
 |-------|-------|
-| **Last Updated** | 2025-01-21 |
+| **Last Updated** | 2025-12-22 |
 | **License Version** | 1.0 |
-| **Total Dependencies** | 62+ packages |
+| **Total Dependencies** | 70+ packages |
 | **Primary Licenses** | MIT, Apache-2.0, BSD-3-Clause |
 
 ---
