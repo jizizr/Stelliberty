@@ -4,10 +4,6 @@
 
 [![English](https://img.shields.io/badge/English-red)](README.md)
 [![简体中文](https://img.shields.io/badge/简体中文-blue)](.github/docs/README.zh-CN.md)
-[![日本語](https://img.shields.io/badge/日本語-blue)](.github/docs/README.ja.md)
-[![한국어](https://img.shields.io/badge/한국어-blue)](.github/docs/README.ko.md)
-[![Deutsch](https://img.shields.io/badge/Deutsch-blue)](.github/docs/README.de.md)
-[![Français](https://img.shields.io/badge/Français-blue)](.github/docs/README.fr.md)
 
 ![Stable Version](https://img.shields.io/github/v/release/Kindness-Kismet/Stelliberty?style=flat-square&label=Stable)
 ![Latest Version](https://img.shields.io/github/v/tag/Kindness-Kismet/Stelliberty?style=flat-square&label=Latest&color=orange)
@@ -41,26 +37,29 @@ Featuring the unique **MD3M** (Material Design 3 Modern) visual style
 
 ## ✨ Features
 
-- 🎨 **MD3M Design System**: Unique Material Design 3 Modern style combining MD3 color management with acrylic glass effects
-- 🦀 **Rust Backend**: High-performance core powered by Rust with Flutter UI
-- 🌐 **Multi-language Support**: Built-in i18n support using slang
-- 🔧 **Subscription Management**: Full subscription and override configuration support
-- 📊 **Real-time Monitoring**: Connection tracking and traffic statistics
-- 🪟 **Native Desktop Integration**: Windows service, system tray, and auto-start support
-- 🔄 **Built-in UWP Loopback Manager**: Manage Windows UWP app loopback exemptions (Windows only)
+- 🎨 **MD3M Design System**: Unique Material Design 3 Modern style combining MD3 color management with acrylic glass effects.
+- 🦀 **Rust Backend**: High-performance core powered by Rust with Flutter UI.
+- 🌐 **Multi-language Support**: Built-in i18n support using `slang`.
+- 🔧 **Subscription Management**: Full subscription and override configuration support.
+- 📊 **Real-time Monitoring**: Connection tracking and traffic statistics.
+- 🪟 **Native Desktop Integration**: Windows service, system tray, and auto-start support.
+- 🔄 **Built-in UWP Loopback Manager**: Manage Windows UWP app loopback exemptions (Windows only).
 
 ### 🏆 Implementation Highlights
 
 This might be one of the most detail-oriented Flutter desktop applications:
 
-- ✨ **System Tray Dark Mode**: Adaptive tray icons for Windows dark/light themes
-- 🚀 **Flicker-Free Launch**: Maximized window startup without visual artifacts
-- 👻 **Smooth Window Transitions**: Show/hide animations without flickering
-- 🎯 **Pixel-Perfect UI**: Carefully crafted MD3M design system
+- ✨ **System Tray Dark Mode**: Adaptive tray icons for Windows dark/light themes.
+- 🚀 **Flicker-Free Launch**: Maximized window startup without visual artifacts.
+- 👻 **Smooth Window Transitions**: Show/hide animations without flickering.
+- 🎯 **Pixel-Perfect UI**: Carefully crafted MD3M design system.
 
 ---
 
-## 📋 User Guide
+## 📖 User Guide
+
+<details>
+<summary>Click to expand User Guide</summary>
 
 ### System Requirements
 
@@ -70,72 +69,67 @@ This might be one of the most detail-oriented Flutter desktop applications:
 
 > ⚠️ **Platform Status**: Fully tested on Windows and Linux. macOS support is experimental and may have incomplete functionality.
 
-### Installation
+### Downloads
 
-**Download Options:**
 - **Stable Version**: [Releases](https://github.com/Kindness-Kismet/stelliberty/releases)
 - **Beta Version**: [Pre-releases](https://github.com/Kindness-Kismet/stelliberty/releases?q=prerelease%3Atrue) (latest features)
 
-**Installation Methods (Windows):**
+### Installation
 
-#### Option 1: Portable Version (ZIP Archive)
-1. Download the `.zip` file from the release page
-2. Extract to your desired location (e.g., `D:\Stelliberty`)
-3. Run `stelliberty.exe` directly from the extracted folder
-4. ✅ No installation required, fully portable
+#### Windows
 
-#### Option 2: Installer (EXE)
-1. Download the `.exe` installer from the release page
-2. Run the installer and follow the setup wizard
-3. Choose installation location (see restrictions below)
-4. Launch the application from the desktop shortcut
-5. ✅ Includes uninstaller and desktop shortcut
+##### Option 1: Portable Version (ZIP Archive)
+1. Download the `.zip` file from the release page.
+2. Extract to your desired location (e.g., `D:\Stelliberty`).
+3. Run `stelliberty.exe` directly from the extracted folder.
+4. ✅ No installation required, fully portable.
 
-**Installation Directory Restrictions:**
+##### Option 2: Installer (EXE)
+1. Download the `.exe` installer from the release page.
+2. Run the installer and follow the setup wizard.
+3. Choose an installation location (see restrictions below).
+4. Launch the application from the desktop shortcut.
+5. ✅ Includes uninstaller and desktop shortcut.
 
-The installer enforces the following path restrictions for security and stability:
-
+##### Installation Directory Restrictions
+The installer enforces path restrictions for security and stability:
 - **System Drive (Usually C:)**:
-  - ✅ Allowed: `%LOCALAPPDATA%\Programs\*` (e.g., `C:\Users\YourName\AppData\Local\Programs\Stelliberty`)
-  - ❌ Prohibited: System drive root directory (e.g., `C:\`)
-  - ❌ Prohibited: All other paths on system drive
-  
+  - ✅ Allowed: `%LOCALAPPDATA%\Programs\*` (e.g., `C:\Users\YourName\AppData\Local\Programs\Stelliberty`).
+  - ❌ Prohibited: System drive root and all other paths.
 - **Other Drives (D:, E:, etc.)**:
-  - ✅ No restrictions - Install anywhere you like
-  - ✅ Root directories allowed (e.g., `D:\`, `E:\Stelliberty`)
+  - ✅ No restrictions. Install anywhere, including root directories (e.g., `D:\`, `E:\Stelliberty`).
 
-> 💡 **Recommendation**: For best experience, install to non-system drives (e.g., `D:\Stelliberty`, `E:\Apps\Stelliberty`) to avoid potential permission issues.
+> 💡 **Recommendation**: For the best experience, install to a non-system drive (e.g., `D:\Stelliberty`) to avoid permission issues. The default path `%LOCALAPPDATA%\Programs\Stelliberty` is recommended for most users.
 
-> 📌 **Note**: The default installation path `%LOCALAPPDATA%\Programs\Stelliberty` requires no special permissions and is recommended for most users.
+#### Linux
 
-**Installation Methods (Linux):**
-
-#### Arch Linux (AUR)
+##### Arch Linux (AUR)
 Supported architectures: `x86_64`, `aarch64`
-
-Using `yay`:
-```bash
-yay -S stelliberty-bin
-```
-
-Using `paru`:
-```bash
-paru -S stelliberty-bin
-```
+- **yay**: `yay -S stelliberty-bin`
+- **paru**: `paru -S stelliberty-bin`
 
 > AUR Package: [stelliberty-bin](https://aur.archlinux.org/packages/stelliberty-bin)
 
----
-
-#### Portable Version (ZIP Archive)
-1. Download the `.zip` file for your architecture (`amd64` or `arm64`) from the release page.
+##### Portable Version (ZIP Archive)
+1. Download the `.zip` file for your architecture (`amd64` or `arm64`).
 2. Extract it to your desired location (e.g., `~/Stelliberty`).
-3. **Important:** Grant permissions to the application folder:
-   ```bash
-   chmod 777 -R ./stelliberty
-   ```
+3. **Important:** Grant permissions: `chmod 777 -R ./stelliberty`.
 4. Run `./stelliberty` from the extracted directory.
 5. ✅ Ready to use.
+
+### Troubleshooting
+
+#### Port Already in Use (Windows)
+If you encounter port conflicts, run Command Prompt as **Administrator**:
+1. **Find Process**: `netstat -ano | findstr :<port_number>`
+2. **Kill Process**: `taskkill /F /PID <process_id>`
+
+#### Software Not Working Properly
+- **Path Requirements**: The path should not contain special characters (except spaces) or non-ASCII characters.
+- **Installation Restrictions**: Use the **portable ZIP version** if you need to install to a location not allowed by the EXE installer.
+
+#### Missing Runtime Libraries (Windows)
+If the application fails to start, install the **Visual C++ Runtimes**: [vcredist - Runtimes AIO](https://gitlab.com/stdout12/vcredist).
 
 ### Reporting Issues
 
@@ -148,9 +142,14 @@ If you encounter any issues:
 5. Create an issue on GitHub and attach the sanitized log file
 6. Describe the problem and steps to reproduce
 
+</details>
+
 ---
 
 ## 🛠️ For Developers
+
+<details>
+<summary>Click to expand Developer Guide</summary>
 
 ### Prerequisites
 
@@ -169,8 +168,7 @@ Before building this project, ensure you have the following installed:
 The prebuild script requires additional Dart packages:
 
 ```bash
-cd scripts
-dart pub get
+cd scripts && dart pub get && cd ..
 ```
 
 #### 2. Install rinf CLI
@@ -282,7 +280,7 @@ Built packages will be in `build/packages/`
 ⚠️ **Platform Support Status**:
 
 - ✅ **Windows**: Fully tested and supported
-- ⚠️ **Linux**: Core functionality works, but system integration (service, auto-start) is unverified
+- ✅ **Linux**: Fully tested and supported
 - ⚠️ **macOS**: Core functionality works, but system integration is experimental
 - ❌ **Android**: Not implemented yet
 
@@ -358,48 +356,18 @@ flutter run --dart-define=TEST_TYPE=ipc-api
 
 Test implementations: `lib/dev_test/` (`override_test.dart`, `ipc_api_test.dart`)
 
+</details>
+
 ---
 
-## ❓ Troubleshooting
+## 📋 Code Standards
 
-### Port Already in Use (Windows)
-
-If you encounter port conflicts:
-
-```bash
-# 1. Find the process using the port
-netstat -ano | findstr :端口号
-
-# 2. Kill the process (run as Administrator)
-taskkill /F /PID XXX
-```
-
-> ⚠️ **Important**: Run Command Prompt as Administrator. Service-mode core processes require elevated privileges to terminate.
-
-### Software Not Working Properly
-
-**Path Requirements** (applies to both ZIP and EXE):
-
-- Path should NOT contain special characters (except spaces)
-- Path should NOT contain non-ASCII characters (e.g., Chinese characters)
-- Spaces are supported: `D:\Program Files\Stelliberty` ✅
-
-**EXE Installer Location Restrictions**:
-
-If you used the EXE installer, additional location restrictions apply:
-
-- **System Drive (C:)**: Only allowed in `%LOCALAPPDATA%\Programs\*`
-- **Other Drives (D:, E:, etc.)**: No restrictions
-
-> 💡 **Tip**: Use the **portable ZIP version** if you need to install to a location not allowed by the EXE installer. The ZIP version has no location restrictions, but may still be affected by system directory permissions (e.g., installing to `C:\Windows` or `C:\Program Files` may require administrator privileges).
-
-### Missing Runtime Libraries (Windows)
-
-If the application fails to start or crashes immediately on Windows, you may be missing required Visual C++ runtime libraries.
-
-**Solution:**
-
-Install Visual C++ runtimes: [vcredist - Visual C++ Redistributable Runtimes AIO](https://gitlab.com/stdout12/vcredist)
+- ✅ No warnings from `flutter analyze` and `cargo clippy`
+- ✅ Format code with `dart format` and `cargo fmt` before committing
+- ✅ Do not modify auto-generated files (`lib/src/bindings/`, `lib/i18n/`)
+- ✅ Use event-driven architecture, avoid `setState` abuse
+- ✅ Rust code must use `Result<T, E>`, no `unwrap()`
+- ✅ Dart code must maintain null safety
 
 ---
 
@@ -413,17 +381,6 @@ Install Visual C++ runtimes: [vcredist - Visual C++ Redistributable Runtimes AIO
 - 🌗 **Dark Mode Support**: Seamless light/dark theme switching
 
 This creates a modern, elegant desktop application experience with native-like feel across all platforms.
-
----
-
-## 📋 Code Standards
-
-- ✅ No warnings from `flutter analyze` and `cargo clippy`
-- ✅ Format code with `dart format` and `cargo fmt` before committing
-- ✅ Do not modify auto-generated files (`lib/src/bindings/`, `lib/i18n/`)
-- ✅ Use event-driven architecture, avoid `setState` abuse
-- ✅ Rust code must use `Result<T, E>`, no `unwrap()`
-- ✅ Dart code must maintain null safety
 
 ---
 

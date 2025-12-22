@@ -4,10 +4,6 @@
 
 [![简体中文](https://img.shields.io/badge/简体中文-red)](README.zh-CN.md)
 [![English](https://img.shields.io/badge/English-blue)](../../README.md)
-[![日本語](https://img.shields.io/badge/日本語-blue)](README.ja.md)
-[![한국어](https://img.shields.io/badge/한국어-blue)](README.ko.md)
-[![Deutsch](https://img.shields.io/badge/Deutsch-blue)](README.de.md)
-[![Français](https://img.shields.io/badge/Français-blue)](README.fr.md)
 
 ![正式版](https://img.shields.io/github/v/release/Kindness-Kismet/Stelliberty?style=flat-square&label=正式版)
 ![最新版](https://img.shields.io/github/v/tag/Kindness-Kismet/Stelliberty?style=flat-square&label=最新版&color=orange)
@@ -42,26 +38,29 @@
 
 ## ✨ 特性
 
-- 🎨 **MD3M 设计系统**：独特的 Material Design 3 Modern 风格，结合 MD3 色彩管理与磨砂玻璃效果
-- 🦀 **Rust 后端**：高性能 Rust 核心驱动，Flutter UI 呈现
-- 🌐 **多语言支持**：使用 slang 框架的内置国际化支持
-- 🔧 **订阅管理**：完整的订阅和覆写配置支持
-- 📊 **实时监控**：连接跟踪和流量统计
-- 🪟 **原生桌面集成**：Windows 服务、系统托盘和开机自启支持
-- 🔄 **内置 UWP 回环管理器**：管理 Windows UWP 应用的回环豁免权限（仅限 Windows）
+- 🎨 **MD3M 设计系统**：独特的 Material Design 3 Modern 风格，结合 MD3 色彩管理与磨砂玻璃效果。
+- 🦀 **Rust 后端**：高性能 Rust 核心驱动，Flutter UI 呈现。
+- 🌐 **多语言支持**：使用 `slang` 框架的内置国际化支持。
+- 🔧 **订阅管理**：完整的订阅和覆写配置支持。
+- 📊 **实时监控**：连接跟踪和流量统计。
+- 🪟 **原生桌面集成**：Windows 服务、系统托盘和开机自启支持。
+- 🔄 **内置 UWP 回环管理器**：管理 Windows UWP 应用的回环豁免权限（仅限 Windows）。
 
 ### 🏆 实现亮点
 
 本应用可能是细节做得最好的 Flutter 桌面应用之一：
 
-- ✨ **系统托盘夜间模式**：Windows 托盘图标自动适配深色/浅色主题
-- 🚀 **无闪烁启动**：最大化窗口启动不产生视觉闪烁
-- 👻 **流畅窗口切换**：显示/隐藏窗口动画无闪烁
-- 🎯 **像素级完美 UI**：精心打造的 MD3M 设计系统
+- ✨ **系统托盘夜间模式**：Windows 托盘图标自动适配深色/浅色主题。
+- 🚀 **无闪烁启动**：最大化窗口启动不产生视觉闪烁。
+- 👻 **流畅窗口切换**：显示/隐藏窗口动画无闪烁。
+- 🎯 **像素级完美 UI**：精心打造的 MD3M 设计系统。
 
 ---
 
-## 📋 用户指南
+## 📖 用户指南
+
+<details>
+<summary>点击展开用户指南</summary>
 
 ### 系统要求
 
@@ -71,72 +70,67 @@
 
 > ⚠️ **平台状态**：目前已在 Windows 和 Linux 上完整测试。macOS 支持为实验性，部分功能可能不完整。
 
-### 安装方法
+### 下载
 
-**下载选项：**
 - **稳定版本**：[Releases](https://github.com/Kindness-Kismet/stelliberty/releases)
 - **测试版本**：[预发布页面](https://github.com/Kindness-Kismet/stelliberty/releases?q=prerelease%3Atrue)（体验最新特性）
 
-**安装方式（Windows）：**
+### 安装
 
-#### 方式一：便携版（ZIP 压缩包）
-1. 从发布页面下载 `.zip` 文件
-2. 解压到任意位置（如 `D:\Stelliberty`）
-3. 直接运行解压目录中的 `stelliberty.exe`
-4. ✅ 无需安装，开箱即用
+#### Windows
 
-#### 方式二：安装程序（EXE）
-1. 从发布页面下载 `.exe` 安装程序
-2. 运行安装程序并按照向导完成安装
-3. 选择安装位置（参见下方限制说明）
-4. 从桌面快捷方式启动应用
-5. ✅ 包含卸载程序和桌面快捷方式
+##### 方式一：便携版（ZIP 压缩包）
+1. 从发布页面下载 `.zip` 文件。
+2. 解压到任意位置（如 `D:\Stelliberty`）。
+3. 直接运行解压目录中的 `stelliberty.exe`。
+4. ✅ 无需安装，开箱即用。
 
-**安装目录限制说明：**
+##### 方式二：安装程序（EXE）
+1. 从发布页面下载 `.exe` 安装程序。
+2. 运行安装程序并按照向导完成安装。
+3. 选择安装位置（参见下方限制说明）。
+4. 从桌面快捷方式启动应用。
+5. ✅ 包含卸载程序和桌面快捷方式。
 
+##### 安装目录限制
 为确保安全性和稳定性，安装程序对安装路径有以下限制：
-
 - **系统盘（通常是 C: 盘）**：
-  - ✅ 允许安装到：`%LOCALAPPDATA%\Programs\*`（如 `C:\Users\用户名\AppData\Local\Programs\Stelliberty`）
-  - ❌ 禁止安装到：系统盘根目录（如 `C:\`）
-  - ❌ 禁止安装到：系统盘的其他所有路径
-  
+  - ✅ 允许安装到：`%LOCALAPPDATA%\Programs\*`（如 `C:\Users\用户名\AppData\Local\Programs\Stelliberty`）。
+  - ❌ 禁止安装到：系统盘根目录（如 `C:\`）及其他所有路径。
 - **其他盘（D:、E: 等）**：
-  - ✅ 完全自由，无任何限制
-  - ✅ 可安装到根目录（如 `D:\`、`E:\Stelliberty`）
+  - ✅ 完全自由，无任何限制，可安装到根目录（如 `D:\`、`E:\Stelliberty`）。
 
-> 💡 **建议**：为获得最佳体验，建议安装到非系统盘（如 `D:\Stelliberty`、`E:\Apps\Stelliberty`），避免潜在的权限问题。
+> 💡 **建议**：为获得最佳体验，建议安装到非系统盘（如 `D:\Stelliberty`），避免潜在的权限问题。默认安装路径 `%LOCALAPPDATA%\Programs\Stelliberty` 无需特殊权限，推荐大多数用户使用。
 
-> 📌 **注意**：默认安装路径 `%LOCALAPPDATA%\Programs\Stelliberty` 无需特殊权限，推荐大多数用户使用。
+#### Linux
 
-**安装方式（Linux）：**
-
-#### Arch Linux (AUR)
+##### Arch Linux (AUR)
 支持架构：`x86_64`、`aarch64`
-
-使用 `yay`:
-```bash
-yay -S stelliberty-bin
-```
-
-使用 `paru`:
-```bash
-paru -S stelliberty-bin
-```
+- **yay**: `yay -S stelliberty-bin`
+- **paru**: `paru -S stelliberty-bin`
 
 > AUR 软件包链接：[stelliberty-bin](https://aur.archlinux.org/packages/stelliberty-bin)
 
----
+##### 便携版（ZIP 压缩包）
+1. 从发布页面下载适用于您架构（`amd64` 或 `arm64`）的 `.zip` 文件。
+2. 解压到任意位置（如 `~/Stelliberty`）。
+3. **重要：** 为应用文件夹赋予权限：`chmod 777 -R ./stelliberty`。
+4. 直接运行解压目录中的 `./stelliberty`。
+5. ✅ 开箱即用。
 
-#### 便携版（ZIP 压缩包）
-1. 从发布页面下载适用于您架构（`amd64` 或 `arm64`）的 `.zip` 文件
-2. 解压到任意位置（如 `~/Stelliberty`）
-3. **重要：** 为应用文件夹赋予权限：
-   ```bash
-   chmod 777 -R ./stelliberty
-   ```
-4. 直接运行解压目录中的 `./stelliberty`
-5. ✅ 开箱即用
+### 故障排查
+
+#### 端口被占用（Windows）
+如果遇到端口冲突，请以**管理员身份**运行命令提示符：
+1. **查找进程**：`netstat -ano | findstr :端口号`
+2. **结束进程**：`taskkill /F /PID <进程ID>`
+
+#### 软件工作不正常
+- **路径要求**：路径中不应包含特殊字符（空格除外）或非 ASCII 字符（如中文）。
+- **安装限制**：如需安装到 EXE 安装程序不允许的位置，请使用**便携版 ZIP 压缩包**。
+
+#### 缺少运行库（Windows）
+如果应用无法启动，请安装 **Visual C++ 运行库**：[vcredist - 运行库合集](https://gitlab.com/stdout12/vcredist)。
 
 ### 问题反馈
 
@@ -149,9 +143,14 @@ paru -S stelliberty-bin
 5. 在 GitHub 创建 issue 并附上处理后的日志文件
 6. 描述问题和重现步骤
 
+</details>
+
 ---
 
 ## 🛠️ 开发者指南
+
+<details>
+<summary>点击展开开发者指南</summary>
 
 ### 前置条件
 
@@ -170,8 +169,7 @@ paru -S stelliberty-bin
 预构建脚本需要额外的 Dart 包：
 
 ```bash
-cd scripts
-dart pub get
+cd scripts && dart pub get && cd ..
 ```
 
 #### 2. 安装 rinf CLI
@@ -283,7 +281,7 @@ dart run scripts/build.dart --android
 ⚠️ **平台支持状态**：
 
 - ✅ **Windows**：完整测试和支持
-- ⚠️ **Linux**：核心功能可用，但系统集成（服务、自启动）未经验证
+- ✅ **Linux**：完整测试和支持
 - ⚠️ **macOS**：核心功能可用，但系统集成为实验性
 - ❌ **Android**：尚未实现
 
@@ -359,48 +357,18 @@ flutter run --dart-define=TEST_TYPE=ipc-api
 
 测试实现：`lib/dev_test/`（`override_test.dart`、`ipc_api_test.dart`）
 
+</details>
+
 ---
 
-## ❓ 故障排查
+## 📋 代码规范
 
-### 端口被占用（Windows）
-
-如果遇到端口冲突：
-
-```bash
-# 1. 查找占用端口的进程
-netstat -ano | findstr :端口号
-
-# 2. 结束进程（以管理员身份运行）
-taskkill /F /PID XXX
-```
-
-> ⚠️ **重要**：必须以管理员身份运行命令提示符。服务模式启动的核心进程需要提升权限才能终止。
-
-### 软件工作不正常
-
-**路径要求**（ZIP 和 EXE 均适用）：
-
-- 路径中不应包含特殊字符（空格除外）
-- 路径中不应包含非 ASCII 字符（如中文字符）
-- 支持空格：`D:\Program Files\Stelliberty` ✅
-
-**EXE 安装程序的位置限制**：
-
-如果使用 EXE 安装程序，还有额外的安装位置限制：
-
-- **系统盘（C: 盘）**：仅允许安装到 `%LOCALAPPDATA%\Programs\*`
-- **其他盘（D:、E: 等）**：无任何限制
-
-> 💡 **提示**：如需安装到 EXE 安装程序不允许的位置，请使用**便携版 ZIP 压缩包**。ZIP 版本无位置限制，但仍可能受到系统目录权限的影响（如解压到 `C:\Windows` 或 `C:\Program Files` 可能需要管理员权限）。
-
-### 缺少运行库（Windows）
-
-如果应用程序在 Windows 上无法启动或立即崩溃，可能是缺少必需的 Visual C++ 运行库。
-
-**解决方案：**
-
-安装 Visual C++ 运行库：[vcredist - Visual C++ 运行库合集](https://gitlab.com/stdout12/vcredist)
+- ✅ `flutter analyze` 和 `cargo clippy` 无警告
+- ✅ 提交前使用 `dart format` 和 `cargo fmt` 格式化代码
+- ✅ 不要修改自动生成的文件（`lib/src/bindings/`、`lib/i18n/`）
+- ✅ 使用事件驱动架构，避免滥用 `setState`
+- ✅ Rust 代码必须使用 `Result<T, E>`，禁止 `unwrap()`
+- ✅ Dart 代码必须保持 null safety
 
 ---
 
@@ -414,17 +382,6 @@ taskkill /F /PID XXX
 - 🌗 **深色模式支持**：无缝的明暗主题切换
 
 这创造了一种现代、优雅的桌面应用体验，在各平台上都具有原生般的流畅感受。
-
----
-
-## 📋 代码规范
-
-- ✅ `flutter analyze` 和 `cargo clippy` 无警告
-- ✅ 提交前使用 `dart format` 和 `cargo fmt` 格式化代码
-- ✅ 不要修改自动生成的文件（`lib/src/bindings/`、`lib/i18n/`）
-- ✅ 使用事件驱动架构，避免滥用 `setState`
-- ✅ Rust 代码必须使用 `Result<T, E>`，禁止 `unwrap()`
-- ✅ Dart 代码必须保持 null safety
 
 ---
 
