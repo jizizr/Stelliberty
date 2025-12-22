@@ -59,6 +59,9 @@
 
 ## 📖 用户指南
 
+<details>
+<summary>点击展开用户指南</summary>
+
 ### 系统要求
 
 - **Windows**: Windows 10/11 (x64 / arm64)
@@ -140,9 +143,14 @@
 5. 在 GitHub 创建 issue 并附上处理后的日志文件
 6. 描述问题和重现步骤
 
+</details>
+
 ---
 
 ## 🛠️ 开发者指南
+
+<details>
+<summary>点击展开开发者指南</summary>
 
 ### 前置条件
 
@@ -348,6 +356,8 @@ flutter run --dart-define=TEST_TYPE=ipc-api
 > 💡 **注意**：测试模式仅在 Debug 构建中可用，Release 模式下自动禁用。
 
 测试实现：`lib/dev_test/`（`override_test.dart`、`ipc_api_test.dart`）
+
+</details>
 
 ---
 

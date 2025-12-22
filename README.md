@@ -58,6 +58,9 @@ This might be one of the most detail-oriented Flutter desktop applications:
 
 ## 📖 User Guide
 
+<details>
+<summary>Click to expand User Guide</summary>
+
 ### System Requirements
 
 - **Windows**: Windows 10/11 (x64 / arm64)
@@ -139,9 +142,14 @@ If you encounter any issues:
 5. Create an issue on GitHub and attach the sanitized log file
 6. Describe the problem and steps to reproduce
 
+</details>
+
 ---
 
 ## 🛠️ For Developers
+
+<details>
+<summary>Click to expand Developer Guide</summary>
 
 ### Prerequisites
 
@@ -347,6 +355,8 @@ flutter run --dart-define=TEST_TYPE=ipc-api
 > 💡 **Note**: Test mode is only available in Debug builds and automatically disabled in Release mode.
 
 Test implementations: `lib/dev_test/` (`override_test.dart`, `ipc_api_test.dart`)
+
+</details>
 
 ---
 
