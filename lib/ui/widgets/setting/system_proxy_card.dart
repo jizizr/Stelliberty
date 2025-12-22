@@ -195,6 +195,7 @@ class _SystemProxyCardState extends State<SystemProxyCard> {
           hintText: trans.systemProxy.proxyHostHint,
           helperText: trans.systemProxy.proxyHostHelper,
           shouldShowDropdownIcon: true,
+          minLines: 1,
         ),
       ),
       const SizedBox(height: 16),

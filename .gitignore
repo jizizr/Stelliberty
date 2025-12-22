@@ -50,6 +50,9 @@ migrate_working_dir/
 **/*.g.dart
 **/*.freezed.dart
 
+# Dart 编译缓存
+*.dill
+
 # Rinf 自动生成的绑定文件
 /lib/src/bindings/
 

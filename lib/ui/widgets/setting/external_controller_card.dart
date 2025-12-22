@@ -1,14 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:stelliberty/clash/providers/clash_provider.dart';
 import 'package:stelliberty/clash/storage/preferences.dart';
 import 'package:stelliberty/ui/common/modern_feature_card.dart';
 import 'package:stelliberty/ui/common/modern_switch.dart';
+import 'package:stelliberty/ui/common/modern_text_field.dart';
 import 'package:stelliberty/utils/logger.dart';
 import 'package:stelliberty/ui/widgets/modern_toast.dart';
 import 'package:stelliberty/i18n/i18n.dart';
-import 'package:stelliberty/ui/widgets/modern_tooltip.dart';
 
 class ExternalControllerCard extends StatefulWidget {
   const ExternalControllerCard({super.key});
@@ -105,18 +104,6 @@ class _ExternalControllerCardState extends State<ExternalControllerCard> {
     }
   }
 
-  Future<void> _copyToClipboard(String text, String label) async {
-    final trans = context.translate;
-    if (text.isEmpty) return;
-    await Clipboard.setData(ClipboardData(text: text));
-    if (mounted) {
-      ModernToast.success(
-        context,
-        trans.externalController.copied.replaceAll('{label}', label),
-      );
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final trans = context.translate;
@@ -129,6 +116,7 @@ class _ExternalControllerCardState extends State<ExternalControllerCard> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // 标题区域
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -171,72 +159,28 @@ class _ExternalControllerCardState extends State<ExternalControllerCard> {
             ],
           ),
           const SizedBox(height: 16),
-          const Divider(height: 1),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: _addressController,
-                  enabled: !_isSaving,
-                  decoration: InputDecoration(
-                    labelText: trans.externalController.addressLabel,
-                    hintText: trans.externalController.addressHint,
-                    errorText: _addressError,
-                    border: const OutlineInputBorder(),
-                    prefixIcon: const Icon(Icons.link_rounded, size: 20),
-                    suffixIcon: ModernTooltip(
-                      message: trans.externalController.copyAddress,
-                      child: IconButton(
-                        icon: const Icon(Icons.content_copy_rounded, size: 20),
-                        onPressed: _isSaving
-                            ? null
-                            : () => _copyToClipboard(
-                                _addressController.text,
-                                context
-                                    .translate
-                                    .externalController
-                                    .copyAddress,
-                              ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ],
+          // 外部控制器地址输入框
+          ModernTextField(
+            controller: _addressController,
+            keyboardType: TextInputType.text,
+            labelText: trans.externalController.addressLabel,
+            hintText: trans.externalController.addressHint,
+            errorText: _addressError,
+            minLines: 1,
+          ),
+          const SizedBox(height: 12),
+          // Secret 输入框
+          ModernTextField(
+            controller: _secretController,
+            keyboardType: TextInputType.text,
+            labelText: trans.externalController.secretLabel,
+            hintText: trans.externalController.secretHint,
+            errorText: _secretError,
+            shouldObscureText: true,
+            minLines: 1,
           ),
           const SizedBox(height: 16),
-          Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: _secretController,
-                  enabled: !_isSaving,
-                  obscureText: true,
-                  decoration: InputDecoration(
-                    labelText: trans.externalController.secretLabel,
-                    hintText: trans.externalController.secretHint,
-                    errorText: _secretError,
-                    border: const OutlineInputBorder(),
-                    prefixIcon: const Icon(Icons.vpn_key_rounded, size: 20),
-                    suffixIcon: ModernTooltip(
-                      message: trans.externalController.copySecret,
-                      child: IconButton(
-                        icon: const Icon(Icons.content_copy_rounded, size: 20),
-                        onPressed: _isSaving
-                            ? null
-                            : () => _copyToClipboard(
-                                _secretController.text,
-                                trans.externalController.copySecret,
-                              ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
+          // 保存按钮
           Row(
             mainAxisAlignment: MainAxisAlignment.end,
             children: [

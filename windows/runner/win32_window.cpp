@@ -222,6 +222,20 @@ Win32Window::MessageHandler(HWND hwnd,
       }
       return 0;
 
+    case WM_QUERYENDSESSION:
+      // 响应 Windows RestartManager 或系统关机请求
+      // 返回 TRUE 表示应用程序允许会话结束
+      return TRUE;
+
+    case WM_ENDSESSION:
+      // 处理会话结束通知（由 RestartManager 或系统关机触发）
+      // 此时应立即退出，避免阻塞安装程序或系统关机流程
+      if (wparam) {
+        // wparam 为 TRUE 表示会话确实要结束
+        PostQuitMessage(0);
+      }
+      return 0;
+
     case WM_DPICHANGED: {
       auto newRectSize = reinterpret_cast<RECT*>(lparam);
       LONG newWidth = newRectSize->right - newRectSize->left;

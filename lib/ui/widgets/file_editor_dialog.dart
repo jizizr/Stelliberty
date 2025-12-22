@@ -315,6 +315,32 @@ class _FileEditorDialogState extends State<FileEditorDialog> {
     }
   }
 
+  // 根据行数动态计算左侧间距，避免行号被遮挡
+  double _calculateLeftPadding(int lineCount) {
+    // 基础间距
+    const baseLeftPadding = 8.0;
+    // 根据位数增加额外间距（每增加一位数字，增加 2px）
+    final digits = _getDigits(lineCount);
+    return baseLeftPadding + (digits > 2 ? (digits - 2) * 2.0 : 0);
+  }
+
+  // 计算行数的位数
+  int _getDigits(int number) {
+    if (number <= 0) return 1;
+    return number.toString().length;
+  }
+
+  // 根据行数动态计算分隔线位置
+  double _calculateSeparatorPosition(int lineCount) {
+    // 基础位置（适用于 2 位数，即 10-99 行）
+    // 编辑器左侧 padding 5px + 行号左侧间距 8px + 行号宽度约 20px + 行号右侧间距 0px + SizedBox 12px 中的 4px = 37px
+    const basePosition = 37.0;
+    // 根据位数调整
+    // 每增加一位数字：左侧间距增加 2px + 数字宽度约 8px = 总共右移 10px
+    final digits = _getDigits(lineCount);
+    return basePosition + (digits - 2) * 10.0;
+  }
+
   @override
   Widget build(BuildContext context) {
     final trans = context.translate;
@@ -530,16 +556,21 @@ class _FileEditorDialogState extends State<FileEditorDialog> {
                 },
                 indicatorBuilder:
                     (context, editingController, chunkController, notifier) {
+                      // 根据行数动态计算左侧间距，避免行号被遮挡
+                      final leftPadding = _calculateLeftPadding(_lineCount);
                       return Row(
                         children: [
                           Padding(
-                            padding: const EdgeInsets.only(left: 8, right: 8),
+                            padding: EdgeInsets.only(
+                              left: leftPadding,
+                              right: 0,
+                            ),
                             child: DefaultCodeLineNumber(
                               controller: editingController,
                               notifier: notifier,
                             ),
                           ),
-                          const SizedBox(width: 16), // 分隔线1px + 右侧间距15px
+                          const SizedBox(width: 14), // 行号右侧间距 + 分隔线 + 文本左侧间距
                         ],
                       );
                     },
@@ -592,16 +623,22 @@ class _FileEditorDialogState extends State<FileEditorDialog> {
                   ),
                 ),
               ),
-            // 分隔线独立覆盖（固定在行号右侧）
+            // 分隔线独立覆盖（固定在行号右侧，根据行数动态调整位置）
+            // 和编辑器同步淡入，避免视觉不一致
             Positioned(
-              left: 50, // 左边距5 + 行号宽度约40 + 右边距5
+              left: _calculateSeparatorPosition(_lineCount),
               top: 0,
               bottom: 0,
-              child: Container(
-                width: 1,
-                color: Theme.of(
-                  context,
-                ).colorScheme.outline.withValues(alpha: 0.3),
+              child: AnimatedOpacity(
+                opacity: _editorReady ? 1.0 : 0.0,
+                duration: const Duration(milliseconds: 300),
+                curve: Curves.easeIn,
+                child: Container(
+                  width: 1,
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.outline.withValues(alpha: 0.3),
+                ),
               ),
             ),
           ],

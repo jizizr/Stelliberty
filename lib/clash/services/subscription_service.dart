@@ -61,6 +61,8 @@ class SubscriptionService {
   // 下载订阅配置
   // 返回更新后的订阅对象
   Future<Subscription> downloadSubscription(Subscription subscription) async {
+    // 使用订阅ID作为请求标识符
+    final requestId = subscription.id;
     // 判断 Clash 是否运行
     final isClashRunning = ClashManager.instance.isCoreRunning;
 
@@ -81,20 +83,22 @@ class SubscriptionService {
     StreamSubscription? downloadListener;
 
     try {
-      // 订阅 Rust 下载响应流
-      downloadListener = DownloadSubscriptionResponse.rustSignalStream.listen((
-        result,
-      ) {
-        if (!completer.isCompleted) {
+      // 订阅 Rust 下载响应流，只接收匹配的 request_id
+      StreamSubscription? listener;
+      listener = DownloadSubscriptionResponse.rustSignalStream.listen((result) {
+        if (!completer.isCompleted && result.message.requestId == requestId) {
           completer.complete(result.message);
+          listener?.cancel(); // 收到响应后立即取消监听
         }
       });
+      downloadListener = listener;
 
       // 转换代理模式枚举
       final rustProxyMode = _convertProxyMode(effectiveProxyMode);
 
       // 发送下载请求到 Rust
       final downloadRequest = DownloadSubscriptionRequest(
+        requestId: requestId,
         url: subscription.url,
         proxyMode: rustProxyMode,
         userAgent: subscription.userAgent,
@@ -129,11 +133,11 @@ class SubscriptionService {
       StreamSubscription? streamListener;
 
       try {
-        // 订阅 Rust 信号流
-        streamListener = ParseSubscriptionResponse.rustSignalStream.listen((
-          result,
-        ) {
-          if (!parseCompleter.isCompleted) {
+        // 订阅 Rust 信号流，只接收匹配的 request_id
+        StreamSubscription? listener;
+        listener = ParseSubscriptionResponse.rustSignalStream.listen((result) {
+          if (!parseCompleter.isCompleted &&
+              result.message.requestId == requestId) {
             if (result.message.isSuccessful) {
               parseCompleter.complete(result.message.parsedConfig);
             } else {
@@ -141,11 +145,16 @@ class SubscriptionService {
                 Exception(result.message.errorMessage),
               );
             }
+            listener?.cancel(); // 收到响应后立即取消监听
           }
         });
+        streamListener = listener;
 
         // 发送解析请求到 Rust
-        final parseRequest = ParseSubscriptionRequest(content: configContent);
+        final parseRequest = ParseSubscriptionRequest(
+          requestId: requestId,
+          content: configContent,
+        );
         parseRequest.sendSignalToRust();
 
         // 等待解析结果
@@ -318,14 +327,43 @@ class SubscriptionService {
     final listPath = PathService.instance.subscriptionListPath;
     final listFile = File(listPath);
 
+    // 1. 备份旧文件（如果存在）
+    if (await listFile.exists()) {
+      final backupPath = '$listPath.backup';
+      try {
+        await listFile.copy(backupPath);
+        Logger.debug('已创建订阅列表备份：$backupPath');
+      } catch (e) {
+        Logger.warning('创建备份失败，但继续保存：$e');
+      }
+    }
+
+    // 2. 原子写入（临时文件 + 重命名）
+    final tempPath = '$listPath.tmp';
+    final tempFile = File(tempPath);
+
     final jsonData = {
       'subscriptions': subscriptions.map((s) => s.toJson()).toList(),
     };
 
-    await listFile.writeAsString(
-      const JsonEncoder.withIndent('  ').convert(jsonData),
-    );
-    Logger.info('已保存订阅列表，共 ${subscriptions.length} 个订阅');
+    try {
+      // 写入临时文件
+      await tempFile.writeAsString(
+        const JsonEncoder.withIndent('  ').convert(jsonData),
+      );
+
+      // 原子替换（重命名操作在大多数文件系统上是原子的）
+      await tempFile.rename(listPath);
+
+      Logger.info('已保存订阅列表，共 ${subscriptions.length} 个订阅');
+    } catch (e) {
+      // 清理临时文件
+      if (await tempFile.exists()) {
+        await tempFile.delete();
+      }
+      Logger.error('保存订阅列表失败：$e');
+      rethrow;
+    }
   }
 
   // 从 JSON 加载订阅列表
@@ -339,38 +377,68 @@ class SubscriptionService {
     }
 
     try {
-      final content = await listFile.readAsString();
-      final jsonData = json.decode(content) as Map<String, dynamic>;
-      final subscriptionsJson = jsonData['subscriptions'] as List;
-
-      final subscriptions = subscriptionsJson
-          .map((json) => Subscription.fromJson(json))
-          .toList();
-
-      // 验证订阅文件是否存在，并移除无效的订阅
-      final validSubscriptions = <Subscription>[];
-      bool hasInvalidSubscriptions = false;
-      for (final sub in subscriptions) {
-        if (await subscriptionExists(sub)) {
-          validSubscriptions.add(sub);
-        } else {
-          Logger.warning('订阅配置文件不存在，已移除：${sub.name}');
-          hasInvalidSubscriptions = true;
-        }
-      }
-
-      // 如果有无效订阅被移除，则更新 list.json
-      if (hasInvalidSubscriptions) {
-        await saveSubscriptionList(validSubscriptions);
-        Logger.info('订阅列表已更新，移除了无效的订阅');
-      }
-
-      Logger.info('已加载订阅列表，共 ${validSubscriptions.length} 个订阅');
-      return validSubscriptions;
+      return await _loadFromFile(listPath);
     } catch (e) {
-      Logger.error('加载订阅列表失败：$e');
-      return [];
+      Logger.error('加载订阅列表失败：$e，尝试从备份恢复');
+
+      final backupPath = '$listPath.backup';
+      final backupFile = File(backupPath);
+
+      // 卫语句：备份文件不存在，直接返回
+      if (!await backupFile.exists()) {
+        Logger.warning('备份文件不存在，无法恢复');
+        Logger.error('订阅数据无法恢复，请检查文件：$listPath');
+        return [];
+      }
+
+      // 尝试从备份加载
+      try {
+        final subscriptions = await _loadFromFile(backupPath);
+        Logger.info('从备份恢复成功，共 ${subscriptions.length} 个订阅');
+
+        await saveSubscriptionList(subscriptions);
+        Logger.info('已将备份数据恢复到主文件');
+
+        return subscriptions;
+      } catch (backupError) {
+        Logger.error('备份文件也损坏：$backupError');
+        Logger.error('订阅数据无法恢复，请检查文件：$listPath');
+        return [];
+      }
     }
+  }
+
+  // 从指定路径加载订阅列表（辅助方法）
+  Future<List<Subscription>> _loadFromFile(String filePath) async {
+    final file = File(filePath);
+    final content = await file.readAsString();
+    final jsonData = json.decode(content) as Map<String, dynamic>;
+    final subscriptionsJson = jsonData['subscriptions'] as List;
+
+    final subscriptions = subscriptionsJson
+        .map((json) => Subscription.fromJson(json))
+        .toList();
+
+    // 验证订阅文件是否存在，并移除无效的订阅
+    final validSubscriptions = <Subscription>[];
+    bool hasInvalidSubscriptions = false;
+    for (final sub in subscriptions) {
+      if (await subscriptionExists(sub)) {
+        validSubscriptions.add(sub);
+      } else {
+        Logger.warning('订阅配置文件不存在，已移除：${sub.name}');
+        hasInvalidSubscriptions = true;
+      }
+    }
+
+    // 如果有无效订阅被移除，则更新 list.json
+    if (hasInvalidSubscriptions) {
+      await saveSubscriptionList(validSubscriptions);
+      Logger.info('订阅列表已更新，移除了无效的订阅');
+    }
+
+    Logger.info('已加载订阅列表，共 ${validSubscriptions.length} 个订阅');
+    return validSubscriptions;
   }
 
   // 保存本地订阅文件

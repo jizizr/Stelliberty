@@ -2,182 +2,38 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
-import 'package:archive/archive.dart';
 import 'package:path/path.dart' as p;
 import 'package:args/args.dart';
 
-// --- 配置 ---
-const githubRepo = "MetaCubeX/mihomo";
+// 导入模块化功能
+import 'lib/common.dart';
+import 'lib/process.dart';
+import 'lib/download.dart';
+import 'lib/http_utils.dart';
 
-// --- 日志函数（可选时间戳） ---
-void log(Object? message, {bool withTime = false}) {
-  if (withTime) {
-    final now = DateTime.now();
-    final year = now.year;
-    final month = now.month.toString().padLeft(2, '0');
-    final day = now.day.toString().padLeft(2, '0');
-    final hour = now.hour.toString().padLeft(2, '0');
-    final minute = now.minute.toString().padLeft(2, '0');
-    final timestamp = "$year-$month-$day $hour:$minute";
-    stdout.writeln("[$timestamp] $message");
-  } else {
-    stdout.writeln("$message");
-  }
-}
-
-// 简化错误信息：提取核心错误类型
-String simplifyError(Object error) {
-  final errorStr = error.toString();
-
-  // SocketException: 信号灯超时 → 网络连接超时
-  if (errorStr.contains('SocketException') && errorStr.contains('信号灯超时')) {
-    return '网络连接超时';
-  }
-
-  // TimeoutException → 请求超时
-  if (errorStr.contains('TimeoutException')) {
-    return '请求超时';
-  }
-
-  // HttpException → HTTP 错误
-  if (errorStr.contains('HttpException')) {
-    final match = RegExp(r'HTTP (\d+)').firstMatch(errorStr);
-    if (match != null) {
-      return 'HTTP ${match.group(1)} 错误';
-    }
-    return 'HTTP 请求错误';
-  }
-
-  // SocketException: Connection refused → 连接被拒绝
-  if (errorStr.contains('Connection refused')) {
-    return '连接被拒绝';
-  }
-
-  // SocketException: Network is unreachable → 网络不可达
-  if (errorStr.contains('Network is unreachable')) {
-    return '网络不可达';
-  }
-
-  // 其他 SocketException → 网络错误
-  if (errorStr.contains('SocketException')) {
-    return '网络错误';
-  }
-
-  // 如果错误信息很短（<50字符），直接返回
-  if (errorStr.length <= 50) {
-    return errorStr;
-  }
-
-  // 否则截取前100个字符（安全截取，防止越界）
-  final maxLen = errorStr.length < 100 ? errorStr.length : 100;
-  return '${errorStr.substring(0, maxLen)}...';
-}
-
-// 平台名映射：用户输入 macos → 内部使用 darwin
-String normalizePlatform(String input) {
-  switch (input.toLowerCase()) {
-    case 'macos':
-      return 'darwin';
-    default:
-      return input.toLowerCase();
-  }
-}
-
-// 自动解析 flutter 命令路径
-Future<String> resolveFlutterCmd() async {
-  if (Platform.isWindows) {
-    return 'flutter.bat';
-  } else {
-    final result = await Process.run('which', ['flutter']);
-    if (result.exitCode == 0) {
-      final path = (result.stdout as String).trim();
-      if (path.isNotEmpty) {
-        return path;
-      }
-    }
-    throw Exception('未能找到 flutter 命令，请确认 Flutter SDK 已安装并加入 PATH');
-  }
-}
-
-// 获取当前平台
-String getCurrentPlatform() {
+// 获取当前平台名称
+String _getCurrentPlatform() {
   if (Platform.isWindows) return 'windows';
   if (Platform.isMacOS) return 'macos';
   if (Platform.isLinux) return 'linux';
   throw Exception('不支持的平台');
 }
 
-// 获取当前架构
-String getCurrentArch() {
-  // 通过 Dart VM 信息获取架构
+// 获取当前架构（x64/arm64/x86）
+String _getCurrentArchitecture() {
   final version = Platform.version;
   if (version.contains('arm64') || version.contains('aarch64')) {
     return 'arm64';
+  } else if (version.contains('x64') || version.contains('x86_64')) {
+    return 'x64';
+  } else if (version.contains('ia32') || version.contains('x86')) {
+    return 'x86';
   }
-  return 'amd64';
+  return 'x64'; // 默认
 }
 
-// 配置 HttpClient 的代理设置
-// 返回值：(proxyInfo, shouldLog) - proxyInfo 用于日志输出，shouldLog 表示是否需要记录
-(String?, bool) configureProxy(
-  HttpClient client,
-  Uri targetUrl, {
-  bool isFirstAttempt = true,
-}) {
-  final httpProxy =
-      Platform.environment['HTTP_PROXY'] ?? Platform.environment['http_proxy'];
-  final httpsProxy =
-      Platform.environment['HTTPS_PROXY'] ??
-      Platform.environment['https_proxy'];
-
-  // 判断目标 URL 是 HTTPS 还是 HTTP
-  final isHttps = targetUrl.scheme == 'https';
-
-  // 优先级：HTTPS 请求优先使用 HTTPS_PROXY，HTTP 请求优先使用 HTTP_PROXY
-  String? selectedProxy;
-  String? proxyType;
-
-  if (isHttps) {
-    // HTTPS 请求：优先 HTTPS_PROXY，其次 HTTP_PROXY
-    if (httpsProxy != null && httpsProxy.isNotEmpty) {
-      selectedProxy = httpsProxy;
-      proxyType = 'HTTPS';
-    } else if (httpProxy != null && httpProxy.isNotEmpty) {
-      selectedProxy = httpProxy;
-      proxyType = 'HTTP';
-    }
-  } else {
-    // HTTP 请求：优先 HTTP_PROXY，其次 HTTPS_PROXY
-    if (httpProxy != null && httpProxy.isNotEmpty) {
-      selectedProxy = httpProxy;
-      proxyType = 'HTTP';
-    } else if (httpsProxy != null && httpsProxy.isNotEmpty) {
-      selectedProxy = httpsProxy;
-      proxyType = 'HTTPS';
-    }
-  }
-
-  if (selectedProxy != null) {
-    // 移除协议前缀，只保留 host:port
-    final proxyHost = selectedProxy
-        .replaceFirst(RegExp(r'https?://'), '')
-        .replaceFirst(RegExp(r'/$'), '');
-    client.findProxy = (uri) => 'PROXY $proxyHost';
-
-    // 只在第一次尝试时返回日志信息
-    if (isFirstAttempt) {
-      return ('使用 $proxyType 代理: $selectedProxy', true);
-    }
-    return (null, false);
-  }
-
-  // 没有代理配置
-  if (isFirstAttempt) {
-    return ('未检测到代理设置，使用直连', true);
-  }
-  return (null, false);
-}
-
+// --- 配置 ---
+const githubRepo = "MetaCubeX/mihomo";
 Future<void> main(List<String> args) async {
   final parser = ArgParser()
     ..addFlag('android', negatable: false, help: '构建 Android 平台（暂未适配）')
@@ -239,13 +95,12 @@ Future<void> main(List<String> args) async {
   }
 
   // 自动识别平台和架构
-  final rawPlatform = getCurrentPlatform();
-  final targetPlatform = normalizePlatform(rawPlatform);
-  final targetArch = getCurrentArch();
+  final platform = _getCurrentPlatform();
+  final arch = _getCurrentArchitecture();
 
   final startTime = DateTime.now();
   log('🚀 开始执行预构建任务');
-  log('🖥️  检测到平台: $rawPlatform ($targetArch)');
+  log('🖥️  检测到平台: $platform ($arch)');
 
   try {
     // Step 1: 清理资源
@@ -257,8 +112,8 @@ Future<void> main(List<String> args) async {
     log('▶️  [2/6] 正在获取最新的 Mihomo 核心...');
     await downloadAndSetupCore(
       targetDir: coreAssetDir,
-      platform: targetPlatform,
-      arch: targetArch,
+      platform: platform,
+      arch: arch,
     );
     log('✅ 核心准备完成。');
 
@@ -275,7 +130,7 @@ Future<void> main(List<String> args) async {
 
     // Step 5: 复制所需资源
     log('▶️  [5/6] 正在复制所需资源...');
-    await copyTrayIcons(projectRoot: projectRoot, platform: targetPlatform);
+    await copyTrayIcons(projectRoot: projectRoot, platform: platform);
     log('✅ 资源复制完成。');
 
     // Step 6: 安装打包工具（如果指定）
@@ -284,7 +139,7 @@ Future<void> main(List<String> args) async {
       if (Platform.isWindows) {
         await setupInnoSetup(projectRoot: projectRoot);
       } else if (Platform.isLinux) {
-        await setupLinuxPackagingTools(projectRoot: projectRoot);
+        await setupLinuxPackagingTools(projectRoot: projectRoot, arch: arch);
       }
       log('✅ 打包工具安装完成。');
     }
@@ -381,268 +236,6 @@ Future<void> buildStelliibertyService({required String projectRoot}) async {
 }
 
 // 下载并设置 Clash 核心（带重试机制）
-Future<void> downloadAndSetupCore({
-  required String targetDir,
-  required String platform,
-  required String arch,
-}) async {
-  if (platform == 'android') {
-    log('⚠️  Android 平台暂未实现自动下载 Mihomo 核心，请手动处理。');
-    return;
-  }
-
-  String assetKeyword = '$platform-$arch';
-  log('🔍 正在寻找资源关键字: $assetKeyword');
-
-  const maxRetries = 5;
-  Exception? lastException;
-
-  for (int attempt = 1; attempt <= maxRetries; attempt++) {
-    try {
-      if (attempt > 1) {
-        log('🔄 重试第 $attempt 次...');
-        await Future.delayed(Duration(seconds: 2 * attempt)); // 递增延迟
-      }
-
-      final apiUrl = Uri.parse(
-        "https://api.github.com/repos/$githubRepo/releases/latest",
-      );
-
-      // 从环境变量获取 GitHub Token（优先 GITHUB_TOKEN，其次 GH_TOKEN）
-      final githubToken =
-          Platform.environment['GITHUB_TOKEN'] ??
-          Platform.environment['GH_TOKEN'];
-
-      // 构建请求头
-      final headers = <String, String>{'Accept': 'application/vnd.github+json'};
-
-      // 如果有 Token，添加认证头
-      if (githubToken != null && githubToken.isNotEmpty) {
-        headers['Authorization'] = 'Bearer $githubToken';
-        if (attempt == 1) {
-          log('🔐 使用 GitHub Token 认证请求');
-        }
-      } else if (attempt == 1) {
-        log('⚠️  未检测到 GITHUB_TOKEN，使用未认证请求（每小时限制 60 次）');
-      }
-
-      final response = await http
-          .get(apiUrl, headers: headers)
-          .timeout(
-            const Duration(seconds: 15),
-            onTimeout: () => throw TimeoutException('获取 Release 信息超时'),
-          );
-
-      if (response.statusCode != 200) {
-        throw Exception('获取 GitHub Release 失败: ${response.body}');
-      }
-
-      final releaseInfo = json.decode(response.body);
-      final assets = releaseInfo['assets'] as List;
-
-      final asset = assets.firstWhere((a) {
-        final name = a['name'] as String;
-        // 确保只选择脚本支持解压的 .gz 或 .zip 格式，避免选中 .deb 或 .rpm
-        return name.contains(assetKeyword) &&
-            (name.endsWith('.gz') || name.endsWith('.zip'));
-      }, orElse: () => null);
-
-      if (asset == null) {
-        throw Exception('在最新的 Release 中未找到匹配 "$assetKeyword" 的资源文件。');
-      }
-
-      final downloadUrl = Uri.parse(asset['browser_download_url']);
-      final fileName = asset['name'] as String;
-      final version = releaseInfo['tag_name'] ?? 'unknown';
-
-      // 仅首次下载时输出完整信息
-      if (attempt == 1) {
-        log('✅ 找到核心: $fileName，版本号: $version');
-        log('📥 正在下载...');
-      }
-
-      // 使用 HttpClient 替代 http.readBytes，支持更长超时和代理
-      final client = HttpClient();
-
-      // 配置代理（不输出日志，已在脚本开始时统一输出）
-      configureProxy(client, downloadUrl, isFirstAttempt: false);
-
-      try {
-        final request = await client.getUrl(downloadUrl);
-        final response = await request.close().timeout(
-          const Duration(minutes: 5), // 大文件需要更长超时
-          onTimeout: () => throw TimeoutException('下载超时'),
-        );
-
-        if (response.statusCode != 200) {
-          throw Exception('下载失败: HTTP ${response.statusCode}');
-        }
-
-        final fileBytes = await response.fold<List<int>>(
-          <int>[],
-          (previous, element) => previous..addAll(element),
-        );
-        client.close();
-
-        List<int> coreFileBytes;
-        if (fileName.endsWith('.zip')) {
-          final archive = ZipDecoder().decodeBytes(fileBytes);
-          final coreFile = archive.firstWhere(
-            (file) =>
-                file.isFile &&
-                (file.name.endsWith('.exe') || !file.name.contains('.')),
-            orElse: () => throw Exception('在 ZIP 压缩包中未找到可执行文件。'),
-          );
-          coreFileBytes = coreFile.content as List<int>;
-        } else if (fileName.endsWith('.gz')) {
-          coreFileBytes = GZipDecoder().decodeBytes(fileBytes);
-        } else {
-          throw Exception('不支持的文件格式: $fileName');
-        }
-
-        final targetExeName = (platform == 'windows')
-            ? 'clash-core.exe'
-            : 'clash-core';
-        final targetFile = File(p.join(targetDir, targetExeName));
-
-        if (!await targetFile.parent.exists()) {
-          await targetFile.parent.create(recursive: true);
-        }
-
-        await targetFile.writeAsBytes(coreFileBytes);
-
-        if (platform != 'windows') {
-          await runProcess('chmod', ['+x', targetFile.path]);
-        }
-
-        final sizeInMB = (coreFileBytes.length / (1024 * 1024)).toStringAsFixed(
-          2,
-        );
-        log('✅ 核心已放置 assets/clash-core: $targetExeName ($sizeInMB MB)');
-        return; // 成功，直接返回
-      } catch (e) {
-        client.close();
-        rethrow;
-      }
-    } catch (e) {
-      lastException = e is Exception ? e : Exception(e.toString());
-      final simpleError = simplifyError(e);
-
-      // 仅在最后一次失败时输出详细错误
-      if (attempt == maxRetries) {
-        log('❌ 下载失败 (尝试 $attempt/$maxRetries): $simpleError');
-      } else {
-        log('⚠️  下载失败 (尝试 $attempt/$maxRetries): $simpleError，即将重试...');
-      }
-    }
-  }
-
-  // 所有重试都失败
-  throw Exception('下载核心失败，已重试 $maxRetries 次: ${lastException?.toString()}');
-}
-
-// 下载单个 GeoIP 文件（带重试机制）
-Future<void> _downloadSingleGeoFile({
-  required String baseUrl,
-  required String remoteFileName,
-  required String localFileName,
-  required String targetDir,
-}) async {
-  const maxRetries = 5;
-  final downloadUrl = Uri.parse('$baseUrl/$remoteFileName');
-  final targetFile = File(p.join(targetDir, localFileName));
-
-  for (int attempt = 1; attempt <= maxRetries; attempt++) {
-    try {
-      if (attempt > 1) {
-        log('🔄 重试 $remoteFileName (第 $attempt 次)...');
-      } else {
-        log('📥 正在下载 $remoteFileName...');
-      }
-
-      // 创建带代理支持的 HTTP 客户端
-      final client = HttpClient();
-
-      // 配置代理（不输出日志，因为已在 downloadGeoData 中统一输出）
-      configureProxy(client, downloadUrl, isFirstAttempt: false);
-
-      try {
-        final request = await client.getUrl(downloadUrl);
-        final response = await request.close();
-
-        if (response.statusCode == 200) {
-          final bodyBytes = await response.fold<List<int>>(
-            <int>[],
-            (previous, element) => previous..addAll(element),
-          );
-          client.close();
-
-          await targetFile.writeAsBytes(bodyBytes);
-          final sizeInMB = (bodyBytes.length / (1024 * 1024)).toStringAsFixed(
-            1,
-          );
-          log('✅ $localFileName 下载完成 ($sizeInMB MB)');
-          return; // 成功，直接返回
-        } else {
-          client.close();
-          throw Exception('HTTP ${response.statusCode}');
-        }
-      } catch (e) {
-        client.close();
-        rethrow;
-      }
-    } catch (e) {
-      final simpleError = simplifyError(e);
-
-      if (attempt < maxRetries) {
-        log('⚠️  $remoteFileName 下载失败 (尝试 $attempt/$maxRetries): $simpleError');
-        await Future.delayed(Duration(seconds: 2)); // 等待 2 秒后重试
-      } else {
-        // 最后一次尝试失败，抛出异常
-        throw Exception(
-          '$remoteFileName 下载失败 (已重试 $maxRetries 次): $simpleError',
-        );
-      }
-    }
-  }
-}
-
-// 下载 GeoIP 数据文件（并发下载，带重试机制）
-Future<void> downloadGeoData({required String targetDir}) async {
-  const baseUrl =
-      'https://github.com/MetaCubeX/meta-rules-dat/releases/download/latest';
-
-  // 文件映射：下载URL文件名 -> 本地文件名
-  final files = {
-    'country.mmdb': 'country.mmdb',
-    'GeoLite2-ASN.mmdb': 'asn.mmdb',
-    'geoip.dat': 'geoip.dat',
-    'geoip.metadb': 'geoip.metadb',
-    'geosite.dat': 'geosite.dat',
-  };
-
-  // 确保目标目录存在
-  final targetDirectory = Directory(targetDir);
-  if (!await targetDirectory.exists()) {
-    await targetDirectory.create(recursive: true);
-  }
-
-  // 不再输出代理信息，已在脚本开始时统一输出
-
-  // 并发下载所有文件，任意一个失败则抛出异常
-  final downloadTasks = files.entries.map(
-    (entry) => _downloadSingleGeoFile(
-      baseUrl: baseUrl,
-      remoteFileName: entry.key,
-      localFileName: entry.value,
-      targetDir: targetDir,
-    ),
-  );
-
-  // 等待所有下载任务完成，如果任何一个失败则抛出异常
-  await Future.wait(downloadTasks);
-}
-
 // 复制托盘图标到 assets/icons 目录
 Future<void> copyTrayIcons({
   required String projectRoot,
@@ -721,102 +314,15 @@ Future<void> setupInnoSetup({required String projectRoot}) async {
 
   if (installedVersion != null) {
     log('✅ 检测到 Inno Setup 版本: $installedVersion');
-  }
-
-  // 获取最新版本
-  log('📡 正在获取 Inno Setup 最新版本信息...');
-
-  String latestVersion;
-  String downloadUrl;
-
-  try {
-    // 从环境变量获取 GitHub Token
-    final githubToken =
-        Platform.environment['GITHUB_TOKEN'] ??
-        Platform.environment['GH_TOKEN'];
-
-    // 构建请求头
-    final headers = <String, String>{'Accept': 'application/vnd.github+json'};
-
-    // 如果有 Token，添加认证头
-    if (githubToken != null && githubToken.isNotEmpty) {
-      headers['Authorization'] = 'Bearer $githubToken';
-    }
-
-    final response = await http
-        .get(
-          Uri.parse(
-            'https://api.github.com/repos/jrsoftware/issrc/releases/latest',
-          ),
-          headers: headers,
-        )
-        .timeout(const Duration(seconds: 10));
-
-    if (response.statusCode == 200) {
-      final data = json.decode(response.body);
-      final tagName = data['tag_name'] as String; // 例如: "is-6_6_1"
-
-      // 解析版本号（is-6_6_1 -> 6.6.1）
-      latestVersion = tagName.replaceFirst('is-', '').replaceAll('_', '.');
-
-      // 构建下载 URL
-      downloadUrl =
-          'https://github.com/jrsoftware/issrc/releases/download/$tagName/innosetup-$latestVersion.exe';
-
-      log('✅ 最新版本: $latestVersion');
-    } else {
-      throw Exception('获取版本信息失败: HTTP ${response.statusCode}');
-    }
-  } catch (e) {
-    log('❌ 无法获取最新版本信息: $e');
-    log('❌ 请检查网络连接或手动安装 Inno Setup');
-    return;
-  }
-
-  // 判断是否需要安装
-  if (installedVersion != null) {
-    if (installedVersion == latestVersion) {
-      log('✅ Inno Setup 已是最新版本 ($latestVersion)');
-      return;
-    } else {
-      log('💡 当前版本: $installedVersion，最新版本: $latestVersion');
-      log('🔄 检测到新版本，将自动升级...');
-      // 继续执行安装流程以升级到最新版本
-    }
   } else {
     log('⚠️  未检测到 Inno Setup');
   }
 
-  // 需要安装
-  log('📥 正在下载 Inno Setup $latestVersion...');
-
   final tempDir = Directory.systemTemp.createTempSync('innosetup_');
-  final installerPath = p.join(tempDir.path, 'innosetup-setup.exe');
 
   try {
-    // 下载安装程序（使用代理）
-    final client = HttpClient();
-    final downloadUri = Uri.parse(downloadUrl);
-
-    // 配置代理（不输出日志，因为已在脚本开始时统一输出）
-    configureProxy(client, downloadUri, isFirstAttempt: false);
-
-    final request = await client.getUrl(downloadUri);
-    final response = await request.close();
-
-    if (response.statusCode != 200) {
-      throw Exception('下载失败: HTTP ${response.statusCode}');
-    }
-
-    final installerFile = File(installerPath);
-    final sink = installerFile.openWrite();
-    await response.pipe(sink);
-    await sink.close();
-    client.close();
-
-    final fileSize = (await installerFile.length() / (1024 * 1024))
-        .toStringAsFixed(2);
-    log('✅ 下载完成 ($fileSize MB)');
+    // 使用统一的下载函数（会自动获取最新版本）
+    final installerPath = await downloadInnoSetup(tempDir: tempDir.path);
 
     // 直接运行静默安装（GitHub Actions 环境已具有管理员权限）
     log('🔧 正在静默安装 Inno Setup...');
@@ -841,16 +347,20 @@ Future<void> setupInnoSetup({required String projectRoot}) async {
       throw Exception('Inno Setup 安装失败，退出码: ${result.exitCode}');
     }
 
-    log('✅ Inno Setup $latestVersion 安装成功！');
+    log('✅ Inno Setup 安装成功！');
 
     // 验证安装
     final newVersion = await _getInnoSetupVersion();
-    if (newVersion == latestVersion) {
-      log('✅ 安装验证通过');
+    if (newVersion != null) {
+      log('✅ 安装验证通过，当前版本: $newVersion');
     } else {
-      log('⚠️  安装后版本验证失败: $newVersion');
-      log('💡 Inno Setup 已安装，但版本可能不同（这通常不影响使用）');
+      log('⚠️  安装后版本验证失败');
+      log('💡 Inno Setup 可能已安装，但版本检测失败（这通常不影响使用）');
     }
+  } catch (e) {
+    log('❌ Inno Setup 安装失败: ${simplifyError(e)}');
+    log('❌ 请检查网络连接或手动安装 Inno Setup');
+    rethrow;
   } finally {
     // 清理临时文件
     try {
@@ -897,55 +407,12 @@ Future<String?> _getInnoSetupVersion() async {
 }
 
 // 运行一个进程并等待其完成
-Future<void> runProcess(
-  String executable,
-  List<String> arguments, {
-  String? workingDirectory,
-  bool allowNonZeroExit = false,
-}) async {
-  final process = await Process.start(
-    executable,
-    arguments,
-    workingDirectory: workingDirectory,
-    mode: ProcessStartMode.inheritStdio,
-  );
-
-  final exitCode = await process.exitCode;
-  if (exitCode != 0 && !allowNonZeroExit) {
-    throw Exception(
-      '命令 "$executable ${arguments.join(' ')}" 执行失败，退出码: $exitCode',
-    );
-  }
-}
-
-// 运行命令并捕获输出
-Future<ProcessResult> runProcessWithOutput(
-  String executable,
-  List<String> arguments, {
-  String? workingDirectory,
-  String? stdinData,
-}) async {
-  final process = await Process.start(
-    executable,
-    arguments,
-    workingDirectory: workingDirectory,
-  );
-
-  // 如果需要输入数据（如 sudo 密码）
-  if (stdinData != null) {
-    process.stdin.writeln(stdinData);
-    await process.stdin.close();
-  }
-
-  final stdout = await process.stdout.transform(utf8.decoder).join();
-  final stderr = await process.stderr.transform(utf8.decoder).join();
-  final exitCode = await process.exitCode;
-
-  return ProcessResult(process.pid, exitCode, stdout, stderr);
-}
 
 // 安装 Linux 打包工具
-Future<void> setupLinuxPackagingTools({required String projectRoot}) async {
+Future<void> setupLinuxPackagingTools({
+  required String projectRoot,
+  required String arch, // x64 或 arm64
+}) async {
   log('🔧 正在检查 Linux 打包工具...');
 
   // 检测包管理器类型
@@ -959,7 +426,7 @@ Future<void> setupLinuxPackagingTools({required String projectRoot}) async {
   await _checkAndInstallRpm(packageManager);
 
   // 检查并安装 appimagetool（从 GitHub 下载最新版）
-  await _checkAndInstallAppImageTool(projectRoot: projectRoot);
+  await _checkAndInstallAppImageTool(projectRoot: projectRoot, arch: arch);
 
   log('✅ Linux 打包工具检查完成');
 }
@@ -1062,7 +529,10 @@ Future<void> _checkAndInstallRpm(String packageManager) async {
 }
 
 // 检查并安装 appimagetool（从 GitHub 获取最新版本）
-Future<void> _checkAndInstallAppImageTool({required String projectRoot}) async {
+Future<void> _checkAndInstallAppImageTool({
+  required String projectRoot,
+  required String arch, // x64 或 arm64
+}) async {
   // 存放到 assets/tools 目录，避免被 flutter clean 清理
   final toolPath = p.join(projectRoot, 'assets', 'tools', 'appimagetool');
   final toolFile = File(toolPath);
@@ -1076,19 +546,20 @@ Future<void> _checkAndInstallAppImageTool({required String projectRoot}) async {
       log('✅ appimagetool 已安装: $version');
 
       // 检查是否有更新版本
-      await _updateAppImageToolIfNeeded(toolPath, projectRoot);
+      await _updateAppImageToolIfNeeded(toolPath, projectRoot, arch);
       return;
     }
   }
 
   log('📥 正在从 GitHub 下载最新版 appimagetool...');
-  await _downloadLatestAppImageTool(projectRoot);
+  await downloadAppImageTool(projectRoot: projectRoot, arch: arch);
 }
 
 // 检查并更新 appimagetool
 Future<void> _updateAppImageToolIfNeeded(
   String currentToolPath,
   String projectRoot,
+  String arch,
 ) async {
   try {
     // 获取当前版本
@@ -1122,118 +593,12 @@ Future<void> _updateAppImageToolIfNeeded(
       if (!currentVersion.contains(latestTag) && latestTag != currentVersion) {
         log('💡 发现新版本: $latestTag（当前: $currentVersion）');
         log('🔄 正在更新 appimagetool...');
-        await _downloadLatestAppImageTool(projectRoot);
+        await downloadAppImageTool(projectRoot: projectRoot, arch: arch);
       }
     }
   } catch (e) {
     // 更新检查失败不影响使用
     log('⚠️  检查更新失败: ${simplifyError(e)}');
-  }
-}
-
-// 下载最新版 appimagetool
-Future<void> _downloadLatestAppImageTool(String projectRoot) async {
-  const repoUrl =
-      'https://api.github.com/repos/AppImage/appimagetool/releases/latest';
-
-  final githubToken =
-      Platform.environment['GITHUB_TOKEN'] ?? Platform.environment['GH_TOKEN'];
-
-  final headers = <String, String>{'Accept': 'application/vnd.github+json'};
-  if (githubToken != null && githubToken.isNotEmpty) {
-    headers['Authorization'] = 'Bearer $githubToken';
-  }
-
-  try {
-    final response = await http
-        .get(Uri.parse(repoUrl), headers: headers)
-        .timeout(const Duration(seconds: 15));
-
-    if (response.statusCode != 200) {
-      throw Exception('获取 Release 信息失败: HTTP ${response.statusCode}');
-    }
-
-    final data = json.decode(response.body);
-    final assets = data['assets'] as List;
-    final tagName = data['tag_name'] as String;
-
-    // 根据架构选择下载文件
-    final arch = getCurrentArch();
-    String assetKeyword;
-    if (arch == 'arm64' || arch == 'aarch64') {
-      assetKeyword = 'aarch64';
-    } else {
-      assetKeyword = 'x86_64';
-    }
-
-    final asset = assets.firstWhere((a) {
-      final name = a['name'] as String;
-      return name.contains(assetKeyword) && name.endsWith('.AppImage');
-    }, orElse: () => null);
-
-    if (asset == null) {
-      throw Exception('未找到适合 $arch 架构的 appimagetool');
-    }
-
-    final downloadUrl = asset['browser_download_url'] as String;
-    final fileName = asset['name'] as String;
-
-    log('📥 下载 $fileName (版本: $tagName)...');
-
-    // 下载文件（处理重定向）
-    final client = HttpClient();
-    client.autoUncompress = false;
-    // 跟随重定向
-    client.connectionTimeout = const Duration(seconds: 30);
-
-    configureProxy(client, Uri.parse(downloadUrl), isFirstAttempt: false);
-
-    HttpClientRequest request = await client.getUrl(Uri.parse(downloadUrl));
-    HttpClientResponse downloadResponse = await request.close();
-
-    // 手动处理重定向（最多 5 次）
-    int redirectCount = 0;
-    while (downloadResponse.isRedirect && redirectCount < 5) {
-      final location = downloadResponse.headers.value('location');
-      if (location == null) break;
-
-      final redirectUri = Uri.parse(location);
-      await downloadResponse.drain();
-
-      request = await client.getUrl(redirectUri);
-      downloadResponse = await request.close();
-      redirectCount++;
-    }
-
-    if (downloadResponse.statusCode != 200) {
-      await downloadResponse.drain();
-      client.close();
-      throw Exception('下载失败: HTTP ${downloadResponse.statusCode}');
-    }
-
-    final bytes = await downloadResponse.fold<List<int>>(
-      <int>[],
-      (previous, element) => previous..addAll(element),
-    );
-    client.close();
-
-    // 保存到 assets/tools 目录
-    final toolDir = Directory(p.join(projectRoot, 'assets', 'tools'));
-    if (!await toolDir.exists()) {
-      await toolDir.create(recursive: true);
-    }
-
-    final toolPath = p.join(toolDir.path, 'appimagetool');
-    final toolFile = File(toolPath);
-    await toolFile.writeAsBytes(bytes);
-
-    // 添加执行权限
-    await Process.run('chmod', ['+x', toolPath]);
-
-    final sizeInMB = (bytes.length / (1024 * 1024)).toStringAsFixed(2);
-    log('✅ appimagetool 安装完成 ($sizeInMB MB)');
-  } catch (e) {
-    throw Exception('下载 appimagetool 失败: ${simplifyError(e)}');
   }
 }
 
