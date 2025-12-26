@@ -177,6 +177,8 @@
     "autoUpdateDisabledDesc": "不自動更新",
     "autoUpdateInterval": "間隔更新",
     "autoUpdateIntervalDesc": "按固定間隔更新",
+    "autoUpdateOnStartup": "啟動時更新",
+    "autoUpdateOnStartupDesc": "應用程式啟動時更新",
     "updateOnStartup": "啟動時更新",
     "updateOnStartupDesc": "應用程式啟動時自動更新此訂閱",
     "updateIntervalLabel": "更新間隔（分鐘）",

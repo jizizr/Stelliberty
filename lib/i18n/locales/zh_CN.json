@@ -178,6 +178,8 @@
     "autoUpdateDisabledDesc": "不自动更新",
     "autoUpdateInterval": "间隔更新",
     "autoUpdateIntervalDesc": "按固定间隔更新",
+    "autoUpdateOnStartup": "启动时更新",
+    "autoUpdateOnStartupDesc": "应用启动时更新",
     "updateOnStartup": "启动时更新",
     "updateOnStartupDesc": "应用启动时自动更新此订阅",
     "updateIntervalLabel": "更新间隔（分钟）",

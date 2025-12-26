@@ -155,10 +155,11 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: ${{ (matrix.os == 'windows-11-arm' || matrix.os == 'ubuntu-24.04-arm') && 'master' || 'stable' }}
+          cache: true
 
       - name: 配置 Rust
         uses: dtolnay/rust-toolchain@stable
-        
+
       - name: 安装项目依赖
         shell: bash
         run: |

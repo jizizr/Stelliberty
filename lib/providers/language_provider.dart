@@ -7,9 +7,7 @@ enum AppLanguageMode {
   system('system'),
   zh('zh'),
   zhTw('zh_TW'),
-  en('en'),
-  ja('ja'),
-  ko('ko');
+  en('en');
 
   const AppLanguageMode(this.value);
 
@@ -29,10 +27,6 @@ enum AppLanguageMode {
         return trans.language.modeZhTw;
       case AppLanguageMode.en:
         return trans.language.modeEn;
-      case AppLanguageMode.ja:
-        return trans.language.modeJa;
-      case AppLanguageMode.ko:
-        return trans.language.modeKo;
     }
   }
 
@@ -47,10 +41,6 @@ enum AppLanguageMode {
         return AppLocale.zhTw;
       case AppLanguageMode.en:
         return AppLocale.en;
-      case AppLanguageMode.ja:
-        return AppLocale.ja;
-      case AppLanguageMode.ko:
-        return AppLocale.ko;
     }
   }
 
@@ -67,10 +57,6 @@ enum AppLanguageMode {
     switch (locale) {
       case AppLocale.en:
         return AppLanguageMode.en;
-      case AppLocale.ja:
-        return AppLanguageMode.ja;
-      case AppLocale.ko:
-        return AppLanguageMode.ko;
       case AppLocale.zhCn:
         return AppLanguageMode.zh;
       case AppLocale.zhTw:

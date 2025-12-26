@@ -178,6 +178,8 @@
     "autoUpdateDisabledDesc": "No auto update",
     "autoUpdateInterval": "Interval",
     "autoUpdateIntervalDesc": "Update at fixed intervals",
+    "autoUpdateOnStartup": "On Startup",
+    "autoUpdateOnStartupDesc": "Update when app starts",
     "updateOnStartup": "Update on Startup",
     "updateOnStartupDesc": "Automatically update this subscription when app starts",
     "updateIntervalLabel": "Update Interval (Minutes)",
