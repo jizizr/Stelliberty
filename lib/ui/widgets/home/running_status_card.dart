@@ -1,9 +1,11 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:stelliberty/atomic/platform_helper.dart';
+import 'package:stelliberty/clash/core/core_channel.dart';
 import 'package:stelliberty/clash/model/traffic_data_model.dart';
 import 'package:stelliberty/clash/providers/clash_provider.dart';
 import 'package:stelliberty/clash/providers/resource_usage_provider.dart';
@@ -33,6 +35,7 @@ class _RunningStatusCardState extends State<RunningStatusCard> {
   Timer? _uptimeRefreshTimer;
   bool _isCoreUpdating = false;
   bool _isCoreRestarting = false;
+  bool _isSwitchingCore = false;
 
   @override
   void dispose() {
@@ -95,6 +98,14 @@ class _RunningStatusCardState extends State<RunningStatusCard> {
     final platformName = Platform.operatingSystem;
     final platform = _formatPlatformName(platformName);
     final platformIcon = _resolvePlatformIcon(platformName);
+
+    // 核心渠道
+    final prefs = ClashPreferences.instance;
+    final coreChannel = _describeCoreChannel(
+      context,
+      prefs.getCoreChannel(),
+      prefs.getCoreCustomPath(),
+    );
 
     // 核心状态文字和颜色
     final String coreStatus;
@@ -166,33 +177,43 @@ class _RunningStatusCardState extends State<RunningStatusCard> {
               ),
               _buildMetric(
                 context,
-                label: trans.home.core_run_mode,
-                value: runMode,
+                label: trans.home.core_channel_label,
+                value: coreChannel,
                 color: colorScheme.onSurface,
-                icon: Icons.settings_suggest,
+                icon: Icons.swap_horiz,
                 iconColor: colorScheme.secondary,
               ),
             ],
           ),
           const SizedBox(height: 16),
-          _buildMetricSpanRow(
+          _buildMetricRow(
             context,
-            left: _buildMetric(
-              context,
-              label: trans.home.core_status,
-              value: coreStatus,
-              color: coreStatusColor,
-              icon: Icons.circle,
-              iconColor: coreStatusColor,
-            ),
-            right: _buildMetric(
-              context,
-              label: trans.home.proxy_address,
-              value: proxyAddress,
-              color: proxyAddressColor,
-              icon: Icons.lan,
-              iconColor: colorScheme.primary,
-            ),
+            items: [
+              _buildMetric(
+                context,
+                label: trans.home.core_status,
+                value: coreStatus,
+                color: coreStatusColor,
+                icon: Icons.circle,
+                iconColor: coreStatusColor,
+              ),
+              _buildMetric(
+                context,
+                label: trans.home.core_run_mode,
+                value: runMode,
+                color: colorScheme.onSurface,
+                icon: Icons.settings_suggest,
+                iconColor: colorScheme.tertiary,
+              ),
+              _buildMetric(
+                context,
+                label: trans.home.proxy_address,
+                value: proxyAddress,
+                color: proxyAddressColor,
+                icon: Icons.lan,
+                iconColor: colorScheme.primary,
+              ),
+            ],
           ),
         ],
       ),
@@ -302,13 +323,32 @@ class _RunningStatusCardState extends State<RunningStatusCard> {
     required bool isCoreRunning,
   }) {
     final trans = context.translate;
-    final canUpdate = !_isCoreUpdating && !_isCoreRestarting;
-    final canRestart = isCoreRunning && !_isCoreUpdating && !_isCoreRestarting;
+    final canSwitch =
+        !_isSwitchingCore && !_isCoreUpdating && !_isCoreRestarting;
+    final canUpdate =
+        !_isCoreUpdating && !_isCoreRestarting && !_isSwitchingCore;
+    final canRestart =
+        isCoreRunning &&
+        !_isCoreUpdating &&
+        !_isCoreRestarting &&
+        !_isSwitchingCore;
     final actionColor = Theme.of(context).colorScheme.primary;
 
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
+        // 切换核心按钮
+        ModernTooltip(
+          message: trans.home.switch_core,
+          child: _HeaderActionButton(
+            icon: Icons.swap_horiz,
+            color: actionColor,
+            isBusy: _isSwitchingCore,
+            onPressed: canSwitch ? () => _openCoreSwitchSheet(context) : null,
+          ),
+        ),
+        const SizedBox(width: 8),
+        // 更新核心按钮
         ModernTooltip(
           message: trans.home.update_core,
           child: _HeaderActionButton(
@@ -319,6 +359,7 @@ class _RunningStatusCardState extends State<RunningStatusCard> {
           ),
         ),
         const SizedBox(width: 8),
+        // 重启核心按钮
         ModernTooltip(
           message: trans.proxy.restart_core,
           child: _HeaderActionButton(
@@ -470,13 +511,35 @@ class _RunningStatusCardState extends State<RunningStatusCard> {
 
     final wasRunning = clashProvider.isCoreRunning;
     final currentConfigPath = clashProvider.currentConfigPath;
+    final prefs = ClashPreferences.instance;
+    final channel = prefs.getCoreChannel();
+    final customPath = prefs.getCoreCustomPath();
+
+    // 自定义渠道不支持自动更新
+    if (channel == CoreChannel.custom) {
+      ModernToast.info(trans.home.custom_core_update_unsupported);
+      if (mounted) {
+        setState(() {
+          _isCoreUpdating = false;
+        });
+      }
+      return;
+    }
 
     try {
       Logger.info('检查核心版本');
-      final currentVersion = await CoreUpdateService.getCurrentCoreVersion();
+      final currentVersion = await CoreUpdateService.getCurrentCoreVersion(
+        channel: channel,
+        customPath: customPath,
+      );
 
-      final latestVersionTag = await CoreUpdateService.getLatestRelease();
-      final latestVersion = latestVersionTag.replaceFirst('v', '');
+      final releaseInfo = await CoreUpdateService.getLatestRelease(
+        channel: channel,
+      );
+      final latestVersion = (releaseInfo['tag_name'] as String).replaceFirst(
+        'v',
+        '',
+      );
 
       Logger.info('当前版本: ${currentVersion ?? "未知"}, 最新版本: $latestVersion');
 
@@ -495,7 +558,9 @@ class _RunningStatusCardState extends State<RunningStatusCard> {
       }
 
       Logger.info('开始下载核心文件');
-      final (version, coreBytes) = await CoreUpdateService.downloadCore();
+      final (version, coreBytes) = await CoreUpdateService.downloadCore(
+        channel: channel,
+      );
 
       Logger.info('核心下载成功: $version，准备替换');
 
@@ -505,7 +570,7 @@ class _RunningStatusCardState extends State<RunningStatusCard> {
         await Future.delayed(const Duration(milliseconds: 500));
       }
 
-      final coreDir = await CoreUpdateService.getCoreDirectory();
+      final coreDir = await CoreUpdateService.getCoreDirectory(channel);
       await CoreUpdateService.replaceCore(
         coreDir: coreDir,
         coreBytes: coreBytes,
@@ -591,6 +656,216 @@ class _RunningStatusCardState extends State<RunningStatusCard> {
         });
       }
     }
+  }
+
+  // ==================== 核心切换功能 ====================
+
+  Future<void> _openCoreSwitchSheet(BuildContext context) async {
+    if (_isSwitchingCore || _isCoreUpdating) return;
+
+    final prefs = ClashPreferences.instance;
+    final currentChannel = prefs.getCoreChannel();
+    final customPath = prefs.getCoreCustomPath();
+
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _buildChannelTile(
+                context: ctx,
+                currentChannel: currentChannel,
+                value: CoreChannel.stable,
+                icon: Icons.verified,
+                title: context.translate.home.core_channel_stable,
+                subtitle: context.translate.home.core_channel_stable_desc,
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _switchCore(CoreChannel.stable);
+                },
+              ),
+              _buildChannelTile(
+                context: ctx,
+                currentChannel: currentChannel,
+                value: CoreChannel.beta,
+                icon: Icons.science_outlined,
+                title: context.translate.home.core_channel_beta,
+                subtitle: context.translate.home.core_channel_beta_desc,
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _switchCore(CoreChannel.beta);
+                },
+              ),
+              _buildChannelTile(
+                context: ctx,
+                currentChannel: currentChannel,
+                value: CoreChannel.custom,
+                icon: Icons.folder_open,
+                title: context.translate.home.core_channel_custom,
+                subtitle:
+                    customPath ??
+                    context.translate.home.core_channel_custom_unset,
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _pickCustomCore();
+                },
+              ),
+              const SizedBox(height: 12),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _pickCustomCore() async {
+    if (_isSwitchingCore || _isCoreUpdating) return;
+
+    final result = await FilePicker.platform.pickFiles(
+      dialogTitle: context.translate.home.pick_core_dialog_title,
+      type: Platform.isWindows ? FileType.custom : FileType.any,
+      allowedExtensions: Platform.isWindows ? ['exe'] : null,
+    );
+
+    final path = result?.files.single.path;
+    if (path == null || path.isEmpty) return;
+
+    await _switchCore(CoreChannel.custom, customPath: path);
+  }
+
+  Future<void> _switchCore(CoreChannel channel, {String? customPath}) async {
+    if (_isSwitchingCore || _isCoreUpdating) return;
+
+    setState(() {
+      _isSwitchingCore = true;
+    });
+
+    final prefs = ClashPreferences.instance;
+    final clashProvider = context.read<ClashProvider>();
+    final wasRunning = clashProvider.isCoreRunning;
+    final currentConfigPath = clashProvider.currentConfigPath;
+    final shouldStartAfterSwitch = wasRunning || currentConfigPath != null;
+
+    try {
+      final resolvedPath = await CoreUpdateService.ensureCorePath(
+        channel: channel,
+        customPath: customPath ?? prefs.getCoreCustomPath(),
+      );
+
+      await prefs.setCoreChannel(channel);
+      if (channel == CoreChannel.custom) {
+        await prefs.setCoreCustomPath(resolvedPath);
+      } else {
+        await prefs.setCoreCustomPath(null);
+      }
+
+      if (wasRunning) {
+        final stopped = await clashProvider.stop();
+        if (!stopped) {
+          Logger.error('停止核心失败，取消切换核心');
+          if (mounted) {
+            ModernToast.error(
+              context.translate.home.core_switch_failed.replaceAll(
+                '{error}',
+                context.translate.home.stop_core_failed,
+              ),
+            );
+          }
+          return;
+        }
+      }
+
+      if (shouldStartAfterSwitch) {
+        final started = await clashProvider.start(
+          configPath: currentConfigPath,
+        );
+        if (!started) {
+          Logger.error('切换核心后启动失败');
+          if (mounted) {
+            ModernToast.error(
+              context.translate.home.core_switch_failed.replaceAll(
+                '{error}',
+                context.translate.home.restart_core_failed,
+              ),
+            );
+          }
+          return;
+        }
+      }
+
+      if (mounted) {
+        ModernToast.success(
+          context.translate.home.core_switch_success.replaceAll(
+            '{channel}',
+            _describeCoreChannel(context, channel, resolvedPath),
+          ),
+        );
+      }
+    } catch (e) {
+      Logger.error('切换核心失败: $e');
+
+      if (mounted) {
+        ModernToast.error(
+          context.translate.home.core_switch_failed.replaceAll(
+            '{error}',
+            e.toString(),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSwitchingCore = false;
+        });
+      }
+    }
+  }
+
+  Widget _buildChannelTile({
+    required BuildContext context,
+    required CoreChannel currentChannel,
+    required CoreChannel value,
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required VoidCallback onTap,
+  }) {
+    final selected = currentChannel == value;
+    final trailingIcon = Icon(
+      selected ? Icons.radio_button_checked : Icons.radio_button_off,
+      color: selected
+          ? Theme.of(context).colorScheme.primary
+          : Theme.of(context).colorScheme.onSurfaceVariant,
+    );
+
+    return ListTile(
+      leading: Icon(icon),
+      title: Text(title),
+      subtitle: Text(subtitle),
+      trailing: trailingIcon,
+      onTap: _isSwitchingCore ? null : onTap,
+      enabled: !_isSwitchingCore,
+    );
+  }
+
+  String _describeCoreChannel(
+    BuildContext context,
+    CoreChannel channel,
+    String? customPath,
+  ) {
+    final home = context.translate.home;
+
+    return switch (channel) {
+      CoreChannel.stable => home.core_channel_stable,
+      CoreChannel.beta => home.core_channel_beta,
+      CoreChannel.custom =>
+        (customPath?.isNotEmpty ?? false)
+            ? '${home.core_channel_custom} ($customPath)'
+            : home.core_channel_custom_unset,
+    };
   }
 }
 
