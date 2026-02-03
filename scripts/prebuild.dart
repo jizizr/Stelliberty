@@ -36,7 +36,7 @@ String _getCurrentArchitecture() {
 const githubRepo = "MetaCubeX/mihomo";
 Future<void> main(List<String> args) async {
   final parser = ArgParser()
-    ..addFlag('android', negatable: false, help: '构建 Android 平台（暂未适配）')
+    ..addFlag('android', negatable: false, help: '构建 Android 平台（下载核心 so 文件）')
     ..addFlag(
       'installer',
       negatable: false,
@@ -62,7 +62,7 @@ Future<void> main(List<String> args) async {
     log('\n示例:');
     log('  dart run scripts/prebuild.dart            # 自动识别当前平台和架构');
     log('  dart run scripts/prebuild.dart --installer # 安装平台工具（Inno Setup）');
-    log('  dart run scripts/prebuild.dart --android   # 提示 Android 暂未适配');
+    log('  dart run scripts/prebuild.dart --android   # 下载 Android 核心 so 文件');
     exit(0); // 显式退出，避免继续执行
   }
 
@@ -88,19 +88,17 @@ Future<void> main(List<String> args) async {
 
   final isAndroid = argResults['android'] as bool;
 
-  // 检查 Android 支持
-  if (isAndroid) {
-    log('❌ 错误: 项目暂未适配 Android 平台');
-    exit(1);
-  }
-
-  // 自动识别平台和架构
-  final platform = _getCurrentPlatform();
-  final arch = _getCurrentArchitecture();
+  // 自动识别平台和架构（非 Android 时使用）
+  final platform = isAndroid ? 'android' : _getCurrentPlatform();
+  final arch = isAndroid ? '' : _getCurrentArchitecture();
 
   final startTime = DateTime.now();
   log('🚀 开始执行预构建任务');
-  log('🖥️  检测到平台: $platform ($arch)');
+  if (isAndroid) {
+    log('📱 目标平台: Android');
+  } else {
+    log('🖥️  检测到平台: $platform ($arch)');
+  }
 
   try {
     // Step 1: 清理资源
@@ -108,40 +106,66 @@ Future<void> main(List<String> args) async {
     await cleanAssetsDirectory(projectRoot: projectRoot);
     log('✅ 资源清理完成。');
 
-    // Step 2: 获取 Mihomo 核心
-    log('▶️  [2/6] 正在获取最新的 Mihomo 核心...');
-    await downloadAndSetupCore(
-      targetDir: coreAssetDir,
-      platform: platform,
-      arch: arch,
-    );
-    log('✅ 核心准备完成。');
+    // Step 2: 获取核心
+    if (isAndroid) {
+      log('▶️  [2/6] 正在获取 Android 核心 so...');
+      final androidAbiDir = p.join(projectRoot, 'assets', 'jniLibs');
+      await downloadAndroidCoreSo(targetDir: androidAbiDir);
+      log('✅ Android 核心准备完成。');
 
-    // Step 3: 下载 GeoIP 数据
-    log('▶️  [3/6] 正在下载最新的 GeoIP 数据文件...');
-    final geoDataDir = p.join(coreAssetDir, 'data');
-    await downloadGeoData(targetDir: geoDataDir);
-    log('✅ GeoIP 数据下载完成。');
+      // Step 3: 下载 GeoIP 数据
+      log('▶️  [3/6] 正在下载最新的 GeoIP 数据文件...');
+      final geoDataDir = p.join(coreAssetDir, 'data');
+      await downloadGeoData(targetDir: geoDataDir);
+      log('✅ GeoIP 数据下载完成。');
 
-    // Step 4: 编译 Stelliberty Service
-    log('▶️  [4/6] 正在编译 Stelliberty Service...');
-    await buildStelliibertyService(projectRoot: projectRoot);
-    log('✅ Service 编译完成。');
+      // Android 跳过 Step 4-6，但创建空文件夹满足 pubspec.yaml 要求
+      log('⏭️  [4/6] 跳过 Service 编译（创建空目录）');
+      await Directory(
+        p.join(projectRoot, 'assets', 'service'),
+      ).create(recursive: true);
 
-    // Step 5: 复制所需资源
-    log('▶️  [5/6] 正在复制所需资源...');
-    await copyTrayIcons(projectRoot: projectRoot, platform: platform);
-    log('✅ 资源复制完成。');
+      log('⏭️  [5/6] 跳过托盘图标复制（创建空目录）');
+      await Directory(
+        p.join(projectRoot, 'assets', 'icons'),
+      ).create(recursive: true);
 
-    // Step 6: 安装打包工具（如果指定）
-    if (setupInstaller) {
-      log('▶️  [6/6] 正在安装打包工具...');
-      if (Platform.isWindows) {
-        await setupInnoSetup(projectRoot: projectRoot);
-      } else if (Platform.isLinux) {
-        await setupLinuxPackagingTools(projectRoot: projectRoot, arch: arch);
+      log('⏭️  [6/6] 跳过打包工具安装');
+    } else {
+      log('▶️  [2/6] 正在获取最新的 Mihomo 核心...');
+      await downloadAndSetupCore(
+        targetDir: coreAssetDir,
+        platform: platform,
+        arch: arch,
+      );
+      log('✅ 核心准备完成。');
+
+      // Step 3: 下载 GeoIP 数据
+      log('▶️  [3/6] 正在下载最新的 GeoIP 数据文件...');
+      final geoDataDir = p.join(coreAssetDir, 'data');
+      await downloadGeoData(targetDir: geoDataDir);
+      log('✅ GeoIP 数据下载完成。');
+
+      // Step 4: 编译 Stelliberty Service
+      log('▶️  [4/6] 正在编译 Stelliberty Service...');
+      await buildStelliibertyService(projectRoot: projectRoot);
+      log('✅ Service 编译完成。');
+
+      // Step 5: 复制所需资源
+      log('▶️  [5/6] 正在复制所需资源...');
+      await copyTrayIcons(projectRoot: projectRoot, platform: platform);
+      log('✅ 资源复制完成。');
+
+      // Step 6: 安装打包工具（如果指定）
+      if (setupInstaller) {
+        log('▶️  [6/6] 正在安装打包工具...');
+        if (Platform.isWindows) {
+          await setupInnoSetup(projectRoot: projectRoot);
+        } else if (Platform.isLinux) {
+          await setupLinuxPackagingTools(projectRoot: projectRoot, arch: arch);
+        }
+        log('✅ 打包工具安装完成。');
       }
-      log('✅ 打包工具安装完成。');
     }
 
     final endTime = DateTime.now();

@@ -11,6 +11,7 @@
 .history
 .svn/
 migrate_working_dir/
+/*.txt
 
 **/nul
 
@@ -26,6 +27,15 @@ migrate_working_dir/
 # VS Code
 .vscode/
 *.code-workspace
+
+# Claude Code
+.claude/
+CLAUDE.md
+
+# Agent contributor guide (local only)
+AGENTS.md
+
+/.codex-skills/
 
 # Swift Package Manager
 .swiftpm/
@@ -50,6 +60,13 @@ migrate_working_dir/
 **/*.g.dart
 **/*.freezed.dart
 
+# Flutter 自动生成的插件注册文件
+**/GeneratedPluginRegistrant.swift
+**/GeneratedPluginRegistrant.java
+**/GeneratedPluginRegistrant.m
+**/generated_plugin_registrant.cc
+**/generated_plugin_registrant.h
+
 # Dart 编译缓存
 *.dill
 
@@ -72,6 +89,7 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+/android/.kotlin/
 
 # Windows
 *.exe
@@ -126,6 +144,10 @@ id_ecdsa*
 id_ed25519*
 *.asc
 *.gpg
+
+# 签名密钥（排除整个密钥目录）
+/keys/
+/assets/keys/
 
 # API 密钥和令牌
 *api_key*
@@ -190,6 +212,7 @@ NOTES.txt
 notes/
 personal/
 private/
+docs/
 
 # 调试和分析文件
 *.dmp
@@ -203,4 +226,43 @@ uploads/
 temp/
 tmp/
 
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.bmp
+*.svg
+*.webp
+*.ico
+*.tiff
+*.tif
+*.heic
+*.heif
+*.raw
+*.cr2
+*.nef
+*.orf
+*.sr2
+*.arw
+*.dng
+*.psd
+*.ai
+*.sketch
+*.fig
+*.xd
+*.mp4
+*.avi
+*.mov
+*.wmv
+*.flv
+*.mkv
+*.webm
+*.mp3
+*.wav
+*.flac
+*.aac
+*.ogg
+*.m4a
 
+# Android adaptive icon
+!android/app/src/main/res/mipmap-*/ic_launcher*.png

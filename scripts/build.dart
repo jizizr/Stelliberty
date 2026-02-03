@@ -180,11 +180,96 @@ String getAndroidOutputFile(
   }
 }
 
+// 获取 Android 构建产物（支持 --split-per-abi 多 APK）
+List<String> getAndroidOutputFiles(
+  String sourceDir, {
+  required bool isRelease,
+  required bool isAppBundle,
+}) {
+  final dir = Directory(sourceDir);
+  if (!dir.existsSync()) {
+    throw Exception('构建目录不存在: $sourceDir');
+  }
+
+  final extension = isAppBundle ? '.aab' : '.apk';
+  final files =
+      dir
+          .listSync()
+          .whereType<File>()
+          .where((f) => f.path.endsWith(extension))
+          .where((f) {
+            final name = p.basename(f.path);
+            if (isAppBundle) return true;
+            return isRelease
+                ? name.endsWith('-release.apk')
+                : name.endsWith('-debug.apk');
+          })
+          .map((f) => f.path)
+          .toList()
+        ..sort();
+
+  if (files.isEmpty) {
+    throw Exception('未找到 $extension 文件');
+  }
+
+  return files;
+}
+
+String _getAndroidAbiLabelFromApkPath(String apkPath) {
+  final fileName = p.basename(apkPath);
+  final match = RegExp(r'^app-(.+)-(release|debug)\.apk$').firstMatch(fileName);
+  if (match == null) return 'universal';
+  return match.group(1) ?? 'universal';
+}
+
+String? _getAndroidExpectedAbiLabel(String androidArch) {
+  switch (androidArch) {
+    case 'arm64':
+      return 'arm64-v8a';
+    case 'x64':
+      return 'x86_64';
+    case 'all':
+      return null;
+    default:
+      return null;
+  }
+}
+
+List<String> getAndroidBuildExtraArgs({
+  required String androidArch,
+  required bool shouldSplitPerAbi,
+}) {
+  final extraArgs = <String>[];
+
+  switch (androidArch) {
+    case 'arm64':
+      extraArgs.add('--target-platform=android-arm64');
+      break;
+    case 'x64':
+      extraArgs.add('--target-platform=android-x64');
+      break;
+    case 'all':
+      // Flutter 的默认 ABI 列表包含 armeabi-v7a，但该工程未提供对应核心 so，
+      // 在 --split-per-abi 场景下需要显式限制 target-platform，避免产物缺失导致构建失败。
+      if (shouldSplitPerAbi) {
+        extraArgs.add('--target-platform=android-arm64,android-x64');
+      }
+      break;
+  }
+
+  if (shouldSplitPerAbi) {
+    extraArgs.add('--split-per-abi');
+  }
+
+  return extraArgs;
+}
+
 // 运行 flutter build
 Future<void> runFlutterBuild({
   required String projectRoot,
   required String platform,
   required bool isRelease,
+  List<String> extraArgs = const [],
 }) async {
   final flutterCmd = await resolveFlutterCmd();
   final mode = isRelease ? 'release' : 'debug';
@@ -193,7 +278,7 @@ Future<void> runFlutterBuild({
   log('▶️  正在构建 $platform $buildTypeLabel 版本...');
 
   // 构建命令
-  final buildCommand = ['build', platform, '--$mode'];
+  final buildCommand = ['build', platform, '--$mode', ...extraArgs];
 
   final result = await Process.run(
     flutterCmd,
@@ -212,11 +297,12 @@ Future<void> runFlutterBuild({
 }
 
 // 打包为 ZIP（使用 archive 包）
+// 便携版会在 data 目录创建 .portable 标识文件
 Future<void> packZip({
   required String sourceDir,
   required String outputPath,
 }) async {
-  log('▶️  正在打包为 ZIP...');
+  log('▶️  正在打包为 ZIP（便携版）...');
 
   // 确保输出目录存在
   final outputDir = Directory(p.dirname(outputPath));
@@ -255,6 +341,16 @@ Future<void> packZip({
       log('📦 添加: $relativePath');
     }
   }
+
+  // 添加便携版标识文件到 data 目录
+  const portableMarkerPath = 'data/.portable';
+  final portableMarkerFile = ArchiveFile(
+    portableMarkerPath,
+    0,
+    [], // 空文件
+  );
+  archive.addFile(portableMarkerFile);
+  log('📦 添加: $portableMarkerPath（便携版标识）');
 
   log('📦 正在压缩（最大压缩率）...');
 
@@ -832,6 +928,17 @@ Future<void> main(List<String> args) async {
     )
     ..addFlag('clean', negatable: false, help: '执行 flutter clean 进行干净构建')
     ..addFlag('android', negatable: false, help: '构建 Android APK')
+    ..addOption(
+      'android-arch',
+      allowed: ['all', 'arm64', 'x64'],
+      defaultsTo: 'all',
+      help: 'Android 仅构建指定架构（用于拆分 CI 工作流）：all/arm64/x64',
+    )
+    ..addFlag(
+      'split-per-abi',
+      defaultsTo: false,
+      help: 'Android APK 按 ABI 拆分输出（生成多个 APK，而不是合并到一个包）',
+    )
     ..addFlag(
       'with-installer',
       negatable: false,
@@ -878,6 +985,15 @@ Future<void> main(List<String> args) async {
     log(
       '  dart run scripts/build.dart --android                  # Android APK',
     );
+    log(
+      '  dart run scripts/build.dart --android --android-arch=arm64  # Android 仅 arm64',
+    );
+    log(
+      '  dart run scripts/build.dart --android --android-arch=x64    # Android 仅 x86_64',
+    );
+    log(
+      '  dart run scripts/build.dart --android --split-per-abi  # Android APK 按 ABI 分包',
+    );
     exit(0); // 显式退出
   }
 
@@ -887,6 +1003,8 @@ Future<void> main(List<String> args) async {
   final shouldClean = argResults['clean'] as bool;
   final withDebug = argResults['with-debug'] as bool;
   final isAndroid = argResults['android'] as bool;
+  final androidArch = argResults['android-arch'] as String;
+  final shouldSplitPerAbi = argResults['split-per-abi'] as bool;
   final withInstaller = argResults['with-installer'] as bool;
   final installerOnly = argResults['installer-only'] as bool;
 
@@ -899,6 +1017,10 @@ Future<void> main(List<String> args) async {
     log('   • --installer-only：Release 平台安装包');
     log('   • --with-debug：同时构建 Debug 版本');
     exit(1);
+  }
+
+  if (!isAndroid && (androidArch != 'all' || shouldSplitPerAbi)) {
+    log('⚠️  警告: --android-arch / --split-per-abi 仅在 --android 模式下生效');
   }
 
   // 打包格式逻辑（简化版）：
@@ -966,6 +1088,12 @@ Future<void> main(List<String> args) async {
         projectRoot: projectRoot,
         platform: platform,
         isRelease: true,
+        extraArgs: isAndroid
+            ? getAndroidBuildExtraArgs(
+                androidArch: androidArch,
+                shouldSplitPerAbi: shouldSplitPerAbi,
+              )
+            : const [],
       );
 
       if (needZipPack) {
@@ -1015,21 +1143,62 @@ Future<void> main(List<String> args) async {
           }
         }
       } else {
-        // Android：直接复制 APK 文件
+        // Android：复制 APK 文件（支持 --split-per-abi 多 APK）
         final sourceDir = getBuildOutputDir(projectRoot, platform, true);
-        final sourceFile = getAndroidOutputFile(sourceDir, true, false);
-
-        final outputPath = p.join(
-          outputDir,
-          '${appName.substring(0, 1).toUpperCase()}${appName.substring(1)}-v$version-android.apk',
-        );
-
         await Directory(outputDir).create(recursive: true);
-        await File(sourceFile).copy(outputPath);
 
-        final fileSize = await File(outputPath).length();
-        final sizeInMB = (fileSize / (1024 * 1024)).toStringAsFixed(2);
-        log('✅ 已复制: ${p.basename(outputPath)} ($sizeInMB MB)');
+        if (shouldSplitPerAbi) {
+          final sourceFiles =
+              getAndroidOutputFiles(
+                sourceDir,
+                isRelease: true,
+                isAppBundle: false,
+              ).where((f) {
+                final name = p.basename(f);
+                return RegExp(r'^app-.+-release\.apk$').hasMatch(name);
+              }).toList();
+
+          for (final sourceFile in sourceFiles) {
+            final abiLabel = _getAndroidAbiLabelFromApkPath(sourceFile);
+            final outputPath = p.join(
+              outputDir,
+              '${appName.substring(0, 1).toUpperCase()}${appName.substring(1)}-v$version-android-$abiLabel.apk',
+            );
+
+            await File(sourceFile).copy(outputPath);
+
+            final fileSize = await File(outputPath).length();
+            final sizeInMB = (fileSize / (1024 * 1024)).toStringAsFixed(2);
+            log('✅ 已复制: ${p.basename(outputPath)} ($sizeInMB MB)');
+          }
+        } else {
+          final sourceFiles = getAndroidOutputFiles(
+            sourceDir,
+            isRelease: true,
+            isAppBundle: false,
+          );
+
+          final expectedAbiLabel = _getAndroidExpectedAbiLabel(androidArch);
+          final sourceFile = expectedAbiLabel == null
+              ? getAndroidOutputFile(sourceDir, true, false)
+              : sourceFiles.firstWhere(
+                  (f) => p.basename(f).contains(expectedAbiLabel),
+                  orElse: () => sourceFiles.first,
+                );
+
+          final outputPath = p.join(
+            outputDir,
+            expectedAbiLabel == null
+                ? '${appName.substring(0, 1).toUpperCase()}${appName.substring(1)}-v$version-android.apk'
+                : '${appName.substring(0, 1).toUpperCase()}${appName.substring(1)}-v$version-android-$expectedAbiLabel.apk',
+          );
+
+          await File(sourceFile).copy(outputPath);
+
+          final fileSize = await File(outputPath).length();
+          final sizeInMB = (fileSize / (1024 * 1024)).toStringAsFixed(2);
+          log('✅ 已复制: ${p.basename(outputPath)} ($sizeInMB MB)');
+        }
       }
     }
 
@@ -1039,6 +1208,12 @@ Future<void> main(List<String> args) async {
         projectRoot: projectRoot,
         platform: platform,
         isRelease: false,
+        extraArgs: isAndroid
+            ? getAndroidBuildExtraArgs(
+                androidArch: androidArch,
+                shouldSplitPerAbi: shouldSplitPerAbi,
+              )
+            : const [],
       );
 
       if (needZipPack) {
@@ -1088,21 +1263,62 @@ Future<void> main(List<String> args) async {
           }
         }
       } else {
-        // Android：直接复制 APK 文件
+        // Android：复制 APK 文件（支持 --split-per-abi 多 APK）
         final sourceDir = getBuildOutputDir(projectRoot, platform, false);
-        final sourceFile = getAndroidOutputFile(sourceDir, false, false);
-
-        final outputPath = p.join(
-          outputDir,
-          '${appName.substring(0, 1).toUpperCase()}${appName.substring(1)}-v$version-android-debug.apk',
-        );
-
         await Directory(outputDir).create(recursive: true);
-        await File(sourceFile).copy(outputPath);
 
-        final fileSize = await File(outputPath).length();
-        final sizeInMB = (fileSize / (1024 * 1024)).toStringAsFixed(2);
-        log('✅ 已复制: ${p.basename(outputPath)} ($sizeInMB MB)');
+        if (shouldSplitPerAbi) {
+          final sourceFiles =
+              getAndroidOutputFiles(
+                sourceDir,
+                isRelease: false,
+                isAppBundle: false,
+              ).where((f) {
+                final name = p.basename(f);
+                return RegExp(r'^app-.+-debug\.apk$').hasMatch(name);
+              }).toList();
+
+          for (final sourceFile in sourceFiles) {
+            final abiLabel = _getAndroidAbiLabelFromApkPath(sourceFile);
+            final outputPath = p.join(
+              outputDir,
+              '${appName.substring(0, 1).toUpperCase()}${appName.substring(1)}-v$version-android-$abiLabel-debug.apk',
+            );
+
+            await File(sourceFile).copy(outputPath);
+
+            final fileSize = await File(outputPath).length();
+            final sizeInMB = (fileSize / (1024 * 1024)).toStringAsFixed(2);
+            log('✅ 已复制: ${p.basename(outputPath)} ($sizeInMB MB)');
+          }
+        } else {
+          final sourceFiles = getAndroidOutputFiles(
+            sourceDir,
+            isRelease: false,
+            isAppBundle: false,
+          );
+
+          final expectedAbiLabel = _getAndroidExpectedAbiLabel(androidArch);
+          final sourceFile = expectedAbiLabel == null
+              ? getAndroidOutputFile(sourceDir, false, false)
+              : sourceFiles.firstWhere(
+                  (f) => p.basename(f).contains(expectedAbiLabel),
+                  orElse: () => sourceFiles.first,
+                );
+
+          final outputPath = p.join(
+            outputDir,
+            expectedAbiLabel == null
+                ? '${appName.substring(0, 1).toUpperCase()}${appName.substring(1)}-v$version-android-debug.apk'
+                : '${appName.substring(0, 1).toUpperCase()}${appName.substring(1)}-v$version-android-$expectedAbiLabel-debug.apk',
+          );
+
+          await File(sourceFile).copy(outputPath);
+
+          final fileSize = await File(outputPath).length();
+          final sizeInMB = (fileSize / (1024 * 1024)).toStringAsFixed(2);
+          log('✅ 已复制: ${p.basename(outputPath)} ($sizeInMB MB)');
+        }
       }
     }
     // 计算总耗时

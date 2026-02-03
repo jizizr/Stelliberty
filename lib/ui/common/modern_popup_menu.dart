@@ -35,19 +35,18 @@ class PopupMenuItemData {
     required this.label,
     required this.onPressed,
     this.isDangerous = false,
+    this.closeOnTap = true,
   });
 
   final String label;
   final VoidCallback? onPressed;
   final IconData? icon;
   final bool isDangerous;
+  final bool closeOnTap;
 }
 
-// 现代化弹出路由
-// 自定义弹出路由，实现了：
-// - 250ms 弹出动画（淡入 + 缩放 + 轻微滑动）
-// - 智能定位（防止菜单超出屏幕边界）
-// - Curves.easeOutBack 曲线提供回弹效果
+// 现代化弹出路由：提供弹出动画与回弹曲线。
+// 内置智能定位，避免菜单溢出屏幕边界。
 class ModernPopupRoute<T> extends PopupRoute<T> {
   final WidgetBuilder builder;
   final ValueNotifier<Offset> offsetNotifier;
@@ -128,11 +127,8 @@ class ModernPopupRoute<T> extends PopupRoute<T> {
   Duration get transitionDuration => const Duration(milliseconds: 250);
 }
 
-// 智能定位委托
-// 防止菜单超出屏幕边界：
-// - 自动调整水平位置避免右侧溢出
-// - 自动调整垂直位置避免底部溢出
-// - 保留 16px 安全边距
+// 智能定位委托：防止菜单超出屏幕边界。
+// 自动调整位置并保留安全边距。
 class OverflowAwareLayoutDelegate extends SingleChildLayoutDelegate {
   final Offset offset;
 
@@ -163,11 +159,8 @@ class OverflowAwareLayoutDelegate extends SingleChildLayoutDelegate {
   }
 }
 
-// 现代化弹出菜单容器
-// 提供触发器和弹出内容的桥接：
-// - targetBuilder: 构建触发按钮（注入 open 回调）
-// - popup: 弹出的菜单内容
-// - 自动跟踪触发器位置变化
+// 弹出菜单容器：桥接触发器与弹出内容。
+// 自动跟踪触发器位置变化并更新偏移。
 typedef PopupOpen = Function({Offset offset});
 
 class ModernPopupBox extends StatefulWidget {
@@ -251,18 +244,14 @@ class _ModernPopupBoxState extends State<ModernPopupBox> {
   }
 }
 
-// 现代化弹出菜单 UI
-// Windows 11 风格的弹出菜单：
-// - 1px 边框 + 10px 圆角
-// - 菜单项带 6px 圆角悬停效果
-// - 危险操作显示红色悬停背景
-// - 6px 水平内边距，避免贴边
-// - 使用 InkRipple 实现快速响应
-class ModernPopupMenu extends StatelessWidget {
+// 现代化弹出菜单组件：提供更一致的交互与视觉样式。
+// 内置禁用态、危险态与自动分页逻辑。
+class ModernPopupMenu extends StatefulWidget {
   final List<PopupMenuItemData> items;
   final double minWidth;
   final double minItemVerticalPadding;
   final double fontSize;
+  final String? moreOptionsLabel;
 
   const ModernPopupMenu({
     super.key,
@@ -270,13 +259,18 @@ class ModernPopupMenu extends StatelessWidget {
     this.minWidth = 220,
     this.minItemVerticalPadding = 16,
     this.fontSize = 15,
+    this.moreOptionsLabel,
   });
 
-  // 构建单个菜单项
-  // 特性：
-  // - 禁用状态显示 30% 透明度
-  // - 危险操作悬停显示 10% 红色背景
-  // - 点击后先关闭菜单再执行回调
+  @override
+  State<ModernPopupMenu> createState() => _ModernPopupMenuState();
+}
+
+class _ModernPopupMenuState extends State<ModernPopupMenu> {
+  int _currentPage = 0;
+
+  // 构建菜单项：支持禁用态、危险态与点击关闭策略。
+  // 由 `closeOnTap` 决定是否先关闭菜单再执行回调。
   Widget _popupMenuItem(
     BuildContext context, {
     required PopupMenuItemData item,
@@ -297,7 +291,11 @@ class ModernPopupMenu extends StatelessWidget {
         child: InkWell(
           onTap: onPressed != null
               ? () {
-                  Navigator.of(context).pop();
+                  // 根据 closeOnTap 决定是否关闭菜单
+                  // 分页导航按钮不关闭菜单
+                  if (item.closeOnTap) {
+                    Navigator.of(context).pop();
+                  }
                   onPressed();
                 }
               : null,
@@ -307,7 +305,7 @@ class ModernPopupMenu extends StatelessWidget {
               ? colorScheme.error.withValues(alpha: 0.1)
               : null,
           child: Container(
-            constraints: BoxConstraints(minWidth: minWidth - 16),
+            constraints: BoxConstraints(minWidth: widget.minWidth - 16),
             padding: const EdgeInsets.symmetric(
               horizontal: _PopupMenuStyle.itemContentHorizontalPadding,
               vertical: _PopupMenuStyle.itemContentVerticalPadding,
@@ -321,7 +319,11 @@ class ModernPopupMenu extends StatelessWidget {
               mainAxisSize: MainAxisSize.max,
               children: [
                 if (item.icon != null) ...[
-                  Icon(item.icon, size: fontSize + 2, color: foregroundColor),
+                  Icon(
+                    item.icon,
+                    size: widget.fontSize + 2,
+                    color: foregroundColor,
+                  ),
                   const SizedBox(width: 12),
                 ],
                 Flexible(
@@ -329,7 +331,7 @@ class ModernPopupMenu extends StatelessWidget {
                     item.label,
                     style: TextStyle(
                       color: foregroundColor,
-                      fontSize: fontSize - 1,
+                      fontSize: widget.fontSize - 1,
                       fontWeight: FontWeight.w400,
                     ),
                   ),
@@ -342,10 +344,42 @@ class ModernPopupMenu extends StatelessWidget {
     );
   }
 
+  // 获取当前页显示的菜单项
+  List<PopupMenuItemData> _getCurrentPageItems() {
+    final totalItems = widget.items.length;
+
+    // 不超过 6 项，直接显示全部
+    if (totalItems <= 6) {
+      return widget.items;
+    }
+
+    // 第一页：前 5 项 + "更多选项"
+    if (_currentPage == 0) {
+      final firstPageItems = widget.items.take(5).toList();
+      firstPageItems.add(
+        PopupMenuItemData(
+          icon: Icons.more_horiz,
+          label: widget.moreOptionsLabel ?? '更多选项',
+          closeOnTap: false,
+          onPressed: () {
+            setState(() {
+              _currentPage = 1;
+            });
+          },
+        ),
+      );
+      return firstPageItems;
+    }
+
+    // 第二页：显示剩余项
+    return widget.items.skip(5).toList();
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final colorScheme = Theme.of(context).colorScheme;
+    final displayItems = _getCurrentPageItems();
 
     return IntrinsicHeight(
       child: IntrinsicWidth(
@@ -382,9 +416,9 @@ class ModernPopupMenu extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                for (final item in items.asMap().entries) ...[
+                for (final item in displayItems.asMap().entries) ...[
                   _popupMenuItem(context, item: item.value, index: item.key),
-                  if (item.value != items.last) ...[
+                  if (item.value != displayItems.last) ...[
                     SizedBox(height: _PopupMenuStyle.itemGap),
                     Padding(
                       padding: const EdgeInsets.symmetric(

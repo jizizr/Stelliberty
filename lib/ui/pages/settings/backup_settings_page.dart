@@ -2,14 +2,25 @@ import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:provider/provider.dart';
 import 'package:stelliberty/services/backup_service.dart';
-import 'package:stelliberty/clash/manager/manager.dart';
+import 'package:stelliberty/clash/manager/clash_manager.dart';
+import 'package:stelliberty/clash/providers/clash_provider.dart';
+import 'package:stelliberty/clash/providers/behavior_settings_provider.dart';
+import 'package:stelliberty/clash/providers/subscription_provider.dart';
+import 'package:stelliberty/clash/providers/override_provider.dart';
+import 'package:stelliberty/providers/app_update_provider.dart';
+import 'package:stelliberty/providers/language_provider.dart';
+import 'package:stelliberty/providers/theme_provider.dart';
+import 'package:stelliberty/providers/window_effect_provider.dart';
+import 'package:stelliberty/services/hotkey_service.dart';
+import 'package:stelliberty/services/window_state_service.dart';
+import 'package:stelliberty/storage/preferences.dart';
+import 'package:stelliberty/storage/clash_preferences.dart';
 import 'package:stelliberty/ui/common/modern_feature_card.dart';
 import 'package:stelliberty/ui/constants/spacing.dart';
 import 'package:stelliberty/ui/widgets/modern_toast.dart';
-import 'package:stelliberty/ui/widgets/confirm_dialog.dart';
 import 'package:stelliberty/i18n/i18n.dart';
 import 'package:stelliberty/providers/content_provider.dart';
-import 'package:stelliberty/utils/logger.dart';
+import 'package:stelliberty/services/log_print_service.dart';
 
 // 备份与还原设置页面
 class BackupSettingsPage extends StatefulWidget {
@@ -75,7 +86,7 @@ class _BackupSettingsPageState extends State<BackupSettingsPage> {
                   // 创建备份卡片
                   ModernFeatureLayoutCard(
                     icon: Icons.backup_outlined,
-                    title: trans.backup.createBackup,
+                    title: trans.backup.create_backup,
                     subtitle: trans.backup.description,
                     isHoverEnabled: !_isCreating,
                     isTapEnabled: !_isCreating,
@@ -85,7 +96,7 @@ class _BackupSettingsPageState extends State<BackupSettingsPage> {
                   // 还原备份卡片
                   ModernFeatureLayoutCard(
                     icon: Icons.restore_outlined,
-                    title: trans.backup.restoreBackup,
+                    title: trans.backup.restore_backup,
                     subtitle: trans.backup.description,
                     isHoverEnabled: !_isRestoring,
                     isTapEnabled: !_isRestoring,
@@ -108,7 +119,7 @@ class _BackupSettingsPageState extends State<BackupSettingsPage> {
     try {
       // 选择保存位置
       final result = await FilePicker.platform.saveFile(
-        dialogTitle: trans.backup.createBackup,
+        dialogTitle: trans.backup.create_backup,
         fileName: BackupService.instance.generateBackupFileName(),
         type: FileType.custom,
         allowedExtensions: ['stelliberty'],
@@ -125,33 +136,22 @@ class _BackupSettingsPageState extends State<BackupSettingsPage> {
       if (!mounted) return;
       setState(() => _isCreating = false);
 
-      ModernToast.show(
-        context,
-        trans.backup.backupSuccess,
-        type: ToastType.success,
-      );
-
-      // 显示安全提示
+      ModernToast.show(trans.backup.backup_success, type: ToastType.success);
+    } on BackupException catch (e) {
+      Logger.error('创建备份失败：$e');
       if (!mounted) return;
-      await showDialog(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: Text(trans.backup.securityWarning),
-          content: Text(trans.backup.securityWarningMessage),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: Text(trans.common.ok),
-            ),
-          ],
-        ),
-      );
+      setState(() => _isCreating = false);
+
+      ModernToast.show(_getErrorMessage(e), type: ToastType.error);
     } catch (e) {
       Logger.error('创建备份失败：$e');
       if (!mounted) return;
       setState(() => _isCreating = false);
 
-      ModernToast.show(context, _getErrorMessage(e), type: ToastType.error);
+      ModernToast.show(
+        '${trans.backup.error_unknown}: $e',
+        type: ToastType.error,
+      );
     }
   }
 
@@ -161,24 +161,12 @@ class _BackupSettingsPageState extends State<BackupSettingsPage> {
 
     // 选择备份文件
     final result = await FilePicker.platform.pickFiles(
-      dialogTitle: trans.backup.selectBackupFile,
+      dialogTitle: trans.backup.select_backup_file,
       type: FileType.custom,
       allowedExtensions: ['stelliberty'],
     );
 
     if (result == null || result.files.isEmpty) return;
-
-    // 确认对话框
-    if (!mounted) return;
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => ConfirmDialog(
-        title: trans.backup.restoreConfirm,
-        message: trans.backup.restoreConfirmMessage,
-      ),
-    );
-
-    if (confirmed != true) return;
 
     setState(() => _isRestoring = true);
 
@@ -188,45 +176,105 @@ class _BackupSettingsPageState extends State<BackupSettingsPage> {
 
       if (!mounted) return;
 
-      // 如果核心正在运行，重启核心以应用新配置
-      if (ClashManager.instance.isCoreRunning) {
-        Logger.info('备份还原成功，重启核心以应用新配置');
-        await ClashManager.instance.restartCore();
-      }
+      // 重新加载所有数据
+      await _reloadAfterRestore();
 
       if (!mounted) return;
       setState(() => _isRestoring = false);
 
-      ModernToast.show(
-        context,
-        trans.backup.restoreSuccess,
-        type: ToastType.success,
-      );
+      ModernToast.show(trans.backup.restore_success, type: ToastType.success);
+    } on BackupException catch (e) {
+      Logger.error('还原备份失败：$e');
+      if (!mounted) return;
+      setState(() => _isRestoring = false);
+
+      ModernToast.show(_getErrorMessage(e), type: ToastType.error);
     } catch (e) {
       Logger.error('还原备份失败：$e');
       if (!mounted) return;
       setState(() => _isRestoring = false);
 
-      ModernToast.show(context, _getErrorMessage(e), type: ToastType.error);
+      ModernToast.show(
+        '${trans.backup.error_unknown}: $e',
+        type: ToastType.error,
+      );
+    }
+  }
+
+  // 还原后重新加载所有数据
+  Future<void> _reloadAfterRestore() async {
+    Logger.info('备份还原成功，重新加载所有数据');
+
+    final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
+    final windowEffectProvider = Provider.of<WindowEffectProvider>(
+      context,
+      listen: false,
+    );
+    final languageProvider = Provider.of<LanguageProvider>(
+      context,
+      listen: false,
+    );
+    final behaviorSettingsProvider = Provider.of<BehaviorSettingsProvider>(
+      context,
+      listen: false,
+    );
+    final appUpdateProvider = Provider.of<AppUpdateProvider>(
+      context,
+      listen: false,
+    );
+    final clashProvider = Provider.of<ClashProvider>(context, listen: false);
+    final subscriptionProvider = Provider.of<SubscriptionProvider>(
+      context,
+      listen: false,
+    );
+    final overrideProvider = Provider.of<OverrideProvider>(
+      context,
+      listen: false,
+    );
+
+    // 重新初始化 Preferences
+    await AppPreferences.instance.reload();
+    await ClashPreferences.instance.reload();
+
+    if (!mounted) return;
+
+    await themeProvider.initialize();
+    await windowEffectProvider.initialize();
+    await languageProvider.initialize();
+    await behaviorSettingsProvider.applyRestoredSettings();
+    await appUpdateProvider.refreshFromPreferences();
+    await HotkeyService.instance.refreshFromPreferences();
+    WindowStateManager.clearCache();
+
+    clashProvider.refreshConfigState();
+    await subscriptionProvider.initialize();
+    await overrideProvider.initialize();
+
+    // 如果核心正在运行，重启核心以应用新配置
+    if (ClashManager.instance.isCoreRunning) {
+      Logger.info('重启核心以应用新配置');
+      await ClashManager.instance.restartCore();
     }
   }
 
   // 获取友好的错误消息
-  String _getErrorMessage(Object error) {
+  String _getErrorMessage(BackupException error) {
     final trans = context.translate;
-    final errorStr = error.toString();
     final t = trans.backup;
 
-    if (errorStr.contains('不存在') || errorStr.contains('not found')) {
-      return t.errorFileNotFound;
-    } else if (errorStr.contains('格式错误') || errorStr.contains('format')) {
-      return t.errorInvalidFormat;
-    } else if (errorStr.contains('版本') || errorStr.contains('version')) {
-      return t.errorVersionMismatch;
-    } else if (errorStr.contains('不完整') || errorStr.contains('incomplete')) {
-      return t.errorDataIncomplete;
-    } else {
-      return '${t.errorUnknown}: $errorStr';
+    switch (error.type) {
+      case BackupErrorType.fileNotFound:
+        return t.error_file_not_found;
+      case BackupErrorType.invalidFormat:
+        return t.error_invalid_format;
+      case BackupErrorType.versionMismatch:
+        return t.error_version_mismatch;
+      case BackupErrorType.dataIncomplete:
+        return t.error_data_incomplete;
+      case BackupErrorType.operationInProgress:
+      case BackupErrorType.timeout:
+      case BackupErrorType.unknown:
+        return error.message;
     }
   }
 }

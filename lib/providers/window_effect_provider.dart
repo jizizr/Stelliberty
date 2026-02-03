@@ -1,7 +1,8 @@
+import 'package:stelliberty/atomic/platform_helper.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_acrylic/flutter_acrylic.dart';
 import 'package:stelliberty/storage/preferences.dart';
-import 'package:stelliberty/utils/logger.dart';
+import 'package:stelliberty/services/log_print_service.dart';
 
 // 窗口效果枚举
 enum AppWindowEffect { none, acrylic, mica, tabbed }
@@ -55,6 +56,12 @@ class WindowEffectProvider extends ChangeNotifier {
   }
 
   Future<void> _applyWindowEffect() async {
+    // 窗口效果仅在桌面平台可用，移动平台直接返回
+    if (PlatformHelper.isMobile) {
+      Logger.debug('移动平台不支持窗口效果，跳过设置');
+      return;
+    }
+
     final windowEffect = switch (_windowEffect) {
       AppWindowEffect.mica => WindowEffect.mica,
       AppWindowEffect.acrylic => WindowEffect.acrylic,

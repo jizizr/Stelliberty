@@ -1,12 +1,7 @@
 import 'package:flutter/material.dart';
 
-// 现代风格开关组件
-//
-// 符合 Material Design 3 规范：
-// - 关闭状态：20px 小圆点
-// - 开启状态：24px 大圆点，带勾选图标
-// - 悬停时：圆点放大 1.15 倍
-// - 圆点圆心对齐到轨道两端半圆的圆心
+// 现代开关组件：提供切换动画与悬停反馈。
+// 外观与交互遵循 Material 3 风格。
 class ModernSwitch extends StatefulWidget {
   // 开关状态
   final bool value;
@@ -161,9 +156,8 @@ class _ModernSwitchState extends State<ModernSwitch>
             // 右侧半圆圆心的 X 坐标 = 总宽度 - 半径
             final rightCenterX = trackWidth - trackRadius;
 
-            // 圆点圆心的 X 坐标：在左右两个圆心之间插值
-            // progress = 0 时圆心在 leftCenterX (16)
-            // progress = 1 时圆心在 rightCenterX (36)
+            // 圆点圆心 X：在左右半圆圆心之间插值。
+            // progress=0 为 leftCenterX，progress=1 为 rightCenterX。
             final thumbCenterX =
                 leftCenterX +
                 (rightCenterX - leftCenterX) * _positionAnimation.value;

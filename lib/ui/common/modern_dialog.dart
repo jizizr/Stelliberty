@@ -1,5 +1,6 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:stelliberty/atomic/platform_helper.dart';
 import 'package:stelliberty/i18n/i18n.dart';
 
 // 对话框样式常量
@@ -18,17 +19,77 @@ class DialogConstants {
 
   // 加载指示器尺寸
   static const double loadingIndicatorSize = 14.0;
+  static const double loadingIndicatorSizeMobile = 12.0;
 
   // 加载指示器与文字间距
   static const double loadingIndicatorSpacing = 12.0;
+  static const double loadingIndicatorSpacingMobile = 8.0;
 
   // 加载指示器线宽
   static const double loadingIndicatorStrokeWidth = 2.0;
+
+  // 标题字体大小
+  static const double titleFontSize = 20.0;
+  static const double titleFontSizeMobile = 16.0;
+
+  // 副标题字体大小
+  static const double subtitleFontSize = 14.0;
+  static const double subtitleFontSizeMobile = 12.0;
+
+  // 按钮字体大小
+  static const double buttonFontSize = 14.0;
+  static const double buttonFontSizeMobile = 12.0;
+
+  // 按钮内边距
+  static const EdgeInsets buttonPadding = EdgeInsets.symmetric(
+    vertical: 10,
+    horizontal: 16,
+  );
+  static const EdgeInsets buttonPaddingMobile = EdgeInsets.symmetric(
+    vertical: 6,
+    horizontal: 12,
+  );
+
+  // 标题图标尺寸
+  static const double titleIconSize = 20.0;
+  static const double titleIconSizeMobile = 16.0;
+
+  // 关闭按钮图标尺寸
+  static const double closeIconSize = 20.0;
+  static const double closeIconSizeMobile = 18.0;
+
+  // 顶栏内边距
+  static const EdgeInsets headerPadding = EdgeInsets.symmetric(
+    horizontal: 24,
+    vertical: 20,
+  );
+  static const EdgeInsets headerPaddingMobile = EdgeInsets.symmetric(
+    horizontal: 16,
+    vertical: 14,
+  );
+
+  // 底栏内边距
+  static const EdgeInsets actionsPadding = EdgeInsets.symmetric(
+    horizontal: 24,
+    vertical: 16,
+  );
+  static const EdgeInsets actionsPaddingMobile = EdgeInsets.symmetric(
+    horizontal: 16,
+    vertical: 10,
+  );
+
+  // 对话框外边距
+  static const EdgeInsets dialogMargin = EdgeInsets.symmetric(horizontal: 32);
+  static const EdgeInsets dialogMarginMobile = EdgeInsets.symmetric(
+    horizontal: 16,
+  );
+
+  // 判断是否为移动端
+  static bool get isMobile => PlatformHelper.isMobile;
 }
 
-// 现代对话框基础组件
-// 提取所有对话框的公共视觉风格和布局结构
-// 采用插槽模式，中间内容区域完全自定义
+// 现代对话框基础组件：提供统一视觉风格与布局结构。
+// 采用插槽模式，中间内容区域完全自定义。
 class ModernDialog extends StatefulWidget {
   // 标题文本
   final String? title;
@@ -203,14 +264,25 @@ class _ModernDialogState extends State<ModernDialog>
   // 构建对话框主体
   Widget _buildDialog() {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final screenSize = MediaQuery.of(context).size;
+    final viewInsets = MediaQuery.of(context).viewInsets;
+    final isMobile = DialogConstants.isMobile;
+
+    // 计算可用高度（减去键盘高度和安全边距）
+    final availableHeight = screenSize.height - viewInsets.bottom - 64;
+    final maxHeight = availableHeight * widget.maxHeightRatio;
+
+    final margin = isMobile
+        ? DialogConstants.dialogMarginMobile
+        : DialogConstants.dialogMargin;
 
     return ConstrainedBox(
       constraints: BoxConstraints(
         maxWidth: widget.maxWidth,
-        maxHeight: MediaQuery.of(context).size.height * widget.maxHeightRatio,
+        maxHeight: maxHeight,
       ),
       child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 32),
+        margin: margin,
         child: ClipRRect(
           borderRadius: BorderRadius.circular(widget.borderRadius),
           child: BackdropFilter(
@@ -296,7 +368,7 @@ class _ModernDialogState extends State<ModernDialog>
                 : Colors.white.withValues(alpha: 0.5),
             contentPadding: const EdgeInsets.symmetric(
               horizontal: 16,
-              vertical: 12,
+              vertical: 10,
             ),
             hintStyle: TextStyle(
               fontSize: 14,
@@ -332,9 +404,26 @@ class _ModernDialogState extends State<ModernDialog>
   // 构建顶栏
   Widget _buildHeader() {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isMobile = DialogConstants.isMobile;
+
+    final headerPadding = isMobile
+        ? DialogConstants.headerPaddingMobile
+        : DialogConstants.headerPadding;
+    final titleFontSize = isMobile
+        ? DialogConstants.titleFontSizeMobile
+        : DialogConstants.titleFontSize;
+    final subtitleFontSize = isMobile
+        ? DialogConstants.subtitleFontSizeMobile
+        : DialogConstants.subtitleFontSize;
+    final titleIconSize = isMobile
+        ? DialogConstants.titleIconSizeMobile
+        : DialogConstants.titleIconSize;
+    final closeIconSize = isMobile
+        ? DialogConstants.closeIconSizeMobile
+        : DialogConstants.closeIconSize;
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+      padding: headerPadding,
       decoration: BoxDecoration(
         color: isDark
             ? Colors.white.withValues(alpha: 0.06)
@@ -357,7 +446,7 @@ class _ModernDialogState extends State<ModernDialog>
           // 图标容器（可选）
           if (widget.titleIcon != null) ...[
             Container(
-              padding: const EdgeInsets.all(8),
+              padding: EdgeInsets.all(isMobile ? 6 : 8),
               decoration: BoxDecoration(
                 color:
                     (widget.titleIconColor ??
@@ -377,9 +466,13 @@ class _ModernDialogState extends State<ModernDialog>
                   ),
                 ],
               ),
-              child: Icon(widget.titleIcon, color: Colors.white, size: 20),
+              child: Icon(
+                widget.titleIcon,
+                color: Colors.white,
+                size: titleIconSize,
+              ),
             ),
-            const SizedBox(width: 16),
+            SizedBox(width: isMobile ? 12 : 16),
           ],
           // 标题和副标题
           Expanded(
@@ -399,6 +492,7 @@ class _ModernDialogState extends State<ModernDialog>
                         widget.title!,
                         style: Theme.of(context).textTheme.titleLarge?.copyWith(
                           fontWeight: FontWeight.w600,
+                          fontSize: titleFontSize,
                           color: Theme.of(context).colorScheme.onSurface,
                         ),
                       ),
@@ -414,6 +508,7 @@ class _ModernDialogState extends State<ModernDialog>
                   Text(
                     widget.subtitle!,
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      fontSize: subtitleFontSize,
                       color: Theme.of(
                         context,
                       ).colorScheme.onSurface.withValues(alpha: 0.6),
@@ -433,7 +528,7 @@ class _ModernDialogState extends State<ModernDialog>
                   DialogConstants.closeButtonBorderRadius,
                 ),
                 child: Container(
-                  padding: const EdgeInsets.all(8),
+                  padding: EdgeInsets.all(isMobile ? 6 : 8),
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(
                       DialogConstants.closeButtonBorderRadius,
@@ -444,7 +539,7 @@ class _ModernDialogState extends State<ModernDialog>
                     color: Theme.of(
                       context,
                     ).colorScheme.onSurface.withValues(alpha: 0.7),
-                    size: 20,
+                    size: closeIconSize,
                   ),
                 ),
               ),
@@ -457,11 +552,16 @@ class _ModernDialogState extends State<ModernDialog>
   // 构建底部操作栏
   Widget _buildActions() {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isMobile = DialogConstants.isMobile;
+
+    final actionsPadding = isMobile
+        ? DialogConstants.actionsPaddingMobile
+        : DialogConstants.actionsPadding;
 
     return Material(
       color: Colors.transparent,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+        padding: actionsPadding,
         decoration: BoxDecoration(
           color: isDark
               ? Colors.white.withValues(alpha: 0.06)
@@ -478,7 +578,7 @@ class _ModernDialogState extends State<ModernDialog>
         ),
         child: Row(
           children: [
-            // 左侧按钮：从左边开始排列
+            // 左侧按钮：从左边开始排列（移动端隐藏 actionsLeft 提示文字）
             if (widget.actionsLeftButtons != null)
               ...widget.actionsLeftButtons!.asMap().entries.map((entry) {
                 final index = entry.key;
@@ -486,13 +586,13 @@ class _ModernDialogState extends State<ModernDialog>
                 return Padding(
                   padding: EdgeInsets.only(
                     right: index < widget.actionsLeftButtons!.length - 1
-                        ? 8
+                        ? (isMobile ? 6 : 8)
                         : 0,
                   ),
                   child: _buildActionButtonWithIcon(action, isDark),
                 );
               })
-            else if (widget.actionsLeft != null)
+            else if (widget.actionsLeft != null && !isMobile)
               widget.actionsLeft!,
             // 中间空白区域
             const Spacer(),
@@ -501,7 +601,9 @@ class _ModernDialogState extends State<ModernDialog>
               final index = entry.key;
               final action = entry.value;
               return Padding(
-                padding: EdgeInsets.only(left: index > 0 ? 12 : 0),
+                padding: EdgeInsets.only(
+                  left: index > 0 ? (isMobile ? 8 : 12) : 0,
+                ),
                 child: _buildActionButton(action, isDark),
               );
             }),
@@ -513,30 +615,44 @@ class _ModernDialogState extends State<ModernDialog>
 
   // 构建左侧操作按钮（带图标）
   Widget _buildActionButtonWithIcon(DialogActionButton action, bool isDark) {
+    final isMobile = DialogConstants.isMobile;
+    final buttonPadding = isMobile
+        ? DialogConstants.buttonPaddingMobile
+        : DialogConstants.buttonPadding;
+    final buttonFontSize = isMobile
+        ? DialogConstants.buttonFontSizeMobile
+        : DialogConstants.buttonFontSize;
+    final loadingSize = isMobile
+        ? DialogConstants.loadingIndicatorSizeMobile
+        : DialogConstants.loadingIndicatorSize;
+    final loadingSpacing = isMobile
+        ? DialogConstants.loadingIndicatorSpacingMobile
+        : DialogConstants.loadingIndicatorSpacing;
+
     return OutlinedButton.icon(
       onPressed: action.isLoading ? null : action.onPressed,
       icon: action.icon != null
-          ? Icon(action.icon, size: 18)
+          ? Icon(action.icon, size: isMobile ? 16 : 18)
           : const SizedBox.shrink(),
       label: action.isLoading
           ? Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const SizedBox(
-                  width: DialogConstants.loadingIndicatorSize,
-                  height: DialogConstants.loadingIndicatorSize,
-                  child: CircularProgressIndicator(
+                SizedBox(
+                  width: loadingSize,
+                  height: loadingSize,
+                  child: const CircularProgressIndicator(
                     strokeWidth: DialogConstants.loadingIndicatorStrokeWidth,
                     valueColor: AlwaysStoppedAnimation<Color>(Colors.white70),
                   ),
                 ),
-                const SizedBox(width: DialogConstants.loadingIndicatorSpacing),
-                Text(action.label),
+                SizedBox(width: loadingSpacing),
+                Text(action.label, style: TextStyle(fontSize: buttonFontSize)),
               ],
             )
-          : Text(action.label),
+          : Text(action.label, style: TextStyle(fontSize: buttonFontSize)),
       style: OutlinedButton.styleFrom(
-        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+        padding: buttonPadding,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(
             DialogConstants.buttonBorderRadius,
@@ -550,12 +666,28 @@ class _ModernDialogState extends State<ModernDialog>
         backgroundColor: isDark
             ? Colors.white.withValues(alpha: 0.04)
             : Colors.white.withValues(alpha: 0.6),
+        minimumSize: Size.zero,
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
       ),
     );
   }
 
   // 构建操作按钮
   Widget _buildActionButton(DialogActionButton action, bool isDark) {
+    final isMobile = DialogConstants.isMobile;
+    final buttonPadding = isMobile
+        ? DialogConstants.buttonPaddingMobile
+        : DialogConstants.buttonPadding;
+    final buttonFontSize = isMobile
+        ? DialogConstants.buttonFontSizeMobile
+        : DialogConstants.buttonFontSize;
+    final loadingSize = isMobile
+        ? DialogConstants.loadingIndicatorSizeMobile
+        : DialogConstants.loadingIndicatorSize;
+    final loadingSpacing = isMobile
+        ? DialogConstants.loadingIndicatorSpacingMobile
+        : DialogConstants.loadingIndicatorSpacing;
+
     if (action.isPrimary) {
       // 主要按钮 (ElevatedButton)
       // 根据 isDanger 决定按钮颜色
@@ -566,7 +698,7 @@ class _ModernDialogState extends State<ModernDialog>
       return ElevatedButton(
         onPressed: action.isLoading ? null : action.onPressed,
         style: ElevatedButton.styleFrom(
-          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+          padding: buttonPadding,
           backgroundColor: buttonColor,
           foregroundColor: Colors.white,
           shape: RoundedRectangleBorder(
@@ -575,6 +707,8 @@ class _ModernDialogState extends State<ModernDialog>
             ),
           ),
           elevation: 0,
+          minimumSize: Size.zero,
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
           shadowColor: buttonColor.withValues(alpha: 0.5),
         ),
         child: action.isLoading
@@ -582,27 +716,28 @@ class _ModernDialogState extends State<ModernDialog>
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   SizedBox(
-                    width: DialogConstants.loadingIndicatorSize,
-                    height: DialogConstants.loadingIndicatorSize,
+                    width: loadingSize,
+                    height: loadingSize,
                     child: CircularProgressIndicator(
                       strokeWidth: DialogConstants.loadingIndicatorStrokeWidth,
                       valueColor: AlwaysStoppedAnimation<Color>(buttonColor),
                     ),
                   ),
-                  const SizedBox(
-                    width: DialogConstants.loadingIndicatorSpacing,
+                  SizedBox(width: loadingSpacing),
+                  Text(
+                    action.label,
+                    style: TextStyle(fontSize: buttonFontSize),
                   ),
-                  Text(action.label),
                 ],
               )
-            : Text(action.label),
+            : Text(action.label, style: TextStyle(fontSize: buttonFontSize)),
       );
     } else {
       // 次要按钮 (OutlinedButton)
       return OutlinedButton(
         onPressed: action.isLoading ? null : action.onPressed,
         style: OutlinedButton.styleFrom(
-          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+          padding: buttonPadding,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(
               DialogConstants.buttonBorderRadius,
@@ -616,10 +751,13 @@ class _ModernDialogState extends State<ModernDialog>
           backgroundColor: isDark
               ? Colors.white.withValues(alpha: 0.04)
               : Colors.white.withValues(alpha: 0.6),
+          minimumSize: Size.zero,
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
         ),
         child: Text(
           action.label,
           style: TextStyle(
+            fontSize: buttonFontSize,
             color: Theme.of(
               context,
             ).colorScheme.onSurface.withValues(alpha: 0.8),

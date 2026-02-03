@@ -1,31 +1,65 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:stelliberty/atomic/platform_helper.dart';
 import 'package:stelliberty/clash/providers/clash_provider.dart';
-import 'package:stelliberty/clash/data/clash_model.dart';
+import 'package:stelliberty/clash/model/clash_model.dart';
 import 'package:stelliberty/ui/widgets/proxy/proxy_node_card.dart';
-import 'package:stelliberty/ui/notifiers/proxy_notifier.dart';
+import 'package:stelliberty/ui/viewmodels/proxy_viewmodel.dart';
 import 'package:stelliberty/ui/constants/spacing.dart';
-import 'package:stelliberty/utils/logger.dart';
+import 'package:stelliberty/services/log_print_service.dart';
 import 'package:stelliberty/i18n/i18n.dart';
 
 // 代理页布局常量
 class _ProxyGridSpacing {
   _ProxyGridSpacing._();
 
-  static const gridLeftEdge = 16.0; // 最左侧卡片距左边距离
-  static const gridTopEdge = 10.0; // 第一行卡片距顶部距离
-  static const gridRightEdge =
-      16.0 - SpacingConstants.scrollbarRightCompensation; // 最右侧卡片距右边距离（补偿滚动条）
-  static const gridBottomEdge = 10.0; // 最后一行卡片距底部距离
-  static const cardColumnSpacing = 16.0; // 卡片列间距（左右间距）
-  static const cardRowSpacing = 16.0; // 卡片行间距（上下间距）
+  // 桌面端间距
+  static const desktopGridLeftEdge = 16.0;
+  static const desktopGridTopEdge = 10.0;
+  static const desktopGridRightEdge =
+      16.0 - SpacingConstants.scrollbarRightCompensation;
+  static const desktopGridBottomEdge = 10.0;
+  static const desktopCardColumnSpacing = 16.0;
+  static const desktopCardRowSpacing = 16.0;
+  static const desktopCardHeight = 88.0;
+  static const desktopCardMinWidth = 280.0;
 
-  static const gridPadding = EdgeInsets.fromLTRB(
-    gridLeftEdge,
-    gridTopEdge,
-    gridRightEdge,
-    gridBottomEdge,
-  );
+  // 移动端间距（更紧凑）
+  static const mobileGridLeftEdge = 10.0;
+  static const mobileGridTopEdge = 8.0;
+  static const mobileGridRightEdge = 10.0;
+  static const mobileGridBottomEdge = 8.0;
+  static const mobileCardColumnSpacing = 10.0;
+  static const mobileCardRowSpacing = 10.0;
+  static const mobileCardHeight = 64.0;
+  static const mobileCardMinWidth = 160.0;
+
+  static EdgeInsets get gridPadding => PlatformHelper.isMobile
+      ? const EdgeInsets.fromLTRB(
+          mobileGridLeftEdge,
+          mobileGridTopEdge,
+          mobileGridRightEdge,
+          mobileGridBottomEdge,
+        )
+      : const EdgeInsets.fromLTRB(
+          desktopGridLeftEdge,
+          desktopGridTopEdge,
+          desktopGridRightEdge,
+          desktopGridBottomEdge,
+        );
+
+  static double get cardColumnSpacing => PlatformHelper.isMobile
+      ? mobileCardColumnSpacing
+      : desktopCardColumnSpacing;
+
+  static double get cardRowSpacing =>
+      PlatformHelper.isMobile ? mobileCardRowSpacing : desktopCardRowSpacing;
+
+  static double get cardHeight =>
+      PlatformHelper.isMobile ? mobileCardHeight : desktopCardHeight;
+
+  static double get cardMinWidth =>
+      PlatformHelper.isMobile ? mobileCardMinWidth : desktopCardMinWidth;
 }
 
 // 代理节点网格状态（用于 Selector）
@@ -68,7 +102,7 @@ class _ProxyNodeGridState {
 class ProxyNodeGrid extends StatefulWidget {
   final ClashProvider clashProvider;
   final String selectedGroupName; // 改为只传递组名
-  final ProxyNotifier viewModel; // 用于排序
+  final ProxyViewModel viewModel; // 用于排序
   final ScrollController scrollController;
   final Function(int) onCrossAxisCountChanged;
   final Function(String groupName, String proxyName) onSelectProxy;
@@ -104,7 +138,7 @@ class _ProxyNodeGridWidgetState extends State<ProxyNodeGrid> {
           builder: (context, _) {
             return Selector<ClashProvider, _ProxyNodeGridState>(
               selector: (_, clash) {
-                // 先获取 selectedGroup 以获取最新的 now 值
+                // 获取 selectedGroup 以获取当前选中节点
                 final selectedGroup = clash.proxyGroups.firstWhere(
                   (g) => g.name == widget.selectedGroupName,
                   orElse: () => clash.proxyGroups.isNotEmpty
@@ -121,7 +155,7 @@ class _ProxyNodeGridWidgetState extends State<ProxyNodeGrid> {
                 );
               },
               builder: (context, state, child) {
-                // 从最新的 clash.proxyGroups 中获取 selectedGroup
+                // 从 clash.proxyGroups 中获取 selectedGroup
                 final clashProvider = context.read<ClashProvider>();
                 final selectedGroup = clashProvider.proxyGroups.firstWhere(
                   (g) => g.name == widget.selectedGroupName,
@@ -138,9 +172,10 @@ class _ProxyNodeGridWidgetState extends State<ProxyNodeGrid> {
 
                 return LayoutBuilder(
                   builder: (context, constraints) {
-                    final int crossAxisCount = (constraints.maxWidth / 280)
-                        .floor()
-                        .clamp(2, 999);
+                    final int crossAxisCount =
+                        (constraints.maxWidth / _ProxyGridSpacing.cardMinWidth)
+                            .floor()
+                            .clamp(2, 999);
 
                     // 只在列数变化时调用回调
                     if (crossAxisCount != _crossAxisCountCache) {
@@ -155,7 +190,7 @@ class _ProxyNodeGridWidgetState extends State<ProxyNodeGrid> {
                         crossAxisCount: crossAxisCount,
                         crossAxisSpacing: _ProxyGridSpacing.cardColumnSpacing,
                         mainAxisSpacing: _ProxyGridSpacing.cardRowSpacing,
-                        mainAxisExtent: 88.0,
+                        mainAxisExtent: _ProxyGridSpacing.cardHeight,
                       ),
                       itemCount: sortedGroup.all.length,
                       // 优化渲染性能
@@ -177,7 +212,7 @@ class _ProxyNodeGridWidgetState extends State<ProxyNodeGrid> {
                                 style: const TextStyle(fontSize: 14),
                               ),
                               subtitle: Text(
-                                trans.proxy.nodeInfoUnavailable,
+                                trans.proxy.node_info_unavailable,
                                 style: const TextStyle(fontSize: 12),
                               ),
                             ),

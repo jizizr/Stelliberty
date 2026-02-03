@@ -3,7 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:stelliberty/clash/providers/clash_provider.dart';
 import 'package:stelliberty/clash/providers/subscription_provider.dart';
 import 'package:stelliberty/storage/preferences.dart';
-import 'package:stelliberty/ui/notifiers/proxy_notifier.dart';
+import 'package:stelliberty/ui/viewmodels/proxy_viewmodel.dart';
 import 'package:stelliberty/ui/widgets/modern_toast.dart';
 import 'package:stelliberty/ui/widgets/proxy/proxy_action_bar.dart';
 import 'package:stelliberty/ui/widgets/proxy/proxy_empty_state.dart';
@@ -11,9 +11,9 @@ import 'package:stelliberty/ui/widgets/proxy/proxy_node_grid.dart';
 import 'package:stelliberty/ui/widgets/proxy/proxy_group_selector.dart';
 import 'package:stelliberty/ui/widgets/proxy/proxy_group_list_vertical.dart';
 import 'package:stelliberty/ui/constants/spacing.dart';
-import 'package:stelliberty/utils/logger.dart';
+import 'package:stelliberty/services/log_print_service.dart';
 import 'package:stelliberty/i18n/i18n.dart';
-import 'package:stelliberty/clash/data/clash_model.dart';
+import 'package:stelliberty/clash/model/clash_model.dart';
 
 // 代理页面状态数据类（用于优化 Selector）
 class _ProxyPageState {
@@ -58,7 +58,7 @@ class ProxyPage extends StatefulWidget {
 class _ProxyPageWidgetState extends State<ProxyPage> {
   late ScrollController _nodeListScrollController;
   final ScrollController _tabScrollController = ScrollController();
-  late ProxyNotifier _viewModel;
+  late ProxyViewModel _viewModel;
   int _currentCrossAxisCount = 2;
 
   // UI 状态
@@ -83,7 +83,7 @@ class _ProxyPageWidgetState extends State<ProxyPage> {
 
     final clashProvider = context.read<ClashProvider>();
 
-    _viewModel = ProxyNotifier(clashProvider: clashProvider);
+    _viewModel = ProxyViewModel(clashProvider: clashProvider);
 
     // 创建默认 ScrollController
     _nodeListScrollController = ScrollController();
@@ -93,7 +93,7 @@ class _ProxyPageWidgetState extends State<ProxyPage> {
 
     _nodeListScrollController.addListener(_updateScrollOffset);
 
-    // 在第一帧之前初始化并恢复位置
+    // 初始化并恢复位置
     _initializeWithScrollPosition();
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
@@ -160,21 +160,11 @@ class _ProxyPageWidgetState extends State<ProxyPage> {
   // 初始化页面数据
   Future<void> _initializePage() async {
     final clashProvider = context.read<ClashProvider>();
-    final subscriptionProvider = context.read<SubscriptionProvider>();
 
-    // 根据 Clash 运行状态加载代理列表
+    // 仅在 Clash 运行时加载
     if (clashProvider.isCoreRunning && clashProvider.proxyGroups.isEmpty) {
       Logger.info('Clash 正在运行，加载代理列表');
       await clashProvider.loadProxies();
-    } else if (!clashProvider.isCoreRunning &&
-        clashProvider.proxyGroups.isEmpty) {
-      final configPath = subscriptionProvider.getSubscriptionConfigPath();
-      Logger.info('Clash 未运行，尝试加载订阅配置预览：$configPath');
-      if (configPath != null) {
-        await clashProvider.loadProxiesFromSubscription(configPath);
-      } else {
-        Logger.warning('没有可用的订阅配置路径');
-      }
     }
   }
 
@@ -279,8 +269,8 @@ class _ProxyPageWidgetState extends State<ProxyPage> {
     if (subscriptionProvider.getSubscriptionConfigPath() == null) {
       return ProxyEmptyState(
         type: ProxyEmptyStateType.noSubscription,
-        message: trans.proxy.noSubscription,
-        subtitle: trans.proxy.pleaseAddSubscription,
+        message: trans.proxy.no_subscription,
+        subtitle: trans.proxy.please_add_subscription,
       );
     }
 
@@ -296,16 +286,16 @@ class _ProxyPageWidgetState extends State<ProxyPage> {
           clashProvider.outboundMode == 'direct') {
         return ProxyEmptyState(
           type: ProxyEmptyStateType.directMode,
-          message: trans.proxy.directModeEnabled,
-          subtitle: trans.proxy.directModeDescription,
+          message: trans.proxy.direct_mode_enabled,
+          subtitle: trans.proxy.direct_mode_description,
         );
       }
 
       return ProxyEmptyState(
         type: ProxyEmptyStateType.noProxyGroups,
-        message: trans.proxy.noProxyGroups,
+        message: trans.proxy.no_proxy_groups,
         subtitle: !clashProvider.isCoreRunning
-            ? trans.proxy.loadAfterStart
+            ? trans.proxy.load_after_start
             : null,
       );
     }
@@ -320,7 +310,7 @@ class _ProxyPageWidgetState extends State<ProxyPage> {
     final trans = context.translate;
 
     if (clashProvider.proxyGroups.isEmpty) {
-      return Center(child: Text(trans.proxy.noProxyGroups));
+      return Center(child: Text(trans.proxy.no_proxy_groups));
     }
 
     // 检测订阅是否切换
@@ -387,7 +377,7 @@ class _ProxyPageWidgetState extends State<ProxyPage> {
 
     // 如果切换失败（如代理组类型不支持手动切换），给用户提示
     if (!success && context.mounted) {
-      ModernToast.warning(context, trans.proxy.unsupportedGroupType);
+      ModernToast.warning(trans.proxy.unsupported_group_type);
     }
 
     // 移除 setState(),让 ClashProvider.notifyListeners() 触发 Selector 更新

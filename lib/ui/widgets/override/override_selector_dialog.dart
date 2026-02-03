@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:stelliberty/clash/data/override_model.dart';
+import 'package:stelliberty/clash/model/override_model.dart';
 import 'package:stelliberty/clash/providers/override_provider.dart';
 import 'package:stelliberty/ui/common/modern_switch.dart';
 import 'package:stelliberty/ui/common/modern_dialog.dart';
 import 'package:stelliberty/i18n/i18n.dart';
-import 'package:stelliberty/utils/logger.dart';
+import 'package:stelliberty/services/log_print_service.dart';
 
 // 覆写选择对话框 - 从全局覆写列表中选择并排序
 class OverrideSelectorDialog extends StatefulWidget {
@@ -54,7 +54,7 @@ class _OverrideSelectorDialogState extends State<OverrideSelectorDialog> {
   }
 
   void _initializeOrder(List<OverrideConfig> allOverrides) {
-    final overrideMap = {for (final o in allOverrides) o.id: o};
+    final overridesById = {for (final o in allOverrides) o.id: o};
 
     final List<String> sourceIds;
     final bool shouldUseSavedOrder;
@@ -66,12 +66,12 @@ class _OverrideSelectorDialogState extends State<OverrideSelectorDialog> {
       shouldUseSavedOrder = false;
     }
 
-    final sourceIdSet = sourceIds.toSet();
+    final existingIds = sourceIds.toSet();
     _orderedOverrides = [
       for (final id in sourceIds)
-        if (overrideMap.containsKey(id)) overrideMap[id]!,
+        if (overridesById.containsKey(id)) overridesById[id]!,
       for (final override in allOverrides)
-        if (!sourceIdSet.contains(override.id)) override,
+        if (!existingIds.contains(override.id)) override,
     ];
 
     Logger.debug(
@@ -85,7 +85,7 @@ class _OverrideSelectorDialogState extends State<OverrideSelectorDialog> {
     final trans = context.translate;
 
     return ModernDialog(
-      title: trans.overrideDialog.selectOverrides,
+      title: trans.override_dialog.select_overrides,
       titleIcon: Icons.checklist,
       maxWidth: 640,
       maxHeightRatio: 0.8,
@@ -118,15 +118,15 @@ class _OverrideSelectorDialogState extends State<OverrideSelectorDialog> {
       return;
     }
 
-    final newSortPreference = [for (final o in _orderedOverrides) o.id];
-    final newSelectedIds = [
+    final nextSortPreference = [for (final o in _orderedOverrides) o.id];
+    final nextSelectedIds = [
       for (final o in _orderedOverrides)
         if (_orderedSelectedIds.contains(o.id)) o.id,
     ];
 
     final hasChanges =
-        !_areListsEqual(newSelectedIds, widget.initialSelectedIds) ||
-        !_areListsEqual(newSortPreference, widget.initialSortPreference);
+        !_areListsEqual(nextSelectedIds, widget.initialSelectedIds) ||
+        !_areListsEqual(nextSortPreference, widget.initialSortPreference);
 
     if (!hasChanges) {
       Navigator.of(context).pop();
@@ -134,12 +134,12 @@ class _OverrideSelectorDialogState extends State<OverrideSelectorDialog> {
     }
 
     Logger.info(
-      '保存覆写配置 - 选中: ${newSelectedIds.length} 个，'
-      '排序: ${newSortPreference.length} 个',
+      '保存覆写配置 - 选中: ${nextSelectedIds.length} 个，'
+      '排序: ${nextSortPreference.length} 个',
     );
     Navigator.of(
       context,
-    ).pop((selectedIds: newSelectedIds, sortPreference: newSortPreference));
+    ).pop((selectedIds: nextSelectedIds, sortPreference: nextSortPreference));
   }
 
   bool _areListsEqual(List<String> a, List<String> b) {
@@ -178,12 +178,12 @@ class _OverrideSelectorDialogState extends State<OverrideSelectorDialog> {
           Icon(Icons.rule, size: 64, color: Colors.grey[400]),
           const SizedBox(height: 16),
           Text(
-            trans.overrideDialog.noOverridesTitle,
+            trans.override_dialog.no_overrides_title,
             style: TextStyle(fontSize: 16, color: Colors.grey[600]),
           ),
           const SizedBox(height: 8),
           Text(
-            trans.overrideDialog.noOverridesHint,
+            trans.override_dialog.no_overrides_hint,
             style: TextStyle(fontSize: 12, color: Colors.grey[500]),
           ),
         ],

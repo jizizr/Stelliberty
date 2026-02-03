@@ -94,13 +94,24 @@ fn run_service_windows() -> Result<(), Box<dyn std::error::Error>> {
         let clash_manager = Arc::new(RwLock::new(ClashManager::new()));
         let last_heartbeat = Arc::new(RwLock::new(Instant::now()));
         let handler = handler::create_handler(clash_manager.clone(), last_heartbeat.clone());
-        let mut ipc_server = IpcServer::new(handler);
+
+        // 创建就绪信号通道
+        let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
+        let mut ipc_server = IpcServer::new_with_ready_signal(handler, ready_tx);
 
         let ipc_handle = tokio::spawn(async move {
             if let Err(e) = ipc_server.run().await {
                 log::error!("IPC 服务器运行失败: {e}");
             }
         });
+
+        // 等待 IPC 服务器就绪（Named Pipe 创建完成）
+        if tokio::time::timeout(Duration::from_secs(5), ready_rx)
+            .await
+            .is_err()
+        {
+            log::error!("等待 IPC 服务器就绪超时");
+        }
 
         if let Err(e) = status_handle.set_service_status(ServiceStatus {
             service_type: SERVICE_TYPE,
@@ -202,7 +213,7 @@ fn run_service_windows() -> Result<(), Box<dyn std::error::Error>> {
                 log::error!("停止 Clash 失败: {}, 服务将继续退出", e);
             }
             Err(_) => {
-                log::error!("停止 Clash 超时 (5秒)，服务将强制退出");
+                log::error!("停止 Clash 超时 (5 秒)，服务将强制退出");
                 // 超时后尝试通过 drop 清理
                 drop(clash_manager);
             }
@@ -244,8 +255,23 @@ pub async fn run_service() -> Result<()> {
     tokio::spawn(async move {
         use tokio::signal::unix::{SignalKind, signal};
 
-        let mut sigterm = signal(SignalKind::terminate()).expect("无法注册 SIGTERM");
-        let mut sigint = signal(SignalKind::interrupt()).expect("无法注册 SIGINT");
+        let mut sigterm = match signal(SignalKind::terminate()) {
+            Ok(s) => s,
+            Err(e) => {
+                log::error!("注册 SIGTERM 失败: {e}");
+                let _ = shutdown_tx_clone.send(()).await;
+                return;
+            }
+        };
+
+        let mut sigint = match signal(SignalKind::interrupt()) {
+            Ok(s) => s,
+            Err(e) => {
+                log::error!("注册 SIGINT 失败: {e}");
+                let _ = shutdown_tx_clone.send(()).await;
+                return;
+            }
+        };
 
         tokio::select! {
             _ = sigterm.recv() => log::info!("收到 SIGTERM 信号"),
@@ -258,13 +284,24 @@ pub async fn run_service() -> Result<()> {
     let clash_manager = Arc::new(RwLock::new(ClashManager::new()));
     let last_heartbeat = Arc::new(RwLock::new(Instant::now()));
     let handler = handler::create_handler(clash_manager.clone(), last_heartbeat.clone());
-    let mut ipc_server = IpcServer::new(handler);
+
+    // 创建就绪信号通道
+    let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
+    let mut ipc_server = IpcServer::new_with_ready_signal(handler, ready_tx);
 
     let ipc_handle = tokio::spawn(async move {
         if let Err(e) = ipc_server.run().await {
             log::error!("IPC 服务器运行失败: {}", e);
         }
     });
+
+    // 等待 IPC 服务器就绪（Unix Socket 创建完成）
+    if tokio::time::timeout(Duration::from_secs(5), ready_rx)
+        .await
+        .is_err()
+    {
+        log::error!("等待 IPC 服务器就绪超时");
+    }
 
     log::info!("Stelliberty Service 运行中");
 

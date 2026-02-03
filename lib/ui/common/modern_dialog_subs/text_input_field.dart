@@ -1,12 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:stelliberty/atomic/platform_helper.dart';
 
-// 文本输入框组件
-// 特性：
-// - 毛玻璃背景效果
-// - 支持图标前缀
-// - 支持单行/多行输入
-// - 内置表单验证
-// - 自适应深色/浅色主题
+// 文本输入组件：支持图标前缀、校验与多行输入。
+// 提供半透明背景并适配明暗主题。
 class TextInputField extends StatelessWidget {
   // 文本控制器
   final TextEditingController controller;
@@ -47,6 +43,16 @@ class TextInputField extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isMobile = PlatformHelper.isMobile;
+
+    final iconSize = isMobile ? 18.0 : 20.0;
+    final fontSize = isMobile ? 13.0 : 14.0;
+    final contentPadding = isMobile
+        ? const EdgeInsets.symmetric(horizontal: 12, vertical: 12)
+        : const EdgeInsets.symmetric(horizontal: 16, vertical: 16);
+    final iconConstraints = isMobile
+        ? const BoxConstraints(minWidth: 40, minHeight: 40)
+        : const BoxConstraints(minWidth: 48, minHeight: 48);
 
     return Material(
       color: Colors.transparent,
@@ -66,30 +72,25 @@ class TextInputField extends StatelessWidget {
           minLines: minLines,
           maxLines: maxLines,
           validator: validator,
+          style: TextStyle(fontSize: fontSize),
           decoration: InputDecoration(
             labelText: label,
             hintText: hint,
-            prefixIcon: Icon(icon, size: 20),
-            prefixIconConstraints: const BoxConstraints(
-              minWidth: 48,
-              minHeight: 48,
-            ),
+            prefixIcon: Icon(icon, size: iconSize),
+            prefixIconConstraints: iconConstraints,
             border: InputBorder.none,
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 16,
-              vertical: 16,
-            ),
+            contentPadding: contentPadding,
             labelStyle: TextStyle(
               color: Theme.of(
                 context,
               ).colorScheme.onSurface.withValues(alpha: 0.7),
-              fontSize: 14,
+              fontSize: fontSize,
             ),
             hintStyle: TextStyle(
               color: Theme.of(
                 context,
               ).colorScheme.onSurface.withValues(alpha: 0.5),
-              fontSize: 14,
+              fontSize: fontSize,
             ),
           ),
         ),

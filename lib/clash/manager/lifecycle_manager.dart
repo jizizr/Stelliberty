@@ -1,41 +1,79 @@
 import 'dart:async';
-import 'dart:io';
-import 'package:stelliberty/clash/network/api_client.dart';
+import 'package:stelliberty/clash/client/clash_core_client.dart';
 import 'package:stelliberty/clash/services/process_service.dart';
+import 'package:stelliberty/clash/manager/process_manager.dart';
 import 'package:stelliberty/clash/config/config_injector.dart';
 import 'package:stelliberty/clash/config/clash_defaults.dart';
 import 'package:stelliberty/clash/services/traffic_monitor.dart';
-import 'package:stelliberty/clash/services/log_service.dart';
 import 'package:stelliberty/clash/services/geo_service.dart';
-import 'package:stelliberty/clash/providers/service_provider.dart';
-import 'package:stelliberty/clash/storage/preferences.dart';
-import 'package:stelliberty/clash/core/core_state.dart';
+import 'package:stelliberty/clash/manager/service_manager.dart';
+import 'package:stelliberty/storage/clash_preferences.dart';
+import 'package:stelliberty/clash/state/core_states.dart';
+import 'package:stelliberty/atomic/permission_checker.dart';
 import 'package:stelliberty/src/bindings/signals/signals.dart';
-import 'package:stelliberty/utils/logger.dart';
-
-// Clash 启动模式
-enum ClashStartMode {
-  // 普通模式（应用直接启动进程）
-  sidecar,
-
-  // 服务模式（通过服务启动）
-  service,
-}
+import 'package:stelliberty/services/log_print_service.dart';
 
 // Clash 生命周期管理器
 // 负责 Clash 核心的启动、停止、重启
 class LifecycleManager {
   final ProcessService _processService;
-  final ClashApiClient _apiClient;
+  late final ProcessManager _processManager;
+  final ClashCoreClient _coreClient;
   final TrafficMonitor _trafficMonitor;
-  final ClashLogService _logService;
   final Function() _notifyListeners;
-  final Function() _refreshAllStatusBatch;
 
-  // 核心状态管理器
-  final CoreStateManager _coreStateManager = CoreStateManager.instance;
+  // 日志监控回调（由 ClashManager 注入，统一管理）
+  Future<void> Function()? _onStartLogMonitoring;
+  Future<void> Function()? _onStopLogMonitoring;
 
-  // 回退标记（标记是否正在进行覆写回退）
+  // 状态变化回调
+  Function(CoreState)? _onCoreStateChanged;
+  Function(String)? _onCoreVersionChanged;
+  Function(String?)? _onConfigPathChanged;
+  Function(ClashStartMode?)? _onStartModeChanged;
+
+  // 设置状态变化回调
+  void setOnCoreStateChanged(Function(CoreState)? handler) {
+    _onCoreStateChanged = handler;
+  }
+
+  void setOnCoreVersionChanged(Function(String)? handler) {
+    _onCoreVersionChanged = handler;
+  }
+
+  void setOnConfigPathChanged(Function(String?)? handler) {
+    _onConfigPathChanged = handler;
+  }
+
+  void setOnStartModeChanged(Function(ClashStartMode?)? handler) {
+    _onStartModeChanged = handler;
+  }
+
+  // 设置日志监控回调
+  void setLogMonitoringCallbacks({
+    Future<void> Function()? onStart,
+    Future<void> Function()? onStop,
+  }) {
+    _onStartLogMonitoring = onStart;
+    _onStopLogMonitoring = onStop;
+  }
+
+  // 核心状态（由 Manager 直接管理）
+  CoreState _coreState = CoreState.stopped;
+  CoreState get coreState => _coreState;
+
+  // 更新核心状态并通知
+  void _updateCoreState(CoreState nextState) {
+    if (_coreState == nextState) return;
+
+    final previousState = _coreState;
+    _coreState = nextState;
+    Logger.debug('核心状态变化：${previousState.name} -> ${nextState.name}');
+    _onCoreStateChanged?.call(nextState);
+    _notifyListeners();
+  }
+
+  // 回退标记（防止无限递归）
   bool _isFallbackRetry = false;
 
   // 当前启动模式
@@ -48,10 +86,11 @@ class LifecycleManager {
 
   // 更新当前配置路径（用于重载后同步路径）
   void updateConfigPath(String? configPath) {
-    if (configPath != null && configPath.isNotEmpty) {
-      _originalConfigPath = configPath;
-      Logger.debug('配置路径已更新：$configPath');
-    }
+    if (configPath == null || configPath.isEmpty) return;
+
+    _originalConfigPath = configPath;
+    _onConfigPathChanged?.call(configPath);
+    Logger.debug('配置路径已更新：$configPath');
   }
 
   // 启动时实际使用的端口列表（用于停止时准确释放）
@@ -64,41 +103,32 @@ class LifecycleManager {
   String _coreVersion = 'Unknown';
   String get coreVersion => _coreVersion;
 
-  // 运行状态（通过状态管理器获取）
-  bool get isCoreRunning => _coreStateManager.currentState.isRunning;
-  bool get isCoreRestarting =>
-      _coreStateManager.currentState == CoreState.restarting;
-  bool get isCoreStarting =>
-      _coreStateManager.currentState == CoreState.starting;
-  bool get isCoreStopping =>
-      _coreStateManager.currentState == CoreState.stopping;
+  // 运行状态
+  bool get isCoreRunning => _coreState.isRunning;
+  bool get isCoreRestarting => _coreState == CoreState.restarting;
+  bool get isCoreStarting => _coreState == CoreState.starting;
+  bool get isCoreStopping => _coreState == CoreState.stopping;
 
   LifecycleManager({
     required ProcessService processService,
-    required ClashApiClient apiClient,
+    required ClashCoreClient coreClient,
     required TrafficMonitor trafficMonitor,
-    required ClashLogService logService,
-    required Function() notifyListeners,
-    required Function() refreshAllStatusBatch,
+    Function()? notifyListeners,
   }) : _processService = processService,
-       _apiClient = apiClient,
+       _coreClient = coreClient,
        _trafficMonitor = trafficMonitor,
-       _logService = logService,
-       _notifyListeners = notifyListeners,
-       _refreshAllStatusBatch = refreshAllStatusBatch;
+       _notifyListeners = notifyListeners ?? (() {}) {
+    _processManager = ProcessManager(service: _processService);
+  }
 
-  // 启动 Clash 核心（不触碰系统代理）
-  //
-  // 参数：
-  // - configPath: 配置文件路径（可选，为空时使用保存的原始路径）
-  // - overrides: 覆写配置列表（由 ClashManager 通过回调获取）
-  // - enableFallback: 是否启用覆写失败回退（默认 true）
-  // - onOverridesFailed: 覆写失败时的回调（用于禁用覆写）
+  // 启动核心进程（不修改系统代理）。
+  // 支持传入配置路径、覆写回调与 TUN 相关参数。
   Future<bool> startCore({
     String? configPath,
     List<OverrideConfig> overrides = const [],
     bool enableFallback = true,
     Future<void> Function()? onOverridesFailed,
+    Future<void> Function()? onThirdLevelFallback,
     required int mixedPort, // 混合端口
     required bool isIpv6Enabled,
     required bool isTunEnabled,
@@ -107,9 +137,9 @@ class LifecycleManager {
     required bool isTunAutoRouteEnabled,
     required bool isTunAutoRedirectEnabled,
     required bool isTunAutoDetectInterfaceEnabled,
-    required List<String> tunDnsHijack,
+    required List<String> tunDnsHijacks,
     required bool isTunStrictRouteEnabled,
-    required List<String> tunRouteExcludeAddress,
+    required List<String> tunRouteExcludeAddresses,
     required bool isTunIcmpForwardingDisabled,
     required int tunMtu,
     required bool isAllowLanEnabled,
@@ -138,44 +168,35 @@ class LifecycleManager {
       return true;
     }
 
-    _coreStateManager.setStarting(reason: '开始启动核心');
+    _updateCoreState(CoreState.starting); // '开始启动核心');
 
     try {
-      // 如果传入的 configPath 为空，尝试使用原始订阅路径（重启场景）
-      if ((configPath == null || configPath.isEmpty) &&
-          _originalConfigPath != null &&
-          _originalConfigPath!.isNotEmpty) {
-        // 检查原始配置文件是否存在
-        final originalFile = File(_originalConfigPath!);
-        if (await originalFile.exists()) {
-          Logger.info('重启时未提供配置路径，使用原始订阅路径：$_originalConfigPath');
-          configPath = _originalConfigPath;
-        } else {
-          Logger.warning('原始订阅配置文件已不存在：$_originalConfigPath，将使用默认配置或等待新配置');
-          _originalConfigPath = null; // 清空过期的路径
+      // 检查 TUN 权限（如果 TUN 已启用）
+      bool actualTunEnabled = isTunEnabled;
+      if (isTunEnabled) {
+        final hasTunPermission = await _checkTunPermission();
+        if (!hasTunPermission) {
+          Logger.warning('TUN 已启用但没有权限，自动禁用 TUN');
+          actualTunEnabled = false;
         }
       }
-
-      // ⚠️ 保存原始订阅路径（用于重启和回退）
-      if (configPath != null && configPath.isNotEmpty) {
-        _originalConfigPath = configPath;
-      }
-
       // 生成运行时配置（支持无配置路径时使用默认配置）
-      final generatedConfigPath = await ConfigInjector.injectCustomConfigParams(
+      final generatedConfig = await ConfigInjector.generateRuntimeConfig(
         configPath: configPath,
         overrides: overrides,
-        httpPort: mixedPort, // 传递混合端口给配置注入器
+        mixedPort: mixedPort,
+        socksPort: socksPort,
+        httpPort: httpPort,
         isIpv6Enabled: isIpv6Enabled,
-        isTunEnabled: isTunEnabled,
+        isTunEnabled: actualTunEnabled,
         tunStack: tunStack,
         tunDevice: tunDevice,
         isTunAutoRouteEnabled: isTunAutoRouteEnabled,
         isTunAutoRedirectEnabled: isTunAutoRedirectEnabled,
         isTunAutoDetectInterfaceEnabled: isTunAutoDetectInterfaceEnabled,
-        tunDnsHijack: tunDnsHijack,
+        tunDnsHijacks: tunDnsHijacks,
         isTunStrictRouteEnabled: isTunStrictRouteEnabled,
-        tunRouteExcludeAddress: tunRouteExcludeAddress,
+        tunRouteExcludeAddresses: tunRouteExcludeAddresses,
         isTunIcmpForwardingDisabled: isTunIcmpForwardingDisabled,
         tunMtu: tunMtu,
         isAllowLanEnabled: isAllowLanEnabled,
@@ -190,11 +211,11 @@ class LifecycleManager {
         outboundMode: outboundMode,
       );
 
-      if (generatedConfigPath == null) {
+      if (generatedConfig == null) {
         throw Exception('配置生成失败');
       }
 
-      final runtimeConfigPath = generatedConfigPath;
+      final runtimeConfigPath = generatedConfig.runtimeConfigPath;
 
       // 检查服务是否可用
       final serviceAvailable = _checkServiceAvailable();
@@ -203,10 +224,12 @@ class LifecycleManager {
 
       if (serviceAvailable) {
         // 服务模式启动
-        Logger.info('使用服务模式启动 Clash 核心');
+        final serviceState = ServiceManager.instance.cachedState;
+        Logger.info('使用服务模式启动 Clash 核心（状态：$serviceState）');
         isStartSuccessful = await _startWithService(
           runtimeConfigPath,
           externalController,
+          configPath,
         );
       } else {
         // 普通模式启动
@@ -217,6 +240,7 @@ class LifecycleManager {
           socksPort,
           httpPort, // 单独 HTTP 端口
           externalController,
+          configPath,
         );
       }
 
@@ -240,36 +264,84 @@ class LifecycleManager {
         shouldFallback = true;
       }
 
-      // 如果需要回退，执行回退逻辑（只调用一次回调）
+      // 如果需要回退,执行回退逻辑(只调用一次回调)
       if (shouldFallback) {
-        Logger.error('启动失败，检测到有覆写配置，执行回退');
+        Logger.error('启动失败,检测到有覆写配置,执行回退');
 
         // 标记为回退重试
         _isFallbackRetry = true;
 
-        // 确保核心已停止（可能已经停止或根本没启动成功）
-        if (isCoreRunning) {
-          await stopCore();
+        try {
+          // 确保核心已停止(可能已经停止或根本没启动成功)
+          if (isCoreRunning) {
+            await stopCore();
+          }
+
+          // 调用覆写失败回调(禁用当前订阅的覆写) - 只调用一次
+          if (onOverridesFailed != null) {
+            Logger.warning('调用覆写失败回调,禁用所有覆写');
+            await onOverridesFailed();
+          }
+
+          // 等待一段时间确保资源释放
+          await Future.delayed(const Duration(milliseconds: 500));
+
+          // 重置状态,允许递归调用
+          _updateCoreState(CoreState.stopped); // '回退准备重启');
+
+          // 重新启动(不带覆写,且禁用回退以避免无限循环)
+          Logger.info('使用无覆写配置重新启动核心');
+          isStartSuccessful = await startCore(
+            configPath: configPath,
+            overrides: const [], // 不使用覆写
+            mixedPort: mixedPort, // 混合端口
+            isIpv6Enabled: isIpv6Enabled,
+            isTunEnabled: isTunEnabled,
+            tunStack: tunStack,
+            tunDevice: tunDevice,
+            isTunAutoRouteEnabled: isTunAutoRouteEnabled,
+            isTunAutoRedirectEnabled: isTunAutoRedirectEnabled,
+            isTunAutoDetectInterfaceEnabled: isTunAutoDetectInterfaceEnabled,
+            tunDnsHijacks: tunDnsHijacks,
+            isTunStrictRouteEnabled: isTunStrictRouteEnabled,
+            tunRouteExcludeAddresses: tunRouteExcludeAddresses,
+            isTunIcmpForwardingDisabled: isTunIcmpForwardingDisabled,
+            tunMtu: tunMtu,
+            isAllowLanEnabled: isAllowLanEnabled,
+            isTcpConcurrentEnabled: isTcpConcurrentEnabled,
+            geodataLoader: geodataLoader,
+            findProcessMode: findProcessMode,
+            clashCoreLogLevel: clashCoreLogLevel,
+            externalController: externalController,
+            isUnifiedDelayEnabled: isUnifiedDelayEnabled,
+            outboundMode: outboundMode,
+            socksPort: socksPort,
+            httpPort: httpPort, // 单独 HTTP 端口
+            enableFallback: false, // 禁用回退以避免递归
+            onOverridesFailed: null,
+          );
+
+          if (isStartSuccessful) {
+            Logger.info('回退成功：无覆写配置启动成功');
+          } else {
+            Logger.error('回退失败：即使没有覆写也无法启动');
+          }
+        } finally {
+          // 重置回退标记(确保异常时也能重置)
+          _isFallbackRetry = false;
         }
+      }
 
-        // 调用覆写失败回调（禁用当前订阅的覆写） - 只调用一次
-        if (onOverridesFailed != null) {
-          Logger.warning('调用覆写失败回调，禁用所有覆写');
-          await onOverridesFailed();
-        }
+      // 最终回退：如果配置文件启动失败，尝试使用默认配置
+      if (!isStartSuccessful &&
+          enableFallback &&
+          !_isFallbackRetry &&
+          configPath != null &&
+          configPath.isNotEmpty) {
+        Logger.error('配置文件启动失败，尝试使用默认配置回退');
 
-        // 等待一段时间确保资源释放
-        await Future.delayed(const Duration(milliseconds: 500));
-
-        // 重置状态，允许递归调用
-        _coreStateManager.setStopped(reason: '回退准备重启');
-
-        // 重新启动（不带覆写，且禁用回退以避免无限循环）
-        Logger.info('使用无覆写配置重新启动核心');
-        isStartSuccessful = await startCore(
-          configPath: configPath,
-          overrides: const [], // 不使用覆写
-          mixedPort: mixedPort, // 混合端口
+        isStartSuccessful = await _fallbackToDefaultConfig(
+          mixedPort: mixedPort,
           isIpv6Enabled: isIpv6Enabled,
           isTunEnabled: isTunEnabled,
           tunStack: tunStack,
@@ -277,9 +349,9 @@ class LifecycleManager {
           isTunAutoRouteEnabled: isTunAutoRouteEnabled,
           isTunAutoRedirectEnabled: isTunAutoRedirectEnabled,
           isTunAutoDetectInterfaceEnabled: isTunAutoDetectInterfaceEnabled,
-          tunDnsHijack: tunDnsHijack,
+          tunDnsHijacks: tunDnsHijacks,
           isTunStrictRouteEnabled: isTunStrictRouteEnabled,
-          tunRouteExcludeAddress: tunRouteExcludeAddress,
+          tunRouteExcludeAddresses: tunRouteExcludeAddresses,
           isTunIcmpForwardingDisabled: isTunIcmpForwardingDisabled,
           tunMtu: tunMtu,
           isAllowLanEnabled: isAllowLanEnabled,
@@ -291,31 +363,60 @@ class LifecycleManager {
           isUnifiedDelayEnabled: isUnifiedDelayEnabled,
           outboundMode: outboundMode,
           socksPort: socksPort,
-          httpPort: httpPort, // 单独 HTTP 端口
-          enableFallback: false, // 禁用回退以避免递归
-          onOverridesFailed: null,
+          httpPort: httpPort,
+          onDefaultConfigSuccess: onThirdLevelFallback,
         );
-
-        // 重置回退标记
-        _isFallbackRetry = false;
-
-        if (isStartSuccessful) {
-          Logger.info('回退成功：无覆写配置启动成功');
-        } else {
-          Logger.error('回退失败：即使没有覆写也无法启动');
-        }
       }
 
       return isStartSuccessful;
     } catch (e) {
       Logger.error('启动 Clash 失败：$e');
-      _coreStateManager.setStopped(reason: '启动失败');
+
+      // 如果配置文件导致异常,尝试使用默认配置回退
+      if (enableFallback &&
+          !_isFallbackRetry &&
+          configPath != null &&
+          configPath.isNotEmpty) {
+        Logger.error('配置文件导致启动异常，尝试使用默认配置回退');
+
+        final isStartSuccessful = await _fallbackToDefaultConfig(
+          mixedPort: mixedPort,
+          isIpv6Enabled: isIpv6Enabled,
+          isTunEnabled: isTunEnabled,
+          tunStack: tunStack,
+          tunDevice: tunDevice,
+          isTunAutoRouteEnabled: isTunAutoRouteEnabled,
+          isTunAutoRedirectEnabled: isTunAutoRedirectEnabled,
+          isTunAutoDetectInterfaceEnabled: isTunAutoDetectInterfaceEnabled,
+          tunDnsHijacks: tunDnsHijacks,
+          isTunStrictRouteEnabled: isTunStrictRouteEnabled,
+          tunRouteExcludeAddresses: tunRouteExcludeAddresses,
+          isTunIcmpForwardingDisabled: isTunIcmpForwardingDisabled,
+          tunMtu: tunMtu,
+          isAllowLanEnabled: isAllowLanEnabled,
+          isTcpConcurrentEnabled: isTcpConcurrentEnabled,
+          geodataLoader: geodataLoader,
+          findProcessMode: findProcessMode,
+          clashCoreLogLevel: clashCoreLogLevel,
+          externalController: externalController,
+          isUnifiedDelayEnabled: isUnifiedDelayEnabled,
+          outboundMode: outboundMode,
+          socksPort: socksPort,
+          httpPort: httpPort,
+          onDefaultConfigSuccess: onThirdLevelFallback,
+        );
+
+        return isStartSuccessful;
+      }
+
+      // 无法回退,直接返回失败
+      _updateCoreState(CoreState.stopped); // '启动失败');
       _actualPortsUsed = null;
       return false;
     } finally {
       // 如果还在启动状态但没有成功，设置为停止状态
-      if (_coreStateManager.currentState == CoreState.starting) {
-        _coreStateManager.setStopped(reason: '启动未完成');
+      if (_coreState == CoreState.starting) {
+        _updateCoreState(CoreState.stopped); // '启动未完成');
       }
     }
   }
@@ -324,12 +425,9 @@ class LifecycleManager {
   // 直接使用 ServiceProvider 的缓存状态，避免重复 IPC 调用
   bool _checkServiceAvailable() {
     try {
-      // 使用 ServiceProvider 单例
-      final serviceProvider = ServiceProvider();
-      final isServiceModeInstalled = serviceProvider.isServiceModeInstalled;
-      final status = serviceProvider.status;
-
-      Logger.debug('检查服务状态：服务模式已安装=$isServiceModeInstalled，状态=$status');
+      // 使用 ServiceManager 单例
+      final serviceManager = ServiceManager.instance;
+      final isServiceModeInstalled = serviceManager.isServiceModeInstalled;
 
       // 关键：只要服务已安装（stopped 或 running 都可以），就可以使用服务模式
       // 因为通过 IPC 发送 StartClash 命令时，服务会自动启动
@@ -342,17 +440,18 @@ class LifecycleManager {
 
   // 通过服务启动 Clash 核心
   Future<bool> _startWithService(
-    String configPath,
+    String runtimeConfigPath,
     String externalController,
+    String? originalConfigPath,
   ) async {
     try {
-      final execPath = await ProcessService.getExecutablePath();
+      final execPath = await ProcessManager.getExecutablePath();
       final clashDataDir = await GeoService.getGeoDataDir();
 
       // 发送启动命令给服务
       StartClash(
         corePath: execPath,
-        configPath: configPath,
+        configPath: runtimeConfigPath,
         dataDir: clashDataDir,
         externalController: externalController,
       ).sendSignalToRust();
@@ -362,7 +461,7 @@ class LifecycleManager {
       final signal = await ClashProcessResult.rustSignalStream.first.timeout(
         const Duration(seconds: 30),
         onTimeout: () {
-          throw TimeoutException('服务启动核心超时（30秒）');
+          throw TimeoutException('服务启动核心超时（30 秒）');
         },
       );
 
@@ -373,10 +472,11 @@ class LifecycleManager {
 
       // 记录启动模式
       _currentStartMode = ClashStartMode.service;
+      _onStartModeChanged?.call(ClashStartMode.service);
 
       // 等待 IPC API 就绪（与普通模式保持一致）
       Logger.info('等待服务模式下的 IPC API 就绪…');
-      await _apiClient.waitForReady(
+      await _coreClient.waitForReady(
         maxRetries: ClashDefaults.apiReadyMaxRetries,
         retryInterval: Duration(
           milliseconds: ClashDefaults.apiReadyRetryInterval,
@@ -384,7 +484,10 @@ class LifecycleManager {
       );
 
       // 等待 API 就绪并初始化（服务模式使用传递的 externalController 地址）
-      return await _initializeAfterStart(externalController);
+      return await _initializeAfterStart(
+        externalController,
+        originalConfigPath,
+      );
     } catch (e) {
       Logger.error('服务模式启动失败：$e');
       return false;
@@ -393,14 +496,15 @@ class LifecycleManager {
 
   // 通过普通模式启动 Clash 核心
   Future<bool> _startWithSidecar(
-    String configPath,
+    String runtimeConfigPath,
     int mixedPort,
     int? socksPort,
     int? httpPort,
     String externalController,
+    String? originalConfigPath,
   ) async {
     try {
-      final execPath = await ProcessService.getExecutablePath();
+      final execPath = await ProcessManager.getExecutablePath();
 
       final portsToCheck = <int>[ClashDefaults.apiPort, mixedPort];
       if (socksPort != null) {
@@ -417,9 +521,9 @@ class LifecycleManager {
 
       await Future.wait([
         // 任务 1: 启动进程
-        _processService.start(
+        _processManager.startProcess(
           executablePath: execPath,
-          configPath: configPath,
+          configPath: runtimeConfigPath,
           apiHost: ClashDefaults.apiHost,
           apiPort: ClashDefaults.apiPort,
           portsToCheck: portsToCheck,
@@ -428,7 +532,7 @@ class LifecycleManager {
         // 任务 2: 立即开始轮询 API（不等进程启动完成）
         Future.delayed(
           Duration.zero,
-          () => _apiClient.waitForReady(
+          () => _coreClient.waitForReady(
             maxRetries: ClashDefaults.apiReadyMaxRetries,
             retryInterval: Duration(
               milliseconds: ClashDefaults.apiReadyRetryInterval,
@@ -441,21 +545,25 @@ class LifecycleManager {
 
       // 记录启动模式
       _currentStartMode = ClashStartMode.sidecar;
+      _onStartModeChanged?.call(ClashStartMode.sidecar);
 
       // 完成后续初始化（获取版本、启动监控）
-      return await _initializeAfterStart(externalController);
+      return await _initializeAfterStart(
+        externalController,
+        originalConfigPath,
+      );
     } catch (e) {
       Logger.error('普通模式启动失败：$e');
 
       // 确保进程被终止（API 超时时进程可能还在运行）
       try {
         final portsToRelease = _actualPortsUsed ?? <int>[ClashDefaults.apiPort];
-        await _processService.stop(
+        await _processManager.stopProcess(
           timeout: Duration(seconds: ClashDefaults.processKillTimeout),
           portsToRelease: portsToRelease,
         );
-      } catch (stopError) {
-        Logger.warning('清理失败的进程时出错：$stopError');
+      } catch (e) {
+        Logger.warning('清理失败的进程时出错：$e');
       }
 
       _actualPortsUsed = null;
@@ -464,22 +572,21 @@ class LifecycleManager {
   }
 
   // 启动后初始化（获取版本、启动监控服务）
-  Future<bool> _initializeAfterStart(String externalController) async {
+  Future<bool> _initializeAfterStart(
+    String externalController,
+    String? configPath,
+  ) async {
     try {
       // API 已在并行启动时就绪，但 Named Pipe 可能还需要一点时间创建
       // 等待 IPC 就绪（通过重试获取版本号）
       final version = await _waitForIpcReady();
       if (version != null) {
         _coreVersion = version;
+        _onCoreVersionChanged?.call(version);
       } else {
         Logger.warning('未能通过 IPC 获取版本号');
         _coreVersion = 'Unknown';
-      }
-
-      try {
-        await _refreshAllStatusBatch();
-      } catch (e) {
-        Logger.error('获取配置状态失败：$e');
+        _onCoreVersionChanged?.call('Unknown');
       }
 
       // 构建 API base URL
@@ -494,17 +601,22 @@ class LifecycleManager {
       }
 
       try {
-        await _logService.startMonitoring(baseUrl);
+        await _onStartLogMonitoring?.call();
       } catch (e) {
         Logger.error('启动日志服务失败：$e');
       }
 
       // 标记为运行状态
-      _coreStateManager.setRunning(reason: '核心启动成功');
+      _updateCoreState(CoreState.running); // '核心启动成功');
+
+      // 更新当前配置路径（启动成功后才更新，失败则不更新）
+      _originalConfigPath = configPath;
+      _onConfigPathChanged?.call(configPath);
+      Logger.debug('更新当前配置路径：${configPath ?? "null（使用默认配置）"}');
 
       // 服务模式下启动心跳定时器
       if (_currentStartMode == ClashStartMode.service) {
-        _startServiceHeartbeat();
+        startServiceHeartbeat();
       }
 
       _notifyListeners();
@@ -514,7 +626,7 @@ class LifecycleManager {
       return true;
     } catch (e) {
       Logger.error('初始化失败：$e');
-      _coreStateManager.setStopped(reason: '初始化失败');
+      _updateCoreState(CoreState.stopped); // '初始化失败');
       return false;
     }
   }
@@ -527,7 +639,7 @@ class LifecycleManager {
 
       // 1. 检查核心是否能正常响应基本 API 调用
       try {
-        await _apiClient.getVersion().timeout(
+        await _coreClient.getVersion().timeout(
           const Duration(seconds: 3),
           onTimeout: () => throw TimeoutException('获取版本超时'),
         );
@@ -538,7 +650,7 @@ class LifecycleManager {
       }
 
       // 2. 检查是否能成功获取基本配置（最重要的验证）
-      final config = await _apiClient.getConfig().timeout(
+      final config = await _coreClient.getConfig().timeout(
         const Duration(seconds: 5),
         onTimeout: () => throw TimeoutException('获取配置超时'),
       );
@@ -548,10 +660,8 @@ class LifecycleManager {
         return false;
       }
 
-      // 注意：不再验证代理列表，因为：
-      // 1. 代理数据由 ClashProvider 异步加载，时序不确定
-      // 2. 配置验证的职责是确保核心能正常工作，而不是验证业务数据
-      // 3. 代理列表的验证应该由 ClashProvider 负责
+      // 仅验证核心配置，不校验代理列表。
+      // 代理数据由 ClashProvider 异步加载并负责校验。
 
       Logger.info('配置验证成功（核心功能验证）');
       return true;
@@ -561,15 +671,14 @@ class LifecycleManager {
     }
   }
 
-  // 等待 IPC (Named Pipe) 就绪
-  // Clash 核心启动后，Named Pipe 的创建需要 1-2 秒
-  // 返回获取到的版本号（如果成功）
+  // 等待 IPC 就绪并返回版本号（如成功）。
+  // 核心启动后 IPC 创建可能有短暂延迟。
   Future<String?> _waitForIpcReady() async {
     for (int i = 0; i < ClashDefaults.ipcReadyMaxRetries; i++) {
       try {
         // 尝试调用一个简单的 API 来检查 IPC 是否可用
-        final version = await _apiClient.getVersion();
-        Logger.debug('IPC 已就绪（第 ${i + 1} 次尝试），版本：$version');
+        final version = await _coreClient.getVersion();
+        Logger.debug('IPC已就绪（第 ${i + 1} 次尝试），版本：$version');
         return version; // IPC 可用，返回版本号
       } catch (e) {
         if (i < ClashDefaults.ipcReadyMaxRetries - 1) {
@@ -586,6 +695,104 @@ class LifecycleManager {
     return null;
   }
 
+  // 使用默认配置启动（回退机制的最后手段）
+  // 返回 true 表示启动成功，false 表示失败
+  Future<bool> _fallbackToDefaultConfig({
+    required int mixedPort,
+    required bool isIpv6Enabled,
+    required bool isTunEnabled,
+    required String tunStack,
+    required String tunDevice,
+    required bool isTunAutoRouteEnabled,
+    required bool isTunAutoRedirectEnabled,
+    required bool isTunAutoDetectInterfaceEnabled,
+    required List<String> tunDnsHijacks,
+    required bool isTunStrictRouteEnabled,
+    required List<String> tunRouteExcludeAddresses,
+    required bool isTunIcmpForwardingDisabled,
+    required int tunMtu,
+    required bool isAllowLanEnabled,
+    required bool isTcpConcurrentEnabled,
+    required String geodataLoader,
+    required String findProcessMode,
+    required String clashCoreLogLevel,
+    required String externalController,
+    required bool isUnifiedDelayEnabled,
+    required String outboundMode,
+    int? socksPort,
+    int? httpPort,
+    Future<void> Function()? onDefaultConfigSuccess,
+  }) async {
+    _isFallbackRetry = true;
+
+    try {
+      // 确保核心已停止
+      if (isCoreRunning) {
+        Logger.debug('停止核心以准备使用默认配置启动');
+        await stopCore();
+      } else {
+        // 如果核心未运行，确保状态正确
+        _updateCoreState(CoreState.stopped); // '准备使用默认配置启动');
+        _actualPortsUsed = null;
+      }
+
+      // 等待资源释放
+      await Future.delayed(const Duration(milliseconds: 500));
+
+      // 使用默认配置启动
+      Logger.info('使用默认配置启动核心（无订阅节点）');
+      final success = await startCore(
+        configPath: null, // 使用默认配置
+        overrides: const [], // 不使用覆写
+        mixedPort: mixedPort,
+        isIpv6Enabled: isIpv6Enabled,
+        isTunEnabled: isTunEnabled,
+        tunStack: tunStack,
+        tunDevice: tunDevice,
+        isTunAutoRouteEnabled: isTunAutoRouteEnabled,
+        isTunAutoRedirectEnabled: isTunAutoRedirectEnabled,
+        isTunAutoDetectInterfaceEnabled: isTunAutoDetectInterfaceEnabled,
+        tunDnsHijacks: tunDnsHijacks,
+        isTunStrictRouteEnabled: isTunStrictRouteEnabled,
+        tunRouteExcludeAddresses: tunRouteExcludeAddresses,
+        isTunIcmpForwardingDisabled: isTunIcmpForwardingDisabled,
+        tunMtu: tunMtu,
+        isAllowLanEnabled: isAllowLanEnabled,
+        isTcpConcurrentEnabled: isTcpConcurrentEnabled,
+        geodataLoader: geodataLoader,
+        findProcessMode: findProcessMode,
+        clashCoreLogLevel: clashCoreLogLevel,
+        externalController: externalController,
+        isUnifiedDelayEnabled: isUnifiedDelayEnabled,
+        outboundMode: outboundMode,
+        socksPort: socksPort,
+        httpPort: httpPort,
+        enableFallback: false, // 禁用回退以避免递归
+        onOverridesFailed: null,
+        onThirdLevelFallback: null, // 内部调用不需要回调
+      );
+
+      if (success) {
+        Logger.info('默认配置启动成功');
+
+        // 调用成功回调（用于清除 currentSubscription）
+        if (onDefaultConfigSuccess != null) {
+          try {
+            await onDefaultConfigSuccess();
+          } catch (e) {
+            Logger.error('默认配置启动成功回调执行失败：$e');
+          }
+        }
+      } else {
+        Logger.error('默认配置启动失败，这不应该发生！请检查 Clash 核心文件或系统环境');
+      }
+
+      return success;
+    } finally {
+      _isFallbackRetry = false;
+    }
+  }
+
   // 停止 Clash 核心（不触碰系统代理）
   Future<bool> stopCore() async {
     if (isCoreStopping) {
@@ -598,7 +805,7 @@ class LifecycleManager {
       return true;
     }
 
-    _coreStateManager.setStopping(reason: '开始停止核心');
+    _updateCoreState(CoreState.stopping); // '开始停止核心');
 
     try {
       // 先停止监控服务（优雅关闭 WebSocket 连接）
@@ -610,7 +817,7 @@ class LifecycleManager {
       }
 
       try {
-        await _logService.stopMonitoring();
+        await _onStopLogMonitoring?.call();
       } catch (e) {
         Logger.error('停止日志服务失败：$e');
       }
@@ -618,7 +825,7 @@ class LifecycleManager {
       // 再停止 Clash 核心
       if (_currentStartMode == ClashStartMode.service) {
         Logger.info('使用服务模式停止核心');
-        _stopServiceHeartbeat(); // 停止心跳定时器
+        stopServiceHeartbeat(); // 停止心跳定时器
         await _stopWithService();
       } else {
         Logger.info('使用普通模式停止核心');
@@ -626,10 +833,11 @@ class LifecycleManager {
       }
 
       // 清理状态
-      _coreStateManager.setStopped(reason: '核心已停止');
+      _updateCoreState(CoreState.stopped); // '核心已停止');
       _actualPortsUsed = null;
       _coreVersion = 'Unknown';
       _currentStartMode = null;
+      _onStartModeChanged?.call(null);
 
       _notifyListeners();
       Logger.info('Clash 核心已停止');
@@ -639,8 +847,8 @@ class LifecycleManager {
       return false;
     } finally {
       // 确保状态正确
-      if (_coreStateManager.currentState == CoreState.stopping) {
-        _coreStateManager.setStopped(reason: '停止操作完成');
+      if (_coreState == CoreState.stopping) {
+        _updateCoreState(CoreState.stopped); // '停止操作完成');
       }
     }
   }
@@ -655,7 +863,7 @@ class LifecycleManager {
       final signal = await ClashProcessResult.rustSignalStream.first.timeout(
         const Duration(seconds: 10),
         onTimeout: () {
-          throw TimeoutException('服务停止核心超时（10秒）');
+          throw TimeoutException('服务停止核心超时（10 秒）');
         },
       );
 
@@ -680,17 +888,17 @@ class LifecycleManager {
       portsToRelease = <int>[ClashDefaults.apiPort];
     }
 
-    await _processService.stop(
+    await _processManager.stopProcess(
       timeout: Duration(seconds: ClashDefaults.processKillTimeout),
       portsToRelease: portsToRelease,
     );
   }
 
   // 启动服务心跳定时器（仅服务模式使用）
-  void _startServiceHeartbeat() {
+  void startServiceHeartbeat() {
     _serviceHeartbeatTimer?.cancel();
 
-    // 立即发送第一次心跳，避免服务启动后等待30秒导致超时
+    // 立即发送第一次心跳，避免服务启动后等待30 秒导致超时
     Logger.debug('发送服务心跳（立即）');
     SendServiceHeartbeat().sendSignalToRust();
 
@@ -700,11 +908,11 @@ class LifecycleManager {
       Logger.debug('发送服务心跳');
       SendServiceHeartbeat().sendSignalToRust();
     });
-    Logger.info('服务心跳定时器已启动（30秒间隔）');
+    Logger.info('服务心跳定时器已启动（30 秒间隔）');
   }
 
   // 停止服务心跳定时器
-  void _stopServiceHeartbeat() {
+  void stopServiceHeartbeat() {
     if (_serviceHeartbeatTimer != null) {
       _serviceHeartbeatTimer!.cancel();
       _serviceHeartbeatTimer = null;
@@ -714,5 +922,29 @@ class LifecycleManager {
 
   void dispose() {
     _serviceHeartbeatTimer?.cancel();
+  }
+
+  // 检查 TUN 权限
+  Future<bool> _checkTunPermission() async {
+    try {
+      // 检查服务模式是否已安装
+      final serviceManager = ServiceManager.instance;
+      if (serviceManager.isServiceModeInstalled) {
+        return true;
+      }
+
+      // 检查是否以管理员/root 权限运行
+      final isElevated = await PermissionService.isElevated();
+      return isElevated;
+    } catch (e) {
+      Logger.error('检查 TUN 权限失败：$e');
+      return false;
+    }
+  }
+
+  // 强制重置核心状态（服务安装/卸载时调用）
+  void forceResetCoreState() {
+    _updateCoreState(CoreState.stopped);
+    _actualPortsUsed = null;
   }
 }

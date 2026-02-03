@@ -1,23 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
-import 'package:stelliberty/clash/data/subscription_model.dart';
+import 'package:stelliberty/clash/model/subscription_model.dart';
 import 'package:stelliberty/clash/providers/subscription_provider.dart';
 import 'package:stelliberty/i18n/i18n.dart';
+import 'package:stelliberty/atomic/external_opener.dart';
+import 'package:stelliberty/services/path_service.dart';
 import 'package:stelliberty/ui/widgets/modern_toast.dart';
 import 'package:stelliberty/ui/common/modern_popup_menu.dart';
 import 'package:stelliberty/ui/widgets/modern_tooltip.dart';
+import 'package:stelliberty/ui/widgets/subscription/qr_code_overlay.dart';
+import 'package:stelliberty/services/log_print_service.dart';
 
-// 订阅卡片组件
-// 显示订阅的详细信息：
-// - 订阅名称和图标
-// - 订阅 URL（单行省略）
-// - 状态标签（自动更新、更新间隔、距下次更新时间）
-// - 流量统计信息（进度条 + 数值）
-// - 操作菜单（使用 ModernPopupMenu）
-// 性能优化：
-// - 使用 Consumer 精确监听更新状态
-// - 缓存 isDark 和 colorScheme 避免重复调用
+// 订阅卡片组件：展示订阅概览与操作入口。
+// 通过局部监听与缓存减少不必要的重建。
 class SubscriptionCard extends StatelessWidget {
   // 订阅数据
   final Subscription subscription;
@@ -194,7 +190,7 @@ class SubscriptionCard extends StatelessWidget {
         // 独立更新按钮（更新时显示转圈指示器）
         if (!subscription.isLocalFile)
           ModernTooltip(
-            message: trans.subscription.updateCard,
+            message: trans.subscription.update_card,
             child: IconButton(
               onPressed: isDisabled ? null : onUpdate,
               icon: isUpdating
@@ -254,12 +250,12 @@ class SubscriptionCard extends StatelessWidget {
     children.add(
       TextSpan(
         text: subscription.isLocalFile
-            ? trans.subscription.localTypeLabel
+            ? trans.subscription.local_type_label
             : (autoUpdateMode == AutoUpdateMode.disabled
-                  ? trans.subscription.manualUpdateLabel
+                  ? trans.subscription.manual_update_label
                   : (autoUpdateMode == AutoUpdateMode.onStartup
-                        ? trans.subscription.updateOnStartupLabel
-                        : trans.subscription.autoUpdateLabel)),
+                        ? trans.subscription.update_on_startup_label
+                        : trans.subscription.auto_update_label)),
         style: TextStyle(
           color: subscription.isLocalFile
               ? Colors.grey
@@ -274,7 +270,7 @@ class SubscriptionCard extends StatelessWidget {
     // 距下次更新时间（仅远程订阅+间隔更新+有更新记录时显示）
     if (!subscription.isLocalFile &&
         autoUpdateMode == AutoUpdateMode.interval &&
-        subscription.lastUpdateTime != null) {
+        subscription.lastUpdatedAt != null) {
       children.add(
         const TextSpan(
           text: ' | ',
@@ -296,11 +292,11 @@ class SubscriptionCard extends StatelessWidget {
     );
   }
 
-  // 构建现代化弹出菜单
-  // 使用 ModernPopupMenu 替代标准 PopupMenuButton，
-  // 提供 Windows 11 风格的交互体验
+  // 构建弹出菜单入口（使用自定义菜单组件）。
+  // 菜单组件会自动处理分页逻辑。
   Widget _buildModernPopupMenu(BuildContext context, bool isDisabled) {
     final trans = context.translate;
+    final allMenuItems = _buildAllMenuItems(context, trans);
 
     return ModernPopupBox(
       targetBuilder: (open) => IconButton(
@@ -313,48 +309,101 @@ class SubscriptionCard extends StatelessWidget {
         ),
       ),
       popup: ModernPopupMenu(
-        items: [
-          PopupMenuItemData(
-            icon: Icons.edit,
-            label: trans.subscription.menu.configEdit,
-            onPressed: onEdit,
-          ),
-          PopupMenuItemData(
-            icon: Icons.code,
-            label: trans.subscription.menu.fileEdit,
-            onPressed: onEditFile,
-          ),
-          // 只有当前选中的订阅才显示运行配置查看
-          if (isSelected)
-            PopupMenuItemData(
-              icon: Icons.visibility,
-              label: trans.subscription.menu.configView,
-              onPressed: onViewConfig,
-            ),
-          PopupMenuItemData(
-            icon: Icons.rule,
-            label: trans.subscription.menu.overrideManage,
-            onPressed: onManageOverride,
-          ),
-          PopupMenuItemData(
-            icon: Icons.extension,
-            label: trans.subscription.menu.providerView,
-            onPressed: onViewProvider,
-          ),
-          // 本地文件订阅不显示复制链接选项
-          if (!subscription.isLocalFile)
-            PopupMenuItemData(
-              icon: Icons.copy,
-              label: trans.subscription.menu.copyLink,
-              onPressed: () => _copyUrl(context),
-            ),
-          PopupMenuItemData(
-            icon: Icons.delete,
-            label: trans.subscription.menu.delete,
-            onPressed: onDelete,
-            isDangerous: true,
-          ),
-        ],
+        items: allMenuItems,
+        moreOptionsLabel: trans.subscription.menu.more_options,
+      ),
+    );
+  }
+
+  // 构建所有菜单项
+  List<PopupMenuItemData> _buildAllMenuItems(
+    BuildContext context,
+    Translations trans,
+  ) {
+    final items = <PopupMenuItemData>[
+      PopupMenuItemData(
+        icon: Icons.edit,
+        label: trans.subscription.menu.config_edit,
+        onPressed: onEdit,
+      ),
+      PopupMenuItemData(
+        icon: Icons.code,
+        label: trans.subscription.menu.file_edit,
+        onPressed: onEditFile,
+      ),
+      PopupMenuItemData(
+        icon: Icons.open_in_new,
+        label: trans.subscription.menu.open_external_editor,
+        onPressed: () => _handleOpenInExternalEditor(context),
+      ),
+      PopupMenuItemData(
+        icon: Icons.folder_open,
+        label: trans.subscription.menu.open_in_file_manager,
+        onPressed: () => _handleOpenInFileManager(context),
+      ),
+      // 只有当前选中的订阅才显示运行配置查看
+      if (isSelected)
+        PopupMenuItemData(
+          icon: Icons.visibility,
+          label: trans.subscription.menu.config_view,
+          onPressed: onViewConfig,
+        ),
+      PopupMenuItemData(
+        icon: Icons.rule,
+        label: trans.subscription.menu.override_manage,
+        onPressed: onManageOverride,
+      ),
+      PopupMenuItemData(
+        icon: Icons.extension,
+        label: trans.subscription.menu.provider_view,
+        onPressed: onViewProvider,
+      ),
+      // 本地文件订阅不显示复制链接和二维码分享选项
+      if (!subscription.isLocalFile)
+        PopupMenuItemData(
+          icon: Icons.copy,
+          label: trans.subscription.menu.copy_link,
+          onPressed: () => _copyUrl(context),
+        ),
+      if (!subscription.isLocalFile)
+        PopupMenuItemData(
+          icon: Icons.qr_code,
+          label: trans.subscription.menu.qr_share,
+          onPressed: () => _showQrCode(context),
+        ),
+      PopupMenuItemData(
+        icon: Icons.delete,
+        label: trans.subscription.menu.delete,
+        onPressed: onDelete,
+        isDangerous: true,
+      ),
+    ];
+
+    return items;
+  }
+
+  // 在文件管理器中显示订阅目录
+  Future<void> _handleOpenInFileManager(BuildContext context) async {
+    final trans = context.translate;
+    final subscriptionsDir = PathService.instance.subscriptionsDir;
+
+    Logger.info('尝试在文件管理器中打开订阅目录: $subscriptionsDir');
+
+    final result = await ExternalOpenService.openDirectory(subscriptionsDir);
+
+    if (!context.mounted) return;
+
+    if (result.isSuccessful) {
+      Logger.info('成功在文件管理器中打开订阅目录');
+      ModernToast.success(trans.subscription.external_open.open_success);
+      return;
+    }
+
+    Logger.error('在文件管理器中打开订阅目录失败: ${result.errorType}');
+    ModernToast.error(
+      trans.subscription.external_open.open_failed.replaceAll(
+        '{error}',
+        _formatExternalOpenError(trans, result),
       ),
     );
   }
@@ -416,18 +465,69 @@ class SubscriptionCard extends StatelessWidget {
     );
   }
 
+  Future<void> _handleOpenInExternalEditor(BuildContext context) async {
+    final trans = context.translate;
+    final configPath = PathService.instance.getSubscriptionConfigPath(
+      subscription.id,
+    );
+
+    final result = await ExternalOpenService.openFile(configPath);
+    if (!context.mounted) return;
+
+    if (result.isSuccessful) {
+      ModernToast.success(trans.subscription.external_open.open_success);
+      return;
+    }
+
+    ModernToast.error(
+      trans.subscription.external_open.open_failed.replaceAll(
+        '{error}',
+        _formatExternalOpenError(trans, result),
+      ),
+    );
+  }
+
+  String _formatExternalOpenError(
+    Translations trans,
+    ExternalOpenResult result,
+  ) {
+    switch (result.errorType) {
+      case ExternalOpenErrorType.fileNotFound:
+        return trans.subscription.external_open.error_file_not_found;
+      case ExternalOpenErrorType.directoryNotFound:
+        return trans.subscription.external_open.error_directory_not_found;
+      case ExternalOpenErrorType.unsupportedPlatform:
+        return trans.subscription.external_open.error_unsupported_platform;
+      case ExternalOpenErrorType.processFailed:
+        return result.errorDetails ??
+            trans.subscription.external_open.error_unknown;
+      case ExternalOpenErrorType.unknown:
+      case null:
+        return trans.subscription.external_open.error_unknown;
+    }
+  }
+
   // 复制 URL
   void _copyUrl(BuildContext context) async {
+    final trans = context.translate;
+
     try {
       await Clipboard.setData(ClipboardData(text: subscription.url));
-      if (context.mounted) {
-        ModernToast.success(context, '链接已复制到剪贴板');
-      }
+      if (!context.mounted) return;
+
+      ModernToast.success(trans.subscription.link_copied);
     } catch (e) {
-      if (context.mounted) {
-        ModernToast.error(context, '复制失败: $e');
-      }
+      if (!context.mounted) return;
+
+      ModernToast.error(
+        trans.subscription.copy_failed.replaceAll('{error}', e.toString()),
+      );
     }
+  }
+
+  // 显示二维码
+  void _showQrCode(BuildContext context) {
+    QrCodeOverlay.show(context, data: subscription.url);
   }
 
   // 格式化字节数
@@ -444,8 +544,8 @@ class SubscriptionCard extends StatelessWidget {
   String _formatNextUpdate(BuildContext context) {
     final trans = context.translate;
 
-    if (subscription.lastUpdateTime == null) {
-      return trans.subscription.pendingUpdate;
+    if (subscription.lastUpdatedAt == null) {
+      return trans.subscription.pending_update;
     }
 
     final subTrans = trans.subscription;
@@ -454,34 +554,34 @@ class SubscriptionCard extends StatelessWidget {
     // 根据更新模式计算下次更新时间
     DateTime? nextUpdateTime;
     if (subscription.autoUpdateMode == AutoUpdateMode.interval) {
-      nextUpdateTime = subscription.lastUpdateTime!.add(
+      nextUpdateTime = subscription.lastUpdatedAt!.add(
         Duration(minutes: subscription.intervalMinutes),
       );
     } else {
-      return subTrans.pendingUpdate;
+      return subTrans.pending_update;
     }
 
     // 如果已经过了更新时间
     if (now.isAfter(nextUpdateTime)) {
-      return subTrans.pendingUpdate;
+      return subTrans.pending_update;
     }
 
     final diff = nextUpdateTime.difference(now);
 
-    if (diff.inMinutes < 1) return subTrans.willUpdate;
+    if (diff.inMinutes < 1) return subTrans.will_update;
     if (diff.inMinutes < 60) {
-      return subTrans.updateAfterMinutes.replaceAll(
+      return subTrans.update_after_minutes.replaceAll(
         '{n}',
         diff.inMinutes.toString(),
       );
     }
     if (diff.inHours < 24) {
-      return subTrans.updateAfterHours.replaceAll(
+      return subTrans.update_after_hours.replaceAll(
         '{n}',
         diff.inHours.toString(),
       );
     }
-    return subTrans.updateAfterDays.replaceAll('{n}', diff.inDays.toString());
+    return subTrans.update_after_days.replaceAll('{n}', diff.inDays.toString());
   }
 
   // 格式化过期日期
@@ -495,11 +595,11 @@ class SubscriptionCard extends StatelessWidget {
     final subTrans = trans.subscription;
 
     if (diff.inDays > 30) {
-      return subTrans.remainingMonths.replaceAll(
+      return subTrans.remaining_months.replaceAll(
         '{n}',
         (diff.inDays / 30).floor().toString(),
       );
     }
-    return subTrans.remainingDays.replaceAll('{n}', diff.inDays.toString());
+    return subTrans.remaining_days.replaceAll('{n}', diff.inDays.toString());
   }
 }

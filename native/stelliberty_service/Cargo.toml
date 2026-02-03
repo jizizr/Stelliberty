@@ -1,6 +1,6 @@
 [package]
 name = "stelliberty-service"
-version = "1.5.0"
+version = "1.5.2"
 edition = "2024"
 authors = ["Stelliberty Contributors"]
 description = "Background service for Stelliberty to manage Clash core with elevated privileges"
@@ -24,37 +24,25 @@ anyhow = "^1.0"
 thiserror = "^2.0"
 
 # 异步运行时
-tokio = { version = "^1", features = ["full"] }
-
-# HTTP 客户端（用于 Clash API）
-reqwest = { version = "^0.12", features = ["json"] }
+tokio = { version = "^1", features = ["rt-multi-thread", "macros", "sync", "net", "io-util", "time", "signal"] }
 
 # 日志
 log = "^0.4"
-env_logger = "^0.11"
-once_cell = "^1.21"
 chrono = "^0.4"
-
-# 终端输入
-crossterm = "^0.29"
-
-# 进程管理
-sysinfo = "^0.37"
 dirs = "^6.0"
 
 # Windows Service 支持
 [target.'cfg(windows)'.dependencies]
 windows-service = "^0.8"
-windows = { version = "^0.62", features = [
+windows = { version = "^0.62.2", features = [
     "Win32_Foundation",
     "Win32_UI_Shell",
     "Win32_Security_Authorization",
     "Win32_Storage_FileSystem",
     "Win32_System_Pipes",
-    "Win32_System_SystemServices",
-    "Win32_System_Memory",
 ] }
 
-# Unix 权限检查
+# Unix 权限检查和进程管理
 [target.'cfg(not(windows))'.dependencies]
 libc = "^0.2"
+nix = { version = "^0.30.1", features = ["signal", "process"] }

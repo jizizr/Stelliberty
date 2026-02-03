@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:stelliberty/clash/providers/connection_provider.dart';
-import 'package:stelliberty/clash/data/connection_model.dart';
-import 'package:stelliberty/utils/logger.dart';
+import 'package:stelliberty/clash/state/connection_states.dart';
+import 'package:stelliberty/clash/model/connection_model.dart';
+import 'package:stelliberty/services/log_print_service.dart';
 import 'package:stelliberty/i18n/i18n.dart';
 import 'package:stelliberty/ui/widgets/connection/connection_card.dart';
 import 'package:stelliberty/ui/widgets/connection/connection_detail_dialog.dart';
-import 'package:stelliberty/ui/widgets/modern_tooltip.dart';
+import 'package:stelliberty/ui/common/modern_top_toolbar.dart';
 import 'package:stelliberty/ui/constants/spacing.dart';
 
 // 连接页布局常量
@@ -94,192 +95,65 @@ class _ConnectionPageContentState extends State<ConnectionPageContent> {
     List<ConnectionInfo> connections,
   ) {
     final trans = context.translate;
-    final colorScheme = Theme.of(context).colorScheme;
     final totalCount = connections.length;
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
-      child: Row(
-        children: [
-          // 连接数统计（使用 Badge 风格）
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            decoration: BoxDecoration(
-              color: colorScheme.primaryContainer,
-              borderRadius: BorderRadius.circular(20),
+    return ModernTopToolbar(
+      children: [
+        // 过滤按钮组
+        ModernTopToolbarChipGroup(
+          children: [
+            ModernTopToolbarChip(
+              label: trans.connection.all_connections,
+              isSelected: provider.filterLevel == ConnectionFilterLevel.all,
+              onTap: () => provider.setFilterLevel(ConnectionFilterLevel.all),
             ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  Icons.link_rounded,
-                  size: 16,
-                  color: colorScheme.onPrimaryContainer,
-                ),
-                const SizedBox(width: 6),
-                Text(
-                  trans.connection.totalConnections.replaceAll(
-                    '{count}',
-                    totalCount.toString(),
-                  ),
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: colorScheme.onPrimaryContainer,
-                  ),
-                ),
-              ],
+            const SizedBox(width: 4),
+            ModernTopToolbarChip(
+              label: trans.connection.direct_connections,
+              isSelected: provider.filterLevel == ConnectionFilterLevel.direct,
+              onTap: () =>
+                  provider.setFilterLevel(ConnectionFilterLevel.direct),
             ),
-          ),
-
-          const SizedBox(width: 12),
-
-          // 过滤级别按钮组（使用 SegmentedButton 风格）
-          Container(
-            decoration: BoxDecoration(
-              color: colorScheme.surfaceContainerHighest,
-              borderRadius: BorderRadius.circular(20),
+            const SizedBox(width: 4),
+            ModernTopToolbarChip(
+              label: trans.connection.proxied_connections,
+              isSelected: provider.filterLevel == ConnectionFilterLevel.proxy,
+              onTap: () => provider.setFilterLevel(ConnectionFilterLevel.proxy),
             ),
-            padding: const EdgeInsets.all(3),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _buildFilterChip(
-                  context,
-                  label: trans.connection.allConnections,
-                  isSelected: provider.filterLevel == ConnectionFilterLevel.all,
-                  onTap: () =>
-                      provider.setFilterLevel(ConnectionFilterLevel.all),
-                ),
-                const SizedBox(width: 4),
-                _buildFilterChip(
-                  context,
-                  label: trans.connection.directConnections,
-                  isSelected:
-                      provider.filterLevel == ConnectionFilterLevel.direct,
-                  onTap: () =>
-                      provider.setFilterLevel(ConnectionFilterLevel.direct),
-                ),
-                const SizedBox(width: 4),
-                _buildFilterChip(
-                  context,
-                  label: trans.connection.proxiedConnections,
-                  isSelected:
-                      provider.filterLevel == ConnectionFilterLevel.proxy,
-                  onTap: () =>
-                      provider.setFilterLevel(ConnectionFilterLevel.proxy),
-                ),
-              ],
-            ),
-          ),
-
-          const SizedBox(width: 12),
-
-          // 搜索框（扁平设计）
-          Expanded(
-            child: SizedBox(
-              height: 38,
-              child: TextField(
-                onChanged: (value) => provider.setSearchKeyword(value),
-                decoration: InputDecoration(
-                  hintText: trans.connection.searchPlaceholder,
-                  hintStyle: TextStyle(
-                    fontSize: 13,
-                    color: colorScheme.onSurfaceVariant,
-                  ),
-                  prefixIcon: Icon(
-                    Icons.search_rounded,
-                    size: 20,
-                    color: colorScheme.onSurfaceVariant,
-                  ),
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 0,
-                  ),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(20),
-                    borderSide: BorderSide.none,
-                  ),
-                  filled: true,
-                  fillColor: colorScheme.surfaceContainerHighest,
-                ),
-                style: const TextStyle(fontSize: 13),
-              ),
-            ),
-          ),
-
-          const SizedBox(width: 12),
-
-          // 控制按钮组（扁平设计，使用 IconButton）
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // 暂停/恢复按钮
-              ModernIconTooltip(
-                message: provider.isMonitoringPaused
-                    ? trans.connection.resumeBtn
-                    : trans.connection.pauseBtn,
-                icon: provider.isMonitoringPaused
-                    ? Icons.play_arrow_rounded
-                    : Icons.pause_rounded,
-                onPressed: () => provider.togglePause(),
-                iconSize: 20,
-              ),
-              const SizedBox(width: 6),
-              // 手动刷新按钮
-              ModernIconTooltip(
-                message: trans.connection.refreshBtn,
-                icon: Icons.refresh_rounded,
-                onPressed: () => provider.refreshConnections(),
-                iconSize: 20,
-              ),
-              const SizedBox(width: 6),
-              // 关闭所有连接按钮
-              ModernIconTooltip(
-                message: trans.connection.closeAllConnections,
-                icon: Icons.clear_all_rounded,
-                onPressed: totalCount > 0
-                    ? () => _closeAllConnections(context, provider)
-                    : null,
-                iconSize: 20,
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  // 构建过滤筛选片段（扁平设计）
-  Widget _buildFilterChip(
-    BuildContext context, {
-    required String label,
-    required bool isSelected,
-    required VoidCallback onTap,
-  }) {
-    final colorScheme = Theme.of(context).colorScheme;
-
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        curve: Curves.easeInOut,
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-        decoration: BoxDecoration(
-          color: isSelected ? colorScheme.primary : Colors.transparent,
-          borderRadius: BorderRadius.circular(16),
+          ],
         ),
-        child: Text(
-          label,
-          style: TextStyle(
-            color: isSelected
-                ? colorScheme.onPrimary
-                : colorScheme.onSurfaceVariant,
-            fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
-            fontSize: 13,
+        const SizedBox(width: 12),
+        Expanded(
+          // 搜索框
+          child: ModernTopToolbarSearchField(
+            hintText: trans.connection.search_placeholder,
+            onChanged: provider.setSearchKeyword,
           ),
         ),
-      ),
+        const SizedBox(width: 12),
+        // 操作按钮组
+        ModernTopToolbarActionGroup(
+          children: [
+            ModernTopToolbarIconButton(
+              tooltip: provider.isMonitoringPaused
+                  ? trans.connection.resume_btn
+                  : trans.connection.pause_btn,
+              icon: provider.isMonitoringPaused
+                  ? Icons.play_arrow_rounded
+                  : Icons.pause_rounded,
+              onPressed: provider.togglePause,
+            ),
+            const SizedBox(width: 4),
+            ModernTopToolbarIconButton(
+              tooltip: trans.connection.close_all_connections,
+              icon: Icons.clear_all_rounded,
+              onPressed: totalCount > 0
+                  ? () => _closeAllConnections(context, provider)
+                  : null,
+            ),
+          ],
+        ),
+      ],
     );
   }
 
@@ -297,6 +171,9 @@ class _ConnectionPageContentState extends State<ConnectionPageContent> {
     }
 
     if (connections.isEmpty) {
+      Logger.debug(
+        '连接页显示空状态（过滤级别：${provider.filterLevel.name}，搜索关键字：${provider.searchKeyword.isEmpty ? "无" : provider.searchKeyword}）',
+      );
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -310,7 +187,7 @@ class _ConnectionPageContentState extends State<ConnectionPageContent> {
             ),
             const SizedBox(height: 16),
             Text(
-              trans.connection.noActiveConnections,
+              trans.connection.no_active_connections,
               style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                 color: Theme.of(
                   context,
@@ -356,7 +233,7 @@ class _ConnectionPageContentState extends State<ConnectionPageContent> {
         final trans = context.translate;
         return AlertDialog(
           title: Text(trans.common.confirm),
-          content: Text(trans.connection.closeConnectionConfirm),
+          content: Text(trans.connection.close_connection_confirm),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(),
@@ -383,7 +260,7 @@ class _ConnectionPageContentState extends State<ConnectionPageContent> {
         final trans = context.translate;
         return AlertDialog(
           title: Text(trans.common.confirm),
-          content: Text(trans.connection.closeAllConfirm),
+          content: Text(trans.connection.close_all_confirm),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(),

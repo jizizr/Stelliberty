@@ -1,8 +1,10 @@
+import 'dart:async';
+import 'package:flutter/services.dart';
 import 'package:tray_manager/tray_manager.dart';
 import 'package:window_manager/window_manager.dart';
-import 'package:stelliberty/utils/logger.dart';
-import 'package:stelliberty/utils/window_state.dart';
-import 'package:stelliberty/clash/manager/manager.dart';
+import 'package:stelliberty/services/log_print_service.dart';
+import 'package:stelliberty/services/window_state_service.dart';
+import 'package:stelliberty/clash/manager/clash_manager.dart';
 import 'package:stelliberty/clash/providers/clash_provider.dart';
 import 'package:stelliberty/clash/providers/subscription_provider.dart';
 import 'package:stelliberty/storage/preferences.dart';
@@ -128,6 +130,21 @@ class TrayEventHandler with TrayListener {
           Logger.error('从托盘切换出站模式异常：$e');
         });
         break;
+      case 'copy_terminal_proxy_powershell':
+        copyTerminalProxyCommand('powershell').catchError((e) {
+          Logger.error('复制终端代理命令异常：$e');
+        });
+        break;
+      case 'copy_terminal_proxy_cmd':
+        copyTerminalProxyCommand('cmd').catchError((e) {
+          Logger.error('复制终端代理命令异常：$e');
+        });
+        break;
+      case 'copy_terminal_proxy_bash':
+        copyTerminalProxyCommand('bash').catchError((e) {
+          Logger.error('复制终端代理命令异常：$e');
+        });
+        break;
       case 'exit':
         // 退出操作不需要 catchError，内部已处理
         exitApp();
@@ -236,18 +253,28 @@ class TrayEventHandler with TrayListener {
     _isSwitching = true;
 
     final manager = ClashManager.instance;
-    final isTunEnabled = manager.isTunEnabled;
+    final isTunEnabled = _clashProvider!.configState.isTunEnabled;
 
     Logger.info('从托盘切换虚拟网卡模式 - 当前状态：${isTunEnabled ? "已启用" : "未启用"}');
 
-    try {
-      // 切换虚拟网卡模式（等待结果）
-      await manager.setTunEnabled(!isTunEnabled);
-    } catch (e) {
-      Logger.error('从托盘切换虚拟网卡模式失败：$e');
-    } finally {
-      _isSwitching = false;
-    }
+    // 切换虚拟网卡模式（异步执行，不阻塞返回）
+    unawaited(
+      manager
+          .setTunEnabled(!isTunEnabled)
+          .then((success) {
+            if (success) {
+              // 刷新配置状态以更新 UI
+              _clashProvider!.refreshConfigState();
+            }
+          })
+          .catchError((e) {
+            Logger.error('从托盘切换虚拟网卡模式失败：$e');
+          })
+          .whenComplete(() {
+            // 操作完成后重置切换标志
+            _isSwitching = false;
+          }),
+    );
   }
 
   // 切换出站模式
@@ -255,8 +282,7 @@ class TrayEventHandler with TrayListener {
     // 设置切换标志，禁用托盘交互
     _isSwitching = true;
 
-    final manager = ClashManager.instance;
-    final currentOutboundMode = manager.outboundMode;
+    final currentOutboundMode = _clashProvider!.configState.outboundMode;
 
     // 如果已经是当前模式，直接返回
     if (currentOutboundMode == outboundMode) {
@@ -270,18 +296,10 @@ class TrayEventHandler with TrayListener {
     Logger.info('从托盘切换出站模式: $currentOutboundMode → $outboundMode');
 
     try {
-      final success = await manager.setOutboundMode(outboundMode);
+      final success = await _clashProvider!.setOutboundMode(outboundMode);
 
       if (success) {
         Logger.info('出站模式已从托盘切换到: $outboundMode');
-        // 确保状态同步：强制触发一次状态更新通知
-        // 这样主页卡片和其他监听器都能收到更新
-        Future.microtask(() {
-          // 延迟一个微任务确保状态已完全更新
-          if (manager.outboundMode == outboundMode) {
-            Logger.debug('托盘出站模式切换完成，触发状态同步通知');
-          }
-        });
       } else {
         Logger.warning('从托盘切换出站模式失败，保持原模式: $currentOutboundMode');
       }
@@ -289,6 +307,40 @@ class TrayEventHandler with TrayListener {
       Logger.error('从托盘切换出站模式失败：$e');
     } finally {
       _isSwitching = false;
+    }
+  }
+
+  // 复制终端代理命令到剪贴板
+  Future<void> copyTerminalProxyCommand(String terminalType) async {
+    if (_clashProvider == null) {
+      Logger.warning('ClashProvider 未设置，无法获取代理端口');
+      return;
+    }
+
+    final port = _clashProvider!.mixedPort;
+    final proxyUrl = 'http://127.0.0.1:$port';
+
+    String command;
+    switch (terminalType) {
+      case 'powershell':
+        command = '\$env:http_proxy="$proxyUrl"; \$env:https_proxy="$proxyUrl"';
+        break;
+      case 'cmd':
+        command = 'set http_proxy=$proxyUrl && set https_proxy=$proxyUrl';
+        break;
+      case 'bash':
+        command = 'export http_proxy=$proxyUrl && export https_proxy=$proxyUrl';
+        break;
+      default:
+        Logger.error('未知的终端类型：$terminalType');
+        return;
+    }
+
+    try {
+      await Clipboard.setData(ClipboardData(text: command));
+      Logger.info('终端代理命令已复制到剪贴板 ($terminalType)：$command');
+    } catch (e) {
+      Logger.error('复制终端代理命令失败：$e');
     }
   }
 

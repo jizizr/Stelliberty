@@ -10,17 +10,13 @@ import 'process.dart';
 
 // GitHub 仓库配置
 const githubRepo = "MetaCubeX/mihomo";
+const androidCoreRepo = "Kindness-Kismet/android-mihomo-core";
 
 Future<void> downloadAndSetupCore({
   required String targetDir,
   required String platform,
   required String arch,
 }) async {
-  if (platform == 'android') {
-    log('⚠️  Android 平台暂未实现自动下载 Mihomo 核心，请手动处理。');
-    return;
-  }
-
   // Mihomo 核心下载链接使用：darwin (非 macos)、amd64 (非 x64)
   final downloadPlatform = platform == 'macos' ? 'darwin' : platform;
   final downloadArch = arch == 'x64' ? 'amd64' : arch;
@@ -448,4 +444,128 @@ Future<String> downloadInnoSetup({required String tempDir}) async {
   log('✅ 下载完成 ($fileSize MB)');
 
   return installerPath;
+}
+
+// 下载 Android 核心 so 文件
+Future<void> downloadAndroidCoreSo({required String targetDir}) async {
+  const maxRetries = 5;
+
+  // 需要下载的资源文件列表（文件名 -> ABI 目录）
+  final assetMapping = {
+    'libclash_arm64.so': 'arm64-v8a',
+    'libclash_x86_64.so': 'x86_64',
+  };
+
+  final apiUrl = Uri.parse(
+    "https://api.github.com/repos/$androidCoreRepo/releases/latest",
+  );
+
+  // 从环境变量获取 GitHub Token
+  final githubToken =
+      Platform.environment['GITHUB_TOKEN'] ?? Platform.environment['GH_TOKEN'];
+
+  final headers = <String, String>{'Accept': 'application/vnd.github+json'};
+  if (githubToken != null && githubToken.isNotEmpty) {
+    headers['Authorization'] = 'Bearer $githubToken';
+    log('🔐 使用 GitHub Token 认证请求');
+  } else {
+    log('⚠️  未检测到 GITHUB_TOKEN，使用未认证请求（每小时限制 60 次）');
+  }
+
+  // 获取 Release 信息
+  final response = await http
+      .get(apiUrl, headers: headers)
+      .timeout(
+        const Duration(seconds: 15),
+        onTimeout: () => throw TimeoutException('获取 Release 信息超时'),
+      );
+
+  if (response.statusCode != 200) {
+    throw Exception('获取 GitHub Release 失败: ${response.body}');
+  }
+
+  final releaseInfo = json.decode(response.body);
+  final assets = releaseInfo['assets'] as List;
+  final version = releaseInfo['tag_name'] ?? 'unknown';
+
+  log('✅ 找到 Android 核心版本: $version');
+
+  // 并发下载所有 so 文件
+  final downloadTasks = assetMapping.entries.map((entry) async {
+    final assetName = entry.key;
+    final abiDir = entry.value;
+
+    final asset = assets.firstWhere(
+      (a) => a['name'] == assetName,
+      orElse: () => null,
+    );
+
+    if (asset == null) {
+      throw Exception('未找到资源文件: $assetName');
+    }
+
+    final downloadUrl = Uri.parse(asset['browser_download_url']);
+
+    // 目标路径：assets/jniLibs/{abi}/libclash.so
+    final abiDirectory = Directory(p.join(targetDir, abiDir));
+    if (!await abiDirectory.exists()) {
+      await abiDirectory.create(recursive: true);
+    }
+    final targetFile = File(p.join(abiDirectory.path, 'libclash.so'));
+
+    // 带重试的下载
+    for (int attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        if (attempt > 1) {
+          log('🔄 重试 $assetName (第 $attempt 次)...');
+          await Future.delayed(Duration(seconds: 2 * attempt));
+        } else {
+          log('📥 正在下载 $assetName -> $abiDir/libclash.so...');
+        }
+
+        final client = HttpClient();
+        configureProxy(client, downloadUrl, isFirstAttempt: false);
+
+        try {
+          final request = await client.getUrl(downloadUrl);
+          final httpResponse = await request.close().timeout(
+            const Duration(minutes: 5),
+            onTimeout: () => throw TimeoutException('下载超时'),
+          );
+
+          if (httpResponse.statusCode != 200) {
+            throw Exception('HTTP ${httpResponse.statusCode}');
+          }
+
+          final fileBytes = await httpResponse.fold<List<int>>(
+            <int>[],
+            (previous, element) => previous..addAll(element),
+          );
+          client.close();
+
+          await targetFile.writeAsBytes(fileBytes);
+
+          final sizeInMB = (fileBytes.length / (1024 * 1024)).toStringAsFixed(
+            2,
+          );
+          log('✅ $abiDir/libclash.so 下载完成 ($sizeInMB MB)');
+          return;
+        } catch (e) {
+          client.close();
+          rethrow;
+        }
+      } catch (e) {
+        if (attempt == maxRetries) {
+          throw Exception(
+            '$assetName 下载失败 (已重试 $maxRetries 次): ${simplifyError(e)}',
+          );
+        }
+        log(
+          '⚠️  $assetName 下载失败 (尝试 $attempt/$maxRetries): ${simplifyError(e)}',
+        );
+      }
+    }
+  });
+
+  await Future.wait(downloadTasks);
 }

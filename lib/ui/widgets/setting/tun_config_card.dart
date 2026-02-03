@@ -1,4 +1,5 @@
 // ignore_for_file: use_build_context_synchronously
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -9,11 +10,14 @@ import 'package:stelliberty/ui/common/modern_dropdown_button.dart';
 import 'package:stelliberty/ui/common/modern_text_field.dart';
 import 'package:stelliberty/ui/common/modern_switch.dart';
 import 'package:stelliberty/ui/widgets/modern_toast.dart';
-import 'package:stelliberty/clash/manager/manager.dart';
+import 'package:stelliberty/clash/manager/clash_manager.dart';
+import 'package:stelliberty/clash/providers/clash_provider.dart';
 import 'package:stelliberty/clash/providers/service_provider.dart';
-import 'package:stelliberty/clash/core/service_state.dart';
+import 'package:stelliberty/clash/state/service_states.dart';
 import 'package:stelliberty/i18n/i18n.dart';
-import 'package:stelliberty/utils/logger.dart';
+import 'package:stelliberty/services/log_print_service.dart';
+import 'package:stelliberty/src/bindings/signals/signals.dart';
+import 'package:rinf/rinf.dart';
 
 // 虚拟网卡网络栈类型枚举
 enum TunStack {
@@ -46,6 +50,14 @@ class _TunConfigCardState extends State<TunConfigCard> {
   // 加载状态
   bool _isLoading = true;
 
+  // 服务版本号状态
+  String? _installedServiceVersion; // 已安装服务的版本号
+  String? _bundledServiceVersion; // 应用内置服务的版本号
+
+  // Stream 订阅（需要在 dispose 时取消）
+  StreamSubscription<RustSignalPack<ServiceVersionResponse>>?
+  _versionResponseSubscription;
+
   // 虚拟网卡模式配置
   TunStack _tunStack = TunStack.mixed;
   final TextEditingController _tunDeviceController = TextEditingController();
@@ -53,9 +65,10 @@ class _TunConfigCardState extends State<TunConfigCard> {
   bool _tunAutoDetectInterface = true;
   bool _tunStrictRoute = true;
   final TextEditingController _tunMtuController = TextEditingController();
-  final TextEditingController _tunDnsHijackController = TextEditingController();
+  final TextEditingController _tunDnsHijacksController =
+      TextEditingController();
   bool _tunAutoRedirect = false;
-  final TextEditingController _tunRouteExcludeAddressController =
+  final TextEditingController _tunRouteExcludeAddressesController =
       TextEditingController();
   bool _tunDisableIcmpForwarding = false;
 
@@ -73,6 +86,11 @@ class _TunConfigCardState extends State<TunConfigCard> {
     // 延迟加载配置，先显示骨架屏
     Future.delayed(Duration.zero, () {
       _loadConfig();
+      // 检查服务版本号（仅在服务已安装时）
+      final serviceProvider = context.read<ServiceProvider>();
+      if (serviceProvider.serviceState.isServiceModeInstalled) {
+        _checkServiceVersion();
+      }
       // 100ms 后隐藏骨架屏
       Future.delayed(const Duration(milliseconds: 100), () {
         if (mounted) {
@@ -80,14 +98,26 @@ class _TunConfigCardState extends State<TunConfigCard> {
         }
       });
     });
+
+    // 监听服务版本号响应
+    _versionResponseSubscription = ServiceVersionResponse.rustSignalStream
+        .listen((signal) {
+          if (mounted) {
+            setState(() {
+              _installedServiceVersion = signal.message.installedVersion;
+              _bundledServiceVersion = signal.message.bundledVersion;
+            });
+          }
+        });
   }
 
   @override
   void dispose() {
+    _versionResponseSubscription?.cancel();
     _tunDeviceController.dispose();
     _tunMtuController.dispose();
-    _tunDnsHijackController.dispose();
-    _tunRouteExcludeAddressController.dispose();
+    _tunDnsHijacksController.dispose();
+    _tunRouteExcludeAddressesController.dispose();
     super.dispose();
   }
 
@@ -95,41 +125,114 @@ class _TunConfigCardState extends State<TunConfigCard> {
   void _loadConfig() {
     if (!mounted) return;
 
+    final configState = context.read<ClashProvider>().configState;
+
     setState(() {
-      _tunStack = TunStack.fromString(ClashManager.instance.tunStack);
-      _tunDeviceController.text = ClashManager.instance.tunDevice;
-      _tunAutoRoute = ClashManager.instance.isTunAutoRouteEnabled;
-      _tunAutoDetectInterface =
-          ClashManager.instance.isTunAutoDetectInterfaceEnabled;
-      _tunStrictRoute = ClashManager.instance.isTunStrictRouteEnabled;
-      _tunMtuController.text = ClashManager.instance.tunMtu.toString();
-      _tunDnsHijackController.text = ClashManager.instance.tunDnsHijack.join(
-        '，',
-      );
-      _tunAutoRedirect = ClashManager.instance.isTunAutoRedirectEnabled;
-      _tunRouteExcludeAddressController.text = ClashManager
-          .instance
-          .tunRouteExcludeAddress
+      _tunStack = TunStack.fromString(configState.tunStack);
+      _tunDeviceController.text = configState.tunDevice;
+      _tunAutoRoute = configState.isTunAutoRouteEnabled;
+      _tunAutoDetectInterface = configState.isTunAutoDetectInterfaceEnabled;
+      _tunStrictRoute = configState.isTunStrictRouteEnabled;
+      _tunMtuController.text = configState.tunMtu.toString();
+      _tunDnsHijacksController.text = configState.tunDnsHijacks.join('，');
+      _tunAutoRedirect = configState.isTunAutoRedirectEnabled;
+      _tunRouteExcludeAddressesController.text = configState
+          .tunRouteExcludeAddresses
           .join('，');
-      _tunDisableIcmpForwarding =
-          ClashManager.instance.isTunIcmpForwardingDisabled;
+      _tunDisableIcmpForwarding = configState.isTunIcmpForwardingDisabled;
     });
+  }
+
+  // 检查服务版本号
+  void _checkServiceVersion() {
+    GetServiceVersion().sendSignalToRust();
+  }
+
+  // 更新服务
+  Future<void> _updateService(ServiceProvider serviceProvider) async {
+    final trans = context.translate;
+    final clashProvider = context.read<ClashProvider>();
+
+    // 记录当前状态
+    final wasRunning = ClashManager.instance.isCoreRunning;
+    final currentConfig = clashProvider.currentConfigPath;
+    final overrides = ClashManager.instance.getOverrides();
+
+    try {
+      // 显示更新中提示
+      if (mounted) {
+        ModernToast.info(trans.tun_config.updating);
+      }
+
+      // 1. 停止核心（如果正在运行）
+      if (wasRunning) {
+        Logger.info('更新服务前停止核心');
+        await ClashManager.instance.stopCore();
+      }
+
+      // 2. 调用 install 命令（Rust 端会自动检测并原地更新，只需 1 次 UAC）
+      Logger.info('开始更新服务（原地更新）');
+      final installSuccess = await serviceProvider.installService();
+      if (!installSuccess) {
+        throw Exception(serviceProvider.lastOperationError ?? '更新服务失败');
+      }
+
+      // 3. 恢复核心运行状态
+      if (wasRunning && currentConfig != null) {
+        Logger.info('恢复核心运行状态');
+        await ClashManager.instance.startCore(
+          configPath: currentConfig,
+          overrides: overrides,
+        );
+      }
+
+      // 4. 刷新版本号
+      _checkServiceVersion();
+
+      if (mounted) {
+        ModernToast.success(trans.tun_config.update_success);
+      }
+    } catch (e) {
+      Logger.error('更新服务失败：$e');
+
+      // 尝试恢复核心
+      if (wasRunning && currentConfig != null) {
+        try {
+          await ClashManager.instance.startCore(
+            configPath: currentConfig,
+            overrides: overrides,
+          );
+        } catch (e) {
+          Logger.error('恢复核心失败：$e');
+        }
+      }
+
+      if (mounted) {
+        ModernToast.error(
+          trans.tun_config.update_failed.replaceAll('{error}', e.toString()),
+        );
+      }
+    } finally {
+      if (mounted) {
+        serviceProvider.clearLastOperationResult();
+      }
+    }
   }
 
   // 验证 MTU 值
   String? _validateMtu(String value) {
     final trans = context.translate;
     if (value.isEmpty) {
-      return trans.tunConfig.mtuError;
+      return trans.tun_config.mtu_error;
     }
 
     final mtu = int.tryParse(value);
     if (mtu == null) {
-      return trans.tunConfig.mtuInvalid;
+      return trans.tun_config.mtu_invalid;
     }
 
     if (mtu < 1280 || mtu > 9000) {
-      return trans.tunConfig.mtuRange;
+      return trans.tun_config.mtu_range;
     }
 
     return null;
@@ -162,30 +265,29 @@ class _TunConfigCardState extends State<TunConfigCard> {
       ClashManager.instance.setTunMtu(mtu);
 
       // 保存 DNS 劫持列表
-      final hijackList = _tunDnsHijackController.text
+      final hijacks = _tunDnsHijacksController.text
           .split('，')
           .map((s) => s.trim())
           .where((s) => s.isNotEmpty)
           .toList();
-      ClashManager.instance.setTunDnsHijack(hijackList);
+      ClashManager.instance.setTunDnsHijack(hijacks);
 
       // 保存排除路由地址列表
-      final addressList = _tunRouteExcludeAddressController.text
+      final addresses = _tunRouteExcludeAddressesController.text
           .split('，')
           .map((s) => s.trim())
           .where((s) => s.isNotEmpty)
           .toList();
-      ClashManager.instance.setTunRouteExcludeAddress(addressList);
+      ClashManager.instance.setTunRouteExcludeAddress(addresses);
 
       if (mounted) {
-        ModernToast.success(context, trans.tunConfig.saveSuccess);
+        ModernToast.success(trans.tun_config.save_success);
       }
     } catch (e) {
       Logger.error('保存 TUN 配置失败: $e');
       if (mounted) {
         ModernToast.error(
-          context,
-          trans.tunConfig.saveFailed.replaceAll('{error}', e.toString()),
+          trans.tun_config.save_failed.replaceAll('{error}', e.toString()),
         );
       }
     } finally {
@@ -222,9 +324,9 @@ class _TunConfigCardState extends State<TunConfigCard> {
           ),
         ),
         const SizedBox(height: 16),
-        // 开关选项（自动路由、自动检测、严格路由）
+        // 开关选项（自动路由、严格路由）
         Container(
-          height: 120,
+          height: 80,
           decoration: BoxDecoration(
             color: skeletonColor,
             borderRadius: BorderRadius.circular(8),
@@ -271,11 +373,11 @@ class _TunConfigCardState extends State<TunConfigCard> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    trans.clashFeatures.tunMode.title,
+                    trans.clash_features.tun_mode.title,
                     style: theme.textTheme.titleMedium,
                   ),
                   Text(
-                    trans.clashFeatures.tunMode.subtitle,
+                    trans.clash_features.tun_mode.subtitle,
                     style: theme.textTheme.bodySmall,
                   ),
                 ],
@@ -302,11 +404,18 @@ class _TunConfigCardState extends State<TunConfigCard> {
     final trans = context.translate;
     return [
       // ========== 服务模式安装（第一行） ==========
-      Consumer<ServiceStateManager>(
-        builder: (context, stateManager, _) {
-          final serviceProvider = context.read<ServiceProvider>();
-          final isServiceModeInstalled = stateManager.isServiceModeInstalled;
-          final isServiceModeProcessing = stateManager.isServiceModeProcessing;
+      Consumer<ServiceProvider>(
+        builder: (context, serviceProvider, _) {
+          final isServiceModeInstalled =
+              serviceProvider.serviceState.isServiceModeInstalled;
+          final isServiceModeProcessing =
+              serviceProvider.serviceState.isServiceModeProcessing;
+
+          // 检查是否有可用更新
+          final hasUpdate =
+              _installedServiceVersion != null &&
+              _bundledServiceVersion != null &&
+              _installedServiceVersion != _bundledServiceVersion;
 
           return Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -316,80 +425,84 @@ class _TunConfigCardState extends State<TunConfigCard> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      trans.tunConfig.serviceMode,
-                      style: Theme.of(context).textTheme.titleSmall,
+                      trans.tun_config.service_mode,
+                      style: theme.textTheme.titleSmall,
                     ),
                     const SizedBox(height: 4),
                     Text(
                       isServiceModeInstalled
-                          ? trans.tunConfig.serviceInstalled
-                          : trans.tunConfig.serviceNotInstalled,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: isServiceModeInstalled
-                            ? Colors.green.shade700
-                            : Colors.orange.shade700,
+                          ? trans.tun_config.service_installed
+                          : trans.tun_config.service_not_installed,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.outline,
                       ),
                     ),
                   ],
                 ),
               ),
-              ModernSwitch(
-                value: isServiceModeInstalled,
-                onChanged: isServiceModeProcessing
-                    ? null
-                    : (value) async {
-                        if (value) {
-                          // 安装服务
-                          final success = await serviceProvider
-                              .installService();
-                          if (mounted) {
-                            if (success) {
-                              ModernToast.success(
-                                context,
-                                context
-                                    .translate
-                                    .tunConfig
-                                    .serviceInstallSuccess,
-                              );
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (isServiceModeInstalled) ...[
+                    IconButton(
+                      icon: const Icon(Icons.refresh, size: 20),
+                      tooltip: hasUpdate
+                          ? trans.tun_config.update_available
+                          : trans.tun_config.up_to_date,
+                      onPressed: hasUpdate && !isServiceModeProcessing
+                          ? () => _updateService(serviceProvider)
+                          : null,
+                      color: hasUpdate
+                          ? theme.colorScheme.primary
+                          : theme.colorScheme.outline.withAlpha(100),
+                    ),
+                    const SizedBox(width: 8),
+                  ],
+                  ModernSwitch(
+                    value: isServiceModeInstalled,
+                    onChanged: isServiceModeProcessing
+                        ? null
+                        : (value) async {
+                            if (value) {
+                              // 安装服务
+                              final success = await serviceProvider
+                                  .installService();
+                              if (mounted) {
+                                if (success) {
+                                  ModernToast.success(
+                                    trans.tun_config.service_install_success,
+                                  );
+                                  _checkServiceVersion(); // 安装后重新检查版本
+                                } else {
+                                  final errorMsg =
+                                      serviceProvider.lastOperationError ??
+                                      trans.tun_config.service_install_failed;
+                                  ModernToast.error(errorMsg);
+                                }
+                                serviceProvider.clearLastOperationResult();
+                              }
                             } else {
-                              // 显示详细错误信息（可能包含多行）
-                              final errorMsg =
-                                  serviceProvider.lastOperationError ??
-                                  context
-                                      .translate
-                                      .tunConfig
-                                      .serviceInstallFailed;
-                              ModernToast.error(context, errorMsg);
+                              // 卸载服务
+                              final success = await serviceProvider
+                                  .uninstallService();
+                              if (mounted) {
+                                if (success) {
+                                  ModernToast.success(
+                                    trans.tun_config.service_uninstall_success,
+                                  );
+                                  _checkServiceVersion(); // 卸载后重新检查版本
+                                } else {
+                                  final errorMsg =
+                                      serviceProvider.lastOperationError ??
+                                      trans.tun_config.service_uninstall_failed;
+                                  ModernToast.error(errorMsg);
+                                }
+                                serviceProvider.clearLastOperationResult();
+                              }
                             }
-                            serviceProvider.clearLastOperationResult();
-                          }
-                        } else {
-                          // 卸载服务
-                          final success = await serviceProvider
-                              .uninstallService();
-                          if (mounted) {
-                            if (success) {
-                              ModernToast.success(
-                                context,
-                                context
-                                    .translate
-                                    .tunConfig
-                                    .serviceUninstallSuccess,
-                              );
-                            } else {
-                              // 显示详细错误信息（可能包含多行）
-                              final errorMsg =
-                                  serviceProvider.lastOperationError ??
-                                  context
-                                      .translate
-                                      .tunConfig
-                                      .serviceUninstallFailed;
-                              ModernToast.error(context, errorMsg);
-                            }
-                            serviceProvider.clearLastOperationResult();
-                          }
-                        }
-                      },
+                          },
+                  ),
+                ],
               ),
             ],
           );
@@ -405,7 +518,7 @@ class _TunConfigCardState extends State<TunConfigCard> {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(
-            trans.clashFeatures.tunMode.networkStack,
+            trans.clash_features.tun_mode.network_stack,
             style: Theme.of(context).textTheme.titleSmall,
           ),
           MouseRegion(
@@ -434,7 +547,7 @@ class _TunConfigCardState extends State<TunConfigCard> {
       Row(
         children: [
           Text(
-            trans.clashFeatures.tunMode.deviceName,
+            trans.clash_features.tun_mode.device_name,
             style: Theme.of(context).textTheme.titleSmall,
           ),
           const Spacer(),
@@ -455,7 +568,7 @@ class _TunConfigCardState extends State<TunConfigCard> {
       Row(
         children: [
           Text(
-            trans.clashFeatures.tunMode.mtu,
+            trans.clash_features.tun_mode.mtu,
             style: Theme.of(context).textTheme.titleSmall,
           ),
           const Spacer(),
@@ -483,7 +596,7 @@ class _TunConfigCardState extends State<TunConfigCard> {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(
-            trans.clashFeatures.tunMode.autoRoute,
+            trans.clash_features.tun_mode.auto_route,
             style: Theme.of(context).textTheme.titleSmall,
           ),
           ModernSwitch(
@@ -503,7 +616,7 @@ class _TunConfigCardState extends State<TunConfigCard> {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(
-            trans.clashFeatures.tunMode.autoDetectInterface,
+            trans.clash_features.tun_mode.auto_detect_interface,
             style: Theme.of(context).textTheme.titleSmall,
           ),
           ModernSwitch(
@@ -523,7 +636,7 @@ class _TunConfigCardState extends State<TunConfigCard> {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(
-            trans.clashFeatures.tunMode.strictRoute,
+            trans.clash_features.tun_mode.strict_route,
             style: Theme.of(context).textTheme.titleSmall,
           ),
           ModernSwitch(
@@ -542,14 +655,14 @@ class _TunConfigCardState extends State<TunConfigCard> {
       Row(
         children: [
           Text(
-            trans.clashFeatures.tunMode.dnsHijack,
+            trans.clash_features.tun_mode.dns_hijack,
             style: Theme.of(context).textTheme.titleSmall,
           ),
           const Spacer(),
           SizedBox(
             width: 200,
             child: ModernTextField(
-              controller: _tunDnsHijackController,
+              controller: _tunDnsHijacksController,
               hintText: 'any:53, tcp://any:53',
               height: 36,
             ),
@@ -569,12 +682,12 @@ class _TunConfigCardState extends State<TunConfigCard> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    trans.clashFeatures.tunMode.autoRedirect,
+                    trans.clash_features.tun_mode.auto_redirect,
                     style: Theme.of(context).textTheme.titleSmall,
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    trans.clashFeatures.tunMode.autoRedirectDesc,
+                    trans.clash_features.tun_mode.auto_redirect_desc,
                     style: Theme.of(
                       context,
                     ).textTheme.bodySmall?.copyWith(color: Colors.grey),
@@ -603,16 +716,16 @@ class _TunConfigCardState extends State<TunConfigCard> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  trans.clashFeatures.tunMode.routeExcludeAddress,
+                  trans.clash_features.tun_mode.route_exclude_address,
                   style: Theme.of(context).textTheme.titleSmall,
                 ),
                 const SizedBox(height: 4),
                 Text(
                   context
                       .translate
-                      .clashFeatures
-                      .tunMode
-                      .routeExcludeAddressDesc,
+                      .clash_features
+                      .tun_mode
+                      .route_exclude_address_desc,
                   style: Theme.of(
                     context,
                   ).textTheme.bodySmall?.copyWith(color: Colors.grey),
@@ -624,7 +737,7 @@ class _TunConfigCardState extends State<TunConfigCard> {
           SizedBox(
             width: 200,
             child: ModernTextField(
-              controller: _tunRouteExcludeAddressController,
+              controller: _tunRouteExcludeAddressesController,
               hintText: '172.20.0.0/16',
               height: 36,
             ),
@@ -643,12 +756,12 @@ class _TunConfigCardState extends State<TunConfigCard> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  trans.clashFeatures.tunMode.icmpForwarding,
+                  trans.clash_features.tun_mode.icmp_forwarding,
                   style: Theme.of(context).textTheme.titleSmall,
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  trans.clashFeatures.tunMode.icmpForwardingDesc,
+                  trans.clash_features.tun_mode.icmp_forwarding_desc,
                   style: Theme.of(
                     context,
                   ).textTheme.bodySmall?.copyWith(color: Colors.grey),
@@ -684,7 +797,9 @@ class _TunConfigCardState extends State<TunConfigCard> {
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
                 : const Icon(Icons.save, size: 18),
-            label: Text(_isSaving ? trans.tunConfig.saving : trans.common.save),
+            label: Text(
+              _isSaving ? trans.tun_config.saving : trans.common.save,
+            ),
           ),
         ],
       ),

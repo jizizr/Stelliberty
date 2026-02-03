@@ -5,7 +5,7 @@ import 'package:stelliberty/providers/content_provider.dart';
 import 'package:stelliberty/i18n/i18n.dart';
 import 'package:stelliberty/ui/widgets/setting/port_settings_card.dart';
 import 'package:stelliberty/ui/widgets/setting/external_controller_card.dart';
-import 'package:stelliberty/utils/logger.dart';
+import 'package:stelliberty/services/log_print_service.dart';
 
 class PortControlPage extends StatefulWidget {
   const PortControlPage({super.key});
@@ -50,7 +50,7 @@ class _PortControlPageState extends State<PortControlPage> {
               ),
               const SizedBox(width: 8),
               Text(
-                trans.clashFeatures.portControl.pageTitle,
+                trans.clash_features.port_control.page_title,
                 style: theme.textTheme.titleLarge,
               ),
             ],

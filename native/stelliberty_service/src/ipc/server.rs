@@ -24,6 +24,7 @@ pub type CommandHandler =
 pub struct IpcServer {
     handler: CommandHandler,
     shutdown_tx: Option<mpsc::Sender<()>>,
+    ready_tx: Option<tokio::sync::oneshot::Sender<()>>,
 }
 
 impl IpcServer {
@@ -38,6 +39,25 @@ impl IpcServer {
                 Box::pin(handler(cmd)) as Pin<Box<dyn Future<Output = IpcResponse> + Send>>
             }),
             shutdown_tx: None,
+            ready_tx: None,
+        }
+    }
+
+    // 创建带就绪信号的 IPC 服务端
+    pub fn new_with_ready_signal<F, Fut>(
+        handler: F,
+        ready_tx: tokio::sync::oneshot::Sender<()>,
+    ) -> Self
+    where
+        F: Fn(IpcCommand) -> Fut + Send + Sync + 'static,
+        Fut: Future<Output = IpcResponse> + Send + 'static,
+    {
+        Self {
+            handler: Arc::new(move |cmd| {
+                Box::pin(handler(cmd)) as Pin<Box<dyn Future<Output = IpcResponse> + Send>>
+            }),
+            shutdown_tx: None,
+            ready_tx: Some(ready_tx),
         }
     }
 
@@ -77,7 +97,7 @@ impl IpcServer {
 
     // Windows 平台运行
     #[cfg(windows)]
-    async fn run_windows(&self, mut shutdown_rx: mpsc::Receiver<()>) -> Result<()> {
+    async fn run_windows(&mut self, mut shutdown_rx: mpsc::Receiver<()>) -> Result<()> {
         log::info!("准备创建 Named Pipe: {IPC_PATH}");
 
         // 创建允许已认证用户访问的安全描述符
@@ -101,6 +121,13 @@ impl IpcServer {
 
                 log::debug!("Named Pipe 实例创建成功（初始化）");
                 is_first_instance = false;
+
+                // 发送就绪信号
+                if let Some(ready_tx) = self.ready_tx.take() {
+                    let _ = ready_tx.send(());
+                    log::info!("IPC 服务端就绪信号已发送");
+                }
+
                 pipe
             } else {
                 let pipe = create_named_pipe_with_security(IPC_PATH, false, &security_descriptor)
@@ -143,11 +170,26 @@ impl IpcServer {
 
     // Unix 平台运行
     #[cfg(not(windows))]
-    async fn run_unix(&self, mut shutdown_rx: mpsc::Receiver<()>) -> Result<()> {
+    async fn run_unix(&mut self, mut shutdown_rx: mpsc::Receiver<()>) -> Result<()> {
         use tokio::net::UnixListener;
 
         let listener = UnixListener::bind(IPC_PATH)
             .map_err(|e| IpcError::Other(format!("创建 Unix Socket 失败: {}", e)))?;
+
+        // 设置 Unix Socket 文件权限为 0600（仅所有者可读写）
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(IPC_PATH, std::fs::Permissions::from_mode(0o600))
+                .map_err(|e| IpcError::Other(format!("设置 Unix Socket 权限失败: {}", e)))?;
+            log::info!("Unix Socket 权限已设置为 0600（仅所有者可读写）");
+        }
+
+        // 发送就绪信号
+        if let Some(ready_tx) = self.ready_tx.take() {
+            let _ = ready_tx.send(());
+            log::info!("IPC 服务端就绪信号已发送");
+        }
 
         loop {
             tokio::select! {

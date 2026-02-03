@@ -13,7 +13,7 @@
 
 ![Windows](https://img.shields.io/badge/Windows-0078D6?style=flat-square&logo=windows11&logoColor=white)
 ![Linux](https://img.shields.io/badge/Linux-FCC624?style=flat-square&logo=linux&logoColor=black) ![macOS](https://img.shields.io/badge/macOS-experimental-gray?style=flat-square&logo=apple&logoColor=white)
-![Android](https://img.shields.io/badge/Android-not_supported-lightgray?style=flat-square&logo=android&logoColor=white)
+![Android](https://img.shields.io/badge/Android-barely_working-orange?style=flat-square&logo=android&logoColor=white)
 
 A modern cross-platform Clash client built with Flutter and Rust
 Featuring the unique **MD3M** (Material Design 3 Modern) visual style
@@ -24,11 +24,13 @@ Featuring the unique **MD3M** (Material Design 3 Modern) visual style
 
 <table>
   <tr>
-    <td width="50%"><img src=".github/screenshots/home-page.jpg" alt="Home Page"/></td>
-    <td width="50%"><img src=".github/screenshots/uwp-loopback-manager.jpg" alt="UWP Loopback Manager"/></td>
+    <td width="33%"><img src=".github/screenshots/home-page-light.jpg" alt="Home Page (Light)"/></td>
+    <td width="33%"><img src=".github/screenshots/home-page-dark.jpg" alt="Home Page (Dark)"/></td>
+    <td width="33%"><img src=".github/screenshots/uwp-loopback-manager.jpg" alt="UWP Loopback Manager"/></td>
   </tr>
   <tr>
-    <td align="center"><b>Home Page</b></td>
+    <td align="center"><b>Home Page (Light)</b></td>
+    <td align="center"><b>Home Page (Dark)</b></td>
     <td align="center"><b>UWP Loopback Manager</b></td>
   </tr>
 </table>
@@ -328,6 +330,9 @@ flutter run --dart-define=TEST_TYPE=override
 
 # Run IPC API test
 flutter run --dart-define=TEST_TYPE=ipc-api
+
+# Run delay test stream
+flutter run --dart-define=TEST_TYPE=delay-test
 ```
 
 **Required test files** in `assets/test/`:
@@ -352,9 +357,17 @@ flutter run --dart-define=TEST_TYPE=ipc-api
       └── test.yaml          # Base configuration file for testing
   ```
 
+- **For `delay-test` test:**
+  > **Note**: It is recommended to run the pre-build script (`dart run scripts/prebuild.dart`) before this test to download the necessary resources.
+  ```
+  assets/test/
+  └── config/
+      └── test.yaml          # Base configuration file for testing
+  ```
+
 > 💡 **Note**: Test mode is only available in Debug builds and automatically disabled in Release mode.
 
-Test implementations: `lib/dev_test/` (`override_test.dart`, `ipc_api_test.dart`)
+Test implementations: `lib/dev_test/` (`override_test.dart`, `ipc_api_test.dart`, `delay_test_stream.dart`)
 
 </details>
 

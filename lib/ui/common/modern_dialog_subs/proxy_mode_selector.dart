@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:stelliberty/clash/data/subscription_model.dart';
+import 'package:stelliberty/clash/model/subscription_model.dart';
+import 'package:stelliberty/ui/common/modern_dialog.dart';
 import 'package:stelliberty/ui/common/modern_dialog_subs/option_selector.dart';
 import 'package:stelliberty/i18n/i18n.dart';
 
@@ -20,24 +21,24 @@ class ProxyModeSelector extends StatelessWidget {
     final trans = context.translate;
 
     return OptionSelectorWidget<SubscriptionProxyMode>(
-      title: trans.subscriptionDialog.proxyModeTitle,
+      title: trans.subscription_dialog.proxy_mode_title,
       titleIcon: Icons.public,
-      isHorizontal: true,
+      isHorizontal: !DialogConstants.isMobile,
       options: [
         OptionItem(
           value: SubscriptionProxyMode.direct,
-          title: trans.subscriptionDialog.proxyModeDirectTitle,
-          subtitle: trans.subscriptionDialog.proxyModeDirect,
+          title: trans.subscription_dialog.proxy_mode_direct_title,
+          subtitle: trans.subscription_dialog.proxy_mode_direct,
         ),
         OptionItem(
           value: SubscriptionProxyMode.system,
-          title: trans.subscriptionDialog.proxyModeSystemTitle,
-          subtitle: trans.subscriptionDialog.proxyModeSystem,
+          title: trans.subscription_dialog.proxy_mode_system_title,
+          subtitle: trans.subscription_dialog.proxy_mode_system,
         ),
         OptionItem(
           value: SubscriptionProxyMode.core,
-          title: trans.subscriptionDialog.proxyModeCoreTitle,
-          subtitle: trans.subscriptionDialog.proxyModeCore,
+          title: trans.subscription_dialog.proxy_mode_core_title,
+          subtitle: trans.subscription_dialog.proxy_mode_core,
         ),
       ],
       selectedValue: selectedValue,

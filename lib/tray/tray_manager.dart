@@ -2,14 +2,13 @@ import 'dart:io';
 import 'dart:async';
 import 'package:tray_manager/tray_manager.dart';
 import 'package:window_manager/window_manager.dart';
-import 'package:stelliberty/utils/logger.dart';
+import 'package:stelliberty/services/log_print_service.dart';
 import 'package:stelliberty/tray/tray_event.dart';
 import 'package:stelliberty/clash/providers/clash_provider.dart';
-import 'package:stelliberty/clash/providers/service_provider.dart';
+import 'package:stelliberty/clash/manager/service_manager.dart';
 import 'package:stelliberty/clash/providers/subscription_provider.dart';
-import 'package:stelliberty/clash/manager/manager.dart';
 import 'package:stelliberty/i18n/i18n.dart';
-import 'package:stelliberty/services/permission_service.dart';
+import 'package:stelliberty/atomic/permission_checker.dart';
 
 // 系统托盘管理器,负责初始化、配置和生命周期管理
 class AppTrayManager {
@@ -35,10 +34,9 @@ class AppTrayManager {
     _clashProvider = provider;
     _eventHandler.setClashProvider(provider);
 
-    // 监听 ClashManager（系统代理和虚拟网卡状态）
-    // 注意：不监听 ClashProvider，避免双重触发
+    // 监听 ClashProvider 状态变化
     if (!_isListeningToClashManager) {
-      ClashManager.instance.addListener(_updateTrayMenuOnStateChange);
+      provider.addListener(_updateTrayMenuOnStateChange);
       _isListeningToClashManager = true;
     }
 
@@ -47,11 +45,12 @@ class AppTrayManager {
       Logger.info('设置托盘 ClashProvider，当前代理状态：${provider.isCoreRunning}');
 
       // 缓存 ClashManager 实例减少重复访问
-      final manager = ClashManager.instance;
+      final manager = provider.clashManager;
+      final configState = provider.configState;
       _proxyStateCache = provider.isCoreRunning; // 初始化缓存
       _systemProxyStateCache = manager.isSystemProxyEnabled;
-      _tunStateCache = manager.isTunEnabled;
-      _outboundModeCache = manager.outboundMode; // 初始化出站模式缓存
+      _tunStateCache = configState.isTunEnabled;
+      _outboundModeCache = configState.outboundMode; // 初始化出站模式缓存
 
       // 获取订阅状态
       final hasSubscription =
@@ -59,7 +58,7 @@ class AppTrayManager {
       _subscriptionStateCache = hasSubscription;
 
       _updateTrayMenu(provider.isCoreRunning, hasSubscription);
-      _updateTrayIcon(manager.isSystemProxyEnabled, manager.isTunEnabled);
+      _updateTrayIcon(manager.isSystemProxyEnabled, configState.isTunEnabled);
     }
   }
 
@@ -92,9 +91,10 @@ class AppTrayManager {
           _subscriptionProvider!.getSubscriptionConfigPath() != null;
 
       // 获取系统代理和 TUN 状态
-      final manager = ClashManager.instance;
+      final manager = _clashProvider!.clashManager;
+      final configState = _clashProvider!.configState;
       final isSystemProxyEnabled = manager.isSystemProxyEnabled;
-      final isTunEnabled = manager.isTunEnabled;
+      final isTunEnabled = configState.isTunEnabled;
 
       // 清除 TUN 可用性缓存，强制重新检查（用于服务安装/卸载后）
       _tunAvailableCache = null;
@@ -107,7 +107,7 @@ class AppTrayManager {
 
   // Clash 状态变化时更新托盘菜单和图标
   Future<void> _updateTrayMenuOnStateChange() async {
-    // 退出时不再更新托盘图标，避免视觉干扰
+    // 退出时跳过托盘图标更新
     if (_isExiting) {
       return;
     }
@@ -118,10 +118,11 @@ class AppTrayManager {
       final currentProxyState = _clashProvider!.isCoreRunning;
 
       // 缓存 ClashManager 实例减少重复访问
-      final manager = ClashManager.instance;
+      final manager = _clashProvider!.clashManager;
+      final configState = _clashProvider!.configState;
       final currentSystemProxyState = manager.isSystemProxyEnabled;
-      final currentTunState = manager.isTunEnabled;
-      final currentOutboundMode = manager.outboundMode;
+      final currentTunState = configState.isTunEnabled;
+      final currentOutboundMode = configState.outboundMode;
       final currentSubscriptionState =
           _subscriptionProvider!.getSubscriptionConfigPath() != null;
 
@@ -186,7 +187,7 @@ class AppTrayManager {
       // 设置提示文本(Linux 可能不支持)
       if (!Platform.isLinux) {
         try {
-          await trayManager.setToolTip(translate.common.appName);
+          await trayManager.setToolTip(translate.common.app_name);
         } catch (e) {
           Logger.warning('设置托盘提示文本失败（平台可能不支持）：$e');
         }
@@ -209,16 +210,22 @@ class AppTrayManager {
     bool hasSubscription,
   ) async {
     try {
+      if (_clashProvider == null) {
+        Logger.debug('ClashProvider 未设置，跳过托盘菜单更新');
+        return;
+      }
+
       // 获取系统代理实际状态
-      final manager = ClashManager.instance;
+      final manager = _clashProvider!.clashManager;
+      final configState = _clashProvider!.configState;
       final isSystemProxyEnabled = manager.isSystemProxyEnabled;
-      final isTunEnabled = manager.isTunEnabled;
+      final isTunEnabled = configState.isTunEnabled;
 
       // 检查虚拟网卡模式是否可用(需管理员权限或服务模式)
       final isTunAvailable = await _checkTunAvailable();
 
       // 获取当前出站模式
-      final currentOutboundMode = manager.outboundMode;
+      final currentOutboundMode = configState.outboundMode;
 
       // 检查窗口是否可见
       bool isWindowVisible = false;
@@ -230,32 +237,53 @@ class AppTrayManager {
 
       final menu = Menu(
         items: [
-          MenuItem(key: 'close_menu', label: translate.tray.closeMenu),
+          MenuItem(key: 'close_menu', label: translate.tray.close_menu),
           MenuItem(
             key: 'show_window',
-            label: translate.tray.showWindow,
+            label: translate.tray.show_window,
             disabled: isWindowVisible, // 窗口可见时禁用
+          ),
+          MenuItem.separator(),
+          MenuItem.submenu(
+            key: 'copy_terminal_proxy',
+            label: translate.tray.copy_terminal_proxy,
+            submenu: Menu(
+              items: [
+                MenuItem(
+                  key: 'copy_terminal_proxy_powershell',
+                  label: translate.tray.terminal_powershell,
+                ),
+                MenuItem(
+                  key: 'copy_terminal_proxy_cmd',
+                  label: translate.tray.terminal_cmd,
+                ),
+                MenuItem(
+                  key: 'copy_terminal_proxy_bash',
+                  label: translate.tray.terminal_bash,
+                ),
+              ],
+            ),
           ),
           MenuItem.separator(),
           // 出站模式子菜单
           MenuItem.submenu(
             key: 'outbound_mode',
-            label: translate.tray.outboundMode,
+            label: translate.tray.outbound_mode,
             submenu: Menu(
               items: [
                 MenuItem.checkbox(
                   key: 'outbound_mode_rule',
-                  label: translate.tray.ruleMode,
+                  label: translate.tray.rule_mode,
                   checked: currentOutboundMode == 'rule',
                 ),
                 MenuItem.checkbox(
                   key: 'outbound_mode_global',
-                  label: translate.tray.globalMode,
+                  label: translate.tray.global_mode,
                   checked: currentOutboundMode == 'global',
                 ),
                 MenuItem.checkbox(
                   key: 'outbound_mode_direct',
-                  label: translate.tray.directMode,
+                  label: translate.tray.direct_mode,
                   checked: currentOutboundMode == 'direct',
                 ),
               ],
@@ -264,13 +292,13 @@ class AppTrayManager {
           MenuItem.separator(),
           MenuItem.checkbox(
             key: 'toggle_proxy',
-            label: translate.tray.toggleProxy,
+            label: translate.tray.toggle_proxy,
             checked: isSystemProxyEnabled, // 使用系统代理状态
             disabled: !hasSubscription && !isProxyRunning, // 无订阅且未运行时禁用
           ),
           MenuItem.checkbox(
             key: 'toggle_tun',
-            label: translate.tray.toggleTun,
+            label: translate.tray.toggle_tun,
             checked: isTunEnabled,
             disabled: !isTunAvailable, // 仅在权限不足时禁用,服务模式下可独立工作
           ),
@@ -285,9 +313,8 @@ class AppTrayManager {
     }
   }
 
-  // 检查虚拟网卡模式是否可用
-  // Windows: 检查管理员权限或服务安装状态
-  // Linux/macOS: 检查是否为 root 用户
+  // 检查虚拟网卡模式是否可用。
+  // Windows 检查权限或服务状态；Unix 检查是否为 root。
   Future<bool> _checkTunAvailable() async {
     // 使用缓存避免重复检查
     if (_tunAvailableCache != null) {
@@ -298,8 +325,8 @@ class AppTrayManager {
     if (Platform.isWindows) {
       // Windows: 检查服务安装状态 或 管理员权限
       try {
-        final serviceProvider = ServiceProvider();
-        final isServiceModeInstalled = serviceProvider.isServiceModeInstalled;
+        final serviceManager = ServiceManager.instance;
+        final isServiceModeInstalled = serviceManager.isServiceModeInstalled;
 
         if (isServiceModeInstalled) {
           // 服务模式已安装，可以使用 TUN
@@ -391,10 +418,9 @@ class AppTrayManager {
       if (_subscriptionProvider != null) {
         _subscriptionProvider!.removeListener(_updateTrayMenuOnStateChange);
       }
-      if (_isListeningToClashManager) {
-        ClashManager.instance.removeListener(_updateTrayMenuOnStateChange);
-        _isListeningToClashManager = false;
-      }
+      // _isListeningToClashManager 标志现在用于 ClashProvider 监听
+      _isListeningToClashManager = false;
+
       trayManager.removeListener(_eventHandler);
       await trayManager.destroy();
       _isInitialized = false;

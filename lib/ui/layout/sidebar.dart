@@ -26,7 +26,7 @@ class HomeSidebar extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(vertical: 24.0),
                 child: Center(
                   child: Text(
-                    trans.common.appName,
+                    trans.common.app_name,
                     style: TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.bold,
@@ -65,6 +65,12 @@ class HomeSidebar extends StatelessWidget {
                       title: trans.sidebar.logs,
                       isSelected: currentView == ContentView.logs,
                       onTap: () => provider.switchView(ContentView.logs),
+                    ),
+                    HomeSidebarItem(
+                      icon: Icons.rule_rounded,
+                      title: trans.sidebar.rules,
+                      isSelected: currentView == ContentView.rules,
+                      onTap: () => provider.switchView(ContentView.rules),
                     ),
                     HomeSidebarItem(
                       icon: Icons.storage,

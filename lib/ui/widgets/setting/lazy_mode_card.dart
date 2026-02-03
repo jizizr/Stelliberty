@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:stelliberty/clash/storage/preferences.dart';
+import 'package:stelliberty/storage/clash_preferences.dart';
 import 'package:stelliberty/ui/common/modern_feature_card.dart';
 import 'package:stelliberty/ui/common/modern_switch.dart';
-import 'package:stelliberty/utils/logger.dart';
+import 'package:stelliberty/services/log_print_service.dart';
 import 'package:stelliberty/i18n/i18n.dart';
 
 // 懒惰模式配置卡片 - 适配应用行为页面风格
@@ -30,7 +30,7 @@ class _LazyModeCardState extends State<LazyModeCard> {
   }
 
   Future<void> _toggleLazyMode(bool value) async {
-    final oldValue = _lazyMode;
+    final previousValue = _lazyMode;
     setState(() {
       _lazyMode = value;
     });
@@ -41,7 +41,7 @@ class _LazyModeCardState extends State<LazyModeCard> {
     } catch (e) {
       // 持久化失败，回滚 UI 状态
       setState(() {
-        _lazyMode = oldValue;
+        _lazyMode = previousValue;
       });
       Logger.error('保存懒惰模式设置失败: $e');
     }
@@ -55,45 +55,46 @@ class _LazyModeCardState extends State<LazyModeCard> {
       isHoverEnabled: true,
       isTapEnabled: false, // 禁用点击交互，只允许开关本身触发
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          // 左侧图标和标题
-          Row(
-            children: [
-              const Icon(Icons.bedtime_rounded),
-              const SizedBox(
-                width: ModernFeatureCardSpacing.featureIconToTextSpacing,
-              ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    context
-                        .translate
-                        .clashFeatures
-                        .systemIntegration
-                        .lazyMode
-                        .title,
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                  Text(
-                    context
-                        .translate
-                        .clashFeatures
-                        .systemIntegration
-                        .lazyMode
-                        .subtitle,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(
-                        context,
-                      ).colorScheme.onSurface.withAlpha(153),
-                    ),
-                  ),
-                ],
-              ),
-            ],
+          // 左侧图标
+          const Icon(Icons.bedtime_rounded),
+          const SizedBox(
+            width: ModernFeatureCardSpacing.featureIconToTextSpacing,
           ),
+          // 中间标题和描述（Expanded 确保自适应宽度）
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  context
+                      .translate
+                      .clash_features
+                      .system_integration
+                      .lazy_mode
+                      .title,
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                Text(
+                  context
+                      .translate
+                      .clash_features
+                      .system_integration
+                      .lazy_mode
+                      .subtitle,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.onSurface.withAlpha(153),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
           // 右侧开关
           ModernSwitch(value: _lazyMode, onChanged: _toggleLazyMode),
         ],

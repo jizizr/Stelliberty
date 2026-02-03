@@ -66,6 +66,10 @@ impl ClashManager {
             self.stop()?;
         }
 
+        if let Err(e) = Self::cleanup_orphan_processes() {
+            log::warn!("清理孤立进程失败：{}", e);
+        }
+
         log::info!("启动 Clash 核心");
         log::info!("核心路径: {}", core_path);
         log::info!("配置文件: {}", config_path);
@@ -176,6 +180,149 @@ impl ClashManager {
         }
     }
 
+    // 强制停止 Clash（Unix 平台使用信号机制，优先安全退出）
+    #[cfg(unix)]
+    fn force_kill_unix(pid: u32) -> Result<(), String> {
+        use nix::sys::signal::{Signal, kill};
+        use nix::unistd::Pid;
+        use std::thread;
+        use std::time::{Duration, Instant};
+
+        log::warn!("使用强制终止方式清理进程 PID={}", pid);
+
+        let nix_pid = Pid::from_raw(pid as i32);
+
+        // 步骤 1：优先尝试安全退出（发送 SIGTERM 信号）
+        log::debug!("发送 SIGTERM 信号到 PID={}", pid);
+        if let Err(e) = kill(nix_pid, Signal::SIGTERM) {
+            return Err(format!("发送 SIGTERM 失败: {}", e));
+        }
+
+        // 步骤 2：动态超时等待进程安全退出
+        // 轮询策略：初期高频探测（50ms 间隔），300ms 后降低轮询频率（100ms 间隔），最多等待 1 秒
+        let start = Instant::now();
+        let max_wait = Duration::from_secs(1);
+        let mut check_interval = Duration::from_millis(50);
+
+        while start.elapsed() < max_wait {
+            thread::sleep(check_interval);
+
+            // 探测进程存活状态（使用 signal 0 探测，不实际发送信号）
+            match kill(nix_pid, None) {
+                Err(_) => {
+                    // 进程已终止
+                    log::info!(
+                        "进程 PID={} 已安全退出（耗时 {}ms）",
+                        pid,
+                        start.elapsed().as_millis()
+                    );
+                    return Ok(());
+                }
+                Ok(_) => {
+                    // 进程仍在运行，继续轮询
+                    // 超过 300ms 后降低轮询频率以减少 CPU 开销
+                    if start.elapsed() > Duration::from_millis(300) {
+                        check_interval = Duration::from_millis(100);
+                    }
+                    continue;
+                }
+            }
+        }
+
+        // 步骤 3：超时后使用 SIGKILL 强制终止
+        log::warn!(
+            "安全退出超时（{}ms），发送 SIGKILL 信号到 PID={}",
+            start.elapsed().as_millis(),
+            pid
+        );
+        if let Err(e) = kill(nix_pid, Signal::SIGKILL) {
+            return Err(format!("发送 SIGKILL 失败: {}", e));
+        }
+
+        // 等待进程回收确认（SIGKILL 通常立即生效）
+        thread::sleep(Duration::from_millis(100));
+        match kill(nix_pid, None) {
+            Err(_) => {
+                log::info!("进程 PID={} 已被强制终止", pid);
+                Ok(())
+            }
+            Ok(_) => Err(format!("进程 PID={} 在 SIGKILL 后仍然存在", pid)),
+        }
+    }
+
+    // 检查并清理孤立的 Clash 核心进程
+    // 应用场景：处理心跳超时清理失败导致的僵尸进程（进程句柄丢失但进程仍在后台运行）
+    fn cleanup_orphan_processes() -> Result<(), String> {
+        #[cfg(windows)]
+        {
+            // 使用 tasklist 查找 clash-core.exe 进程
+            let output = Command::new("tasklist")
+                .args(["/FI", "IMAGENAME eq clash-core.exe", "/FO", "CSV", "/NH"])
+                .stdout(Stdio::piped())
+                .output()
+                .map_err(|e| format!("执行 tasklist 失败: {}", e))?;
+
+            if !output.status.success() {
+                return Err("tasklist 执行失败".to_string());
+            }
+
+            let stdout = String::from_utf8_lossy(&output.stdout);
+
+            // 解析 CSV 输出格式："clash-core.exe","1234","Console","1","12,345 K"
+            for line in stdout.lines() {
+                if line.contains("clash-core.exe") {
+                    // 提取 PID（第二列）
+                    let parts: Vec<&str> = line.split(',').collect();
+                    if parts.len() >= 2 {
+                        let pid_str = parts[1].trim_matches('"').trim();
+                        if let Ok(pid) = pid_str.parse::<u32>() {
+                            log::warn!("检测到孤立的 clash-core.exe 进程 PID={}，正在清理", pid);
+                            if let Err(e) = Self::force_kill_windows(pid) {
+                                log::error!("清理孤立进程 PID={} 失败: {}", pid, e);
+                            }
+                        }
+                    }
+                }
+            }
+
+            Ok(())
+        }
+
+        #[cfg(unix)]
+        {
+            // 使用 pgrep 查找 clash-core 进程
+            let output = Command::new("pgrep")
+                .arg("clash-core")
+                .stdout(Stdio::piped())
+                .output()
+                .map_err(|e| format!("执行 pgrep 失败: {}", e))?;
+
+            // pgrep 返回 0 表示找到进程，1 表示未找到
+            if output.status.code() == Some(1) {
+                // 未找到进程，正常情况
+                return Ok(());
+            }
+
+            if !output.status.success() {
+                return Err(format!("pgrep 执行失败: 退出码 {:?}", output.status.code()));
+            }
+
+            let stdout = String::from_utf8_lossy(&output.stdout);
+
+            // 每行是一个 PID
+            for line in stdout.lines() {
+                if let Ok(pid) = line.trim().parse::<u32>() {
+                    log::warn!("检测到孤立的 clash-core 进程 PID={}，正在清理", pid);
+                    if let Err(e) = Self::force_kill_unix(pid) {
+                        log::error!("清理孤立进程 PID={} 失败: {}", pid, e);
+                    }
+                }
+            }
+
+            Ok(())
+        }
+    }
+
     // 停止 Clash 核心（改进版：带强制清理）
     pub fn stop(&mut self) -> Result<(), String> {
         let mut child_guard = self.child.lock().unwrap_or_else(|e| {
@@ -210,7 +357,7 @@ impl ClashManager {
                             }
                         }
                         Ok(Err(_)) => {
-                            log::error!("等待进程超时 (3秒)，强制清理 PID={}", pid);
+                            log::error!("等待进程超时 (3 秒)，强制清理 PID={}", pid);
                             #[cfg(windows)]
                             {
                                 let _ = Self::force_kill_windows(pid);

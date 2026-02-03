@@ -5,8 +5,7 @@ import 'package:stelliberty/ui/common/modern_feature_card.dart';
 import 'package:stelliberty/ui/widgets/setting/uwp_loopback_dialog.dart';
 import 'package:stelliberty/ui/widgets/modern_tooltip.dart';
 
-/// UWP 回环管理卡片
-/// 仅在 Windows 平台显示
+// UWP 回环管理卡片（仅 Windows 平台显示）。
 class UwpLoopbackCard extends StatelessWidget {
   const UwpLoopbackCard({super.key});
 
@@ -21,10 +20,10 @@ class UwpLoopbackCard extends StatelessWidget {
 
     return ModernFeatureLayoutCard(
       icon: Icons.apps,
-      title: trans.uwpLoopback.cardTitle,
-      subtitle: trans.uwpLoopback.cardSubtitle,
+      title: trans.uwp_loopback.card_title,
+      subtitle: trans.uwp_loopback.card_subtitle,
       trailing: ModernTooltip(
-        message: trans.uwpLoopback.openManager,
+        message: trans.uwp_loopback.open_manager,
         child: IconButton(
           icon: const Icon(Icons.open_in_new),
           onPressed: () {

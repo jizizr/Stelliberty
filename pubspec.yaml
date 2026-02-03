@@ -3,7 +3,7 @@ description: "星辰自由"
 
 publish_to: 'none'
 
-version: 1.1.128+1
+version: 1.2.255+1
 
 environment:
   sdk: '^3.8.0'
@@ -17,6 +17,7 @@ dependencies:
   window_manager: ^0.5.1
   tray_manager: ^0.5.1
   screen_retriever: ^0.2.0
+  hotkey_manager: ^0.2.3
   # Flutter ↔ Rust 通信
   # 生成桥接代码: rinf gen
   rinf: ^8.8.0
@@ -27,7 +28,7 @@ dependencies:
   # Meta 注解支持
   meta: ^1.11.0
   # Google Fonts 支持
-  google_fonts: ^6.3.1
+  google_fonts: ^8.0.0
   # 强调色支持
   system_theme: ^3.1.2
   # 窗口效果
@@ -36,6 +37,8 @@ dependencies:
   device_info_plus: ^12.1.0
   # 状态管理
   provider: ^6.1.5
+  # 同步锁支持
+  synchronized: ^3.4.0
 
   # 国际化支持
   slang: ^4.8.1
@@ -73,6 +76,18 @@ dependencies:
 
   # 解压缩支持
   archive: ^4.0.7
+  # 品牌图标支持
+  font_awesome_flutter: ^10.8.0
+
+  # 网络图片缓存
+  cached_network_image: ^3.4.1
+  flutter_cache_manager: ^3.4.1
+
+  # 外部打开文件
+  open_filex: ^4.5.1
+
+  # 二维码生成
+  qr_flutter: ^4.1.0
 
 dev_dependencies:
   flutter_lints: ^6.0.0

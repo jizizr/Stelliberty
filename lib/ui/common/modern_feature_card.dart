@@ -16,9 +16,8 @@ class ModernFeatureCardSpacing {
   static const double auxiliaryIconToControlSpacing = 16.0;
 }
 
-// 一个通用的、带动画和描边效果的现代特性卡片容器。
-//
-// 当被选中时，会显示不同的背景色、描边和阴影，并支持禁用悬停和点击效果。
+// 特性卡片容器：带动画与描边效果的通用卡片。
+// 支持选中态样式与可选的悬停/点击控制。
 class ModernFeatureCard extends StatelessWidget {
   // 卡片内部的子组件。
   final Widget child;
@@ -114,9 +113,8 @@ class ModernFeatureCard extends StatelessWidget {
   }
 }
 
-// 统一布局的现代特性卡片组件
-//
-// 提供一致的单行布局：图标 + 标题/描述 + 右侧控件
+// 统一布局的特性卡片：图标 + 标题/描述 + 右侧控件。
+// 用于构建一致的设置项行布局。
 class ModernFeatureLayoutCard extends StatelessWidget {
   // 左侧图标（可选）
   final IconData? icon;
@@ -218,9 +216,7 @@ class ModernFeatureLayoutCard extends StatelessWidget {
   }
 }
 
-// 简单的切换现代特性卡片组件
-//
-// 仅包含图标、标题、描述和开关
+// 简单的切换特性卡片：图标 + 标题/描述 + 开关。
 class ModernFeatureToggleCard extends StatelessWidget {
   // 左侧图标
   final IconData icon;

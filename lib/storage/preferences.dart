@@ -1,8 +1,10 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:stelliberty/storage/dev_preferences.dart';
-import 'package:stelliberty/utils/logger.dart';
+import 'package:stelliberty/atomic/platform_helper.dart';
+import 'package:stelliberty/services/path_service.dart';
+import 'package:stelliberty/storage/settings_store.dart';
+import 'package:stelliberty/services/log_print_service.dart';
 
 // 通用应用持久化配置管理,管理主题、窗口、语言等应用级配置
 class AppPreferences {
@@ -11,19 +13,33 @@ class AppPreferences {
   static AppPreferences? _instance;
   static AppPreferences get instance => _instance ??= AppPreferences._();
 
-  dynamic _prefs; // SharedPreferences 或 DeveloperPreferences
+  dynamic _prefs; // SharedPreferences 或 SettingsStore
 
   // 检查是否为 Dev 模式
   static bool get isDevMode => kDebugMode || kProfileMode;
 
   // 初始化
   Future<void> init() async {
-    if (isDevMode) {
-      // Dev 模式：使用开发者偏好 JSON 配置
-      await DeveloperPreferences.instance.init();
-      _prefs = DeveloperPreferences.instance;
+    if (!PlatformHelper.isDesktop) {
+      // 移动端：使用系统 SharedPreferences
+      _prefs = await SharedPreferences.getInstance();
+      return;
+    }
+
+    // 桌面端：Dev 模式使用调试 JSON，Release 使用便携式 JSON
+    final settingsStore = SettingsStore.instance;
+    final filePath = isDevMode
+        ? PathService.instance.devPreferencesFilePath
+        : PathService.instance.preferencesFilePath;
+    await settingsStore.init(filePath);
+    _prefs = settingsStore;
+  }
+
+  Future<void> reload() async {
+    _ensureInit();
+    if (_prefs is SettingsStore) {
+      await (_prefs as SettingsStore).reload();
     } else {
-      // Release 模式：使用系统 SharedPreferences
       _prefs = await SharedPreferences.getInstance();
     }
   }
@@ -55,6 +71,13 @@ class AppPreferences {
   static const String _kIgnoredUpdateVersion = 'ignored_update_version';
   static const String _kProxyGroupExpandedStates =
       'proxy_group_expanded_states';
+  static const String _kHotkeyEnabled = 'hotkey_enabled';
+  static const String _kHotkeyToggleProxy = 'hotkey_toggle_proxy';
+  static const String _kHotkeyToggleTun = 'hotkey_toggle_tun';
+  static const String _kHotkeyShowWindow = 'hotkey_show_window';
+  static const String _kHotkeyExitApp = 'hotkey_exit_app';
+  static const String _kAccessControlMode = 'access_control_mode';
+  static const String _kAccessControlPackages = 'access_control_packages';
 
   // ==================== 主题配置 ====================
 
@@ -220,13 +243,91 @@ class AppPreferences {
   // 获取应用日志启用状态
   bool getAppLogEnabled() {
     _ensureInit();
-    return _prefs!.getBool(_kAppLogEnabled) ?? false; // 默认禁用
+    return _prefs!.getBool(_kAppLogEnabled) ?? true; // 默认启用
   }
 
   // 保存应用日志启用状态
   Future<void> setAppLogEnabled(bool enabled) async {
     _ensureInit();
     await _prefs!.setBool(_kAppLogEnabled, enabled);
+  }
+
+  // ==================== 快捷键配置 ====================
+
+  // 获取全局快捷键启用状态
+  bool getHotkeyEnabled() {
+    _ensureInit();
+    return _prefs!.getBool(_kHotkeyEnabled) ?? false;
+  }
+
+  // 保存全局快捷键启用状态
+  Future<void> setHotkeyEnabled(bool enabled) async {
+    _ensureInit();
+    await _prefs!.setBool(_kHotkeyEnabled, enabled);
+  }
+
+  // 获取切换系统代理快捷键
+  String? getHotkeyToggleProxy() {
+    _ensureInit();
+    return _prefs!.getString(_kHotkeyToggleProxy);
+  }
+
+  // 保存切换系统代理快捷键
+  Future<void> setHotkeyToggleProxy(String? hotkey) async {
+    _ensureInit();
+    if (hotkey == null || hotkey.isEmpty) {
+      await _prefs!.remove(_kHotkeyToggleProxy);
+    } else {
+      await _prefs!.setString(_kHotkeyToggleProxy, hotkey);
+    }
+  }
+
+  // 获取切换 TUN 模式快捷键
+  String? getHotkeyToggleTun() {
+    _ensureInit();
+    return _prefs!.getString(_kHotkeyToggleTun);
+  }
+
+  // 保存切换 TUN 模式快捷键
+  Future<void> setHotkeyToggleTun(String? hotkey) async {
+    _ensureInit();
+    if (hotkey == null || hotkey.isEmpty) {
+      await _prefs!.remove(_kHotkeyToggleTun);
+    } else {
+      await _prefs!.setString(_kHotkeyToggleTun, hotkey);
+    }
+  }
+
+  // 获取显示/隐藏窗口快捷键
+  String? getHotkeyShowWindow() {
+    _ensureInit();
+    return _prefs!.getString(_kHotkeyShowWindow);
+  }
+
+  // 保存显示/隐藏窗口快捷键
+  Future<void> setHotkeyShowWindow(String? hotkey) async {
+    _ensureInit();
+    if (hotkey == null || hotkey.isEmpty) {
+      await _prefs!.remove(_kHotkeyShowWindow);
+    } else {
+      await _prefs!.setString(_kHotkeyShowWindow, hotkey);
+    }
+  }
+
+  // 获取退出应用快捷键
+  String? getHotkeyExitApp() {
+    _ensureInit();
+    return _prefs!.getString(_kHotkeyExitApp);
+  }
+
+  // 保存退出应用快捷键
+  Future<void> setHotkeyExitApp(String? hotkey) async {
+    _ensureInit();
+    if (hotkey == null || hotkey.isEmpty) {
+      await _prefs!.remove(_kHotkeyExitApp);
+    } else {
+      await _prefs!.setString(_kHotkeyExitApp, hotkey);
+    }
   }
 
   // ==================== 应用更新配置 ====================
@@ -377,6 +478,9 @@ class AppPreferences {
       _kAppUpdateInterval,
       _kLastAppUpdateCheckTime,
       _kIgnoredUpdateVersion,
+      _kHotkeyEnabled,
+      _kHotkeyToggleProxy,
+      _kHotkeyToggleTun,
     ];
 
     final Map<String, dynamic> settings = {};
@@ -408,6 +512,9 @@ class AppPreferences {
       _kAppAutoUpdate,
       _kAppUpdateInterval,
       _kLastAppUpdateCheckTime,
+      _kHotkeyEnabled,
+      _kHotkeyToggleProxy,
+      _kHotkeyToggleTun,
     ];
 
     for (final key in keys) {
@@ -456,5 +563,38 @@ class AppPreferences {
     final states = getProxyGroupExpandedStates();
     states[groupName] = isExpanded;
     await setProxyGroupExpandedStates(states);
+  }
+
+  // ==================== 访问控制配置（仅 Android） ====================
+
+  // 获取访问控制模式
+  // 0: 禁用, 1: 白名单, 2: 黑名单
+  int getAccessControlMode() {
+    _ensureInit();
+    return _prefs!.getInt(_kAccessControlMode) ?? 0;
+  }
+
+  // 保存访问控制模式
+  Future<void> setAccessControlMode(int mode) async {
+    _ensureInit();
+    await _prefs!.setInt(_kAccessControlMode, mode);
+  }
+
+  // 获取访问控制应用列表
+  Set<String> getAccessControlPackages() {
+    _ensureInit();
+    final packagesStr = _prefs!.getString(_kAccessControlPackages);
+    if (packagesStr == null || packagesStr.isEmpty) {
+      return {};
+    }
+    // 使用换行符分隔，避免包名中可能存在的特殊字符问题
+    return packagesStr.split('\n').where((s) => s.isNotEmpty).toSet();
+  }
+
+  // 保存访问控制应用列表
+  Future<void> setAccessControlPackages(Set<String> packages) async {
+    _ensureInit();
+    // 使用换行符分隔，避免包名中可能存在的特殊字符问题
+    await _prefs!.setString(_kAccessControlPackages, packages.join('\n'));
   }
 }

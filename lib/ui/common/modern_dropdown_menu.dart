@@ -25,7 +25,7 @@ class _DropdownMenuStyle {
 }
 
 // 现代化下拉菜单路由
-// 基于 ModernPopupRoute 的架构，实现 Q弹效果
+// 基于 ModernPopupRoute 的架构，实现 Q 弹效果
 class _ModernDropdownRoute<T> extends PopupRoute<T> {
   final WidgetBuilder builder;
   final ValueNotifier<Offset> offsetNotifier;
@@ -137,9 +137,8 @@ class _DropdownLayoutDelegate extends SingleChildLayoutDelegate {
     // X 坐标：offset.dx 是按钮右边缘，菜单右对齐
     double x = offset.dx - childSize.width;
 
-    // Y 坐标：
-    // showAbove 为 true 时，offset.dy 是按钮底部，需要向上偏移菜单高度
-    // showAbove 为 false 时，offset.dy 是按钮顶部，菜单从这里开始向下
+    // Y 坐标：showAbove 时 offset.dy 为按钮底部，需要上移菜单高度。
+    // 否则 offset.dy 为按钮顶部，菜单从该位置向下展开。
     double y = showAbove ? offset.dy - childSize.height : offset.dy;
 
     // 确保不超出屏幕边界
@@ -166,13 +165,8 @@ class _DropdownLayoutDelegate extends SingleChildLayoutDelegate {
   }
 }
 
-// Q弹风格的下拉菜单组件
-//
-// 特性：
-// - Curves.easeOutBack 回弹动画（参考 modern_popup_menu）
-// - Windows 11 风格外观
-// - 适配下拉菜单的间距和尺寸
-// - 支持滚动的长列表
+// 回弹风格下拉菜单组件：支持长列表滚动与定位布局。
+// 采用弹出层显示并提供选中回调。
 class ModernDropdownMenu<T> extends StatefulWidget {
   // 触发菜单的子组件
   final Widget child;
@@ -275,11 +269,8 @@ class _ModernDropdownMenuState<T> extends State<ModernDropdownMenu<T>> {
 
     showAboveNotifier.value = showAbove;
 
-    // 设置菜单位置（覆盖按钮，右对齐）
-    // X 坐标：按钮右边缘（菜单会右对齐到这里）
-    // Y 坐标：
-    //   - 下方显示：从按钮顶部开始
-    //   - 上方显示：菜单底部对齐按钮底部
+    // 设置菜单位置：覆盖按钮并右对齐到按钮右边缘。
+    // 纵向根据 showAbove 选择顶部或底部对齐。
     _targetOffsetValueNotifier.value = Offset(
       buttonPosition.dx + buttonSize.width, // 按钮右边缘
       showAbove
@@ -333,7 +324,7 @@ class _DropdownMenuUIState<T> extends State<_DropdownMenuUI<T>> {
     _currentPage = 0;
   }
 
-  // 每页显示的项目数（最多7项 + 1行翻页按钮）
+  // 每页显示的项目数（最多7 项 + 1 行翻页按钮）
   static const int _itemsPerPage = 7;
 
   // 计算总页数

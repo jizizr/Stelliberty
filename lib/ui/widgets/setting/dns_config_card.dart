@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:stelliberty/i18n/i18n.dart';
-import 'package:stelliberty/clash/data/dns_config_model.dart';
+import 'package:stelliberty/clash/model/dns_config_model.dart';
 import 'package:stelliberty/clash/services/dns_service.dart';
-import 'package:stelliberty/clash/storage/preferences.dart';
-import 'package:stelliberty/clash/manager/manager.dart';
-import 'package:stelliberty/utils/logger.dart';
+import 'package:stelliberty/storage/clash_preferences.dart';
+import 'package:stelliberty/clash/manager/clash_manager.dart';
+import 'package:stelliberty/clash/providers/clash_provider.dart';
+import 'package:stelliberty/services/log_print_service.dart';
 import 'package:stelliberty/ui/common/modern_feature_card.dart';
 import 'package:stelliberty/ui/common/modern_dropdown_menu.dart';
 import 'package:stelliberty/ui/common/modern_dropdown_button.dart';
@@ -246,8 +248,12 @@ class _DnsConfigCardState extends State<DnsConfigCard> {
       await ClashPreferences.instance.setDnsOverrideEnabled(_enableDns);
 
       // 如果 Clash 正在运行，重载配置文件
+      // 在 await 调用前获取 context
+      if (!mounted) return;
+      final clashProvider = context.read<ClashProvider>();
+
       if (ClashManager.instance.isCoreRunning) {
-        final currentConfigPath = ClashManager.instance.currentConfigPath;
+        final currentConfigPath = clashProvider.currentConfigPath;
         if (currentConfigPath != null) {
           await ClashManager.instance.reloadConfig(
             configPath: currentConfigPath,
@@ -268,16 +274,16 @@ class _DnsConfigCardState extends State<DnsConfigCard> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text(trans.dnsSettings.reset),
-        content: Text(trans.dnsSettings.resetConfirm),
+        title: Text(trans.dns_settings.reset),
+        content: Text(trans.dns_settings.reset_confirm),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
-            child: Text(trans.dnsSettings.cancel),
+            child: Text(trans.dns_settings.cancel),
           ),
           TextButton(
             onPressed: () => Navigator.of(context).pop(true),
-            child: Text(trans.dnsSettings.reset),
+            child: Text(trans.dns_settings.reset),
           ),
         ],
       ),
@@ -399,29 +405,30 @@ class _DnsConfigCardState extends State<DnsConfigCard> {
         children: [
           // 标题行（包含 DNS 开关）
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              Row(
-                children: [
-                  const Icon(Icons.dns_outlined),
-                  const SizedBox(
-                    width: ModernFeatureCardSpacing.featureIconToTextSpacing,
-                  ),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        trans.dnsSettings.title,
-                        style: Theme.of(context).textTheme.titleMedium,
-                      ),
-                      Text(
-                        trans.dnsSettings.description,
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                    ],
-                  ),
-                ],
+              const Icon(Icons.dns_outlined),
+              const SizedBox(
+                width: ModernFeatureCardSpacing.featureIconToTextSpacing,
               ),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      trans.dns_settings.title,
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    Text(
+                      trans.dns_settings.description,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
               // DNS 开关直接显示在标题行
               ModernSwitch(
                 value: _enableDns,
@@ -453,13 +460,13 @@ class _DnsConfigCardState extends State<DnsConfigCard> {
             children: [
               TextButton.icon(
                 icon: const Icon(Icons.restart_alt, size: 18),
-                label: Text(trans.dnsSettings.reset),
+                label: Text(trans.dns_settings.reset),
                 onPressed: _resetToDefault,
               ),
               const Spacer(),
               ElevatedButton.icon(
                 icon: const Icon(Icons.save, size: 18),
-                label: Text(trans.dnsSettings.save),
+                label: Text(trans.dns_settings.save),
                 onPressed: _saveConfig,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Theme.of(context).colorScheme.primary,
@@ -479,7 +486,7 @@ class _DnsConfigCardState extends State<DnsConfigCard> {
     return [
       // 基础配置
       Text(
-        trans.dnsSettings.basicConfig,
+        trans.dns_settings.basic_config,
         style: Theme.of(context).textTheme.titleSmall?.copyWith(
           fontWeight: FontWeight.bold,
           color: Theme.of(context).colorScheme.primary,
@@ -490,7 +497,7 @@ class _DnsConfigCardState extends State<DnsConfigCard> {
       // DNS 监听地址
       _buildTextField(
         controller: _listenController,
-        label: trans.dnsSettings.listen,
+        label: trans.dns_settings.listen,
         hint: ':53',
       ),
 
@@ -498,7 +505,7 @@ class _DnsConfigCardState extends State<DnsConfigCard> {
 
       // 增强模式
       _buildDropdown<String>(
-        label: trans.dnsSettings.enhancedMode,
+        label: trans.dns_settings.enhanced_mode,
         value: _enhancedMode,
         isHovering: _isHoveringOnEnhancedModeMenu,
         onHoverChanged: (hovering) =>
@@ -507,13 +514,13 @@ class _DnsConfigCardState extends State<DnsConfigCard> {
         itemToString: (mode) {
           switch (mode) {
             case 'normal':
-              return trans.dnsSettings.enhancedModeNormal;
+              return trans.dns_settings.enhanced_mode_normal;
             case 'fake-ip':
-              return trans.dnsSettings.enhancedModeFakeIp;
+              return trans.dns_settings.enhanced_mode_fake_ip;
             case 'redir-host':
-              return trans.dnsSettings.enhancedModeRedirHost;
+              return trans.dns_settings.enhanced_mode_redir_host;
             case 'hosts':
-              return trans.dnsSettings.enhancedModeHosts;
+              return trans.dns_settings.enhanced_mode_hosts;
             default:
               return mode;
           }
@@ -529,7 +536,7 @@ class _DnsConfigCardState extends State<DnsConfigCard> {
       // Fake IP 范围
       _buildTextField(
         controller: _fakeIpRangeController,
-        label: trans.dnsSettings.fakeIpRange,
+        label: trans.dns_settings.fake_ip_range,
         hint: '198.18.0.1/16',
       ),
 
@@ -537,15 +544,15 @@ class _DnsConfigCardState extends State<DnsConfigCard> {
 
       // Fake IP 过滤模式
       _buildDropdown<String>(
-        label: trans.dnsSettings.fakeIpFilterMode,
+        label: trans.dns_settings.fake_ip_filter_mode,
         value: _fakeIpFilterMode,
         isHovering: _isHoveringOnFakeIpFilterModeMenu,
         onHoverChanged: (hovering) =>
             setState(() => _isHoveringOnFakeIpFilterModeMenu = hovering),
         items: ['blacklist', 'whitelist'],
         itemToString: (mode) => mode == 'blacklist'
-            ? trans.dnsSettings.fakeIpFilterModeBlacklist
-            : trans.dnsSettings.fakeIpFilterModeWhitelist,
+            ? trans.dns_settings.fake_ip_filter_mode_blacklist
+            : trans.dns_settings.fake_ip_filter_mode_whitelist,
         onChanged: (value) {
           setState(() => _fakeIpFilterMode = value);
           _saveConfig(); // 立即保存
@@ -556,7 +563,7 @@ class _DnsConfigCardState extends State<DnsConfigCard> {
 
       // IPv6 开关
       _buildSwitch(
-        label: trans.dnsSettings.ipv6Support,
+        label: trans.dns_settings.ipv6_support,
         value: _ipv6,
         onChanged: (value) {
           setState(() => _ipv6 = value);
@@ -568,7 +575,7 @@ class _DnsConfigCardState extends State<DnsConfigCard> {
 
       // 高级配置
       Text(
-        trans.dnsSettings.advancedConfig,
+        trans.dns_settings.advanced_config,
         style: Theme.of(context).textTheme.titleSmall?.copyWith(
           fontWeight: FontWeight.bold,
           color: Theme.of(context).colorScheme.primary,
@@ -577,7 +584,7 @@ class _DnsConfigCardState extends State<DnsConfigCard> {
       const SizedBox(height: 12),
 
       _buildSwitch(
-        label: trans.dnsSettings.preferH3,
+        label: trans.dns_settings.prefer_h3,
         value: _preferH3,
         onChanged: (value) {
           setState(() => _preferH3 = value);
@@ -588,7 +595,7 @@ class _DnsConfigCardState extends State<DnsConfigCard> {
       const SizedBox(height: 12),
 
       _buildSwitch(
-        label: trans.dnsSettings.respectRules,
+        label: trans.dns_settings.respect_rules,
         value: _respectRules,
         onChanged: (value) {
           setState(() => _respectRules = value);
@@ -599,7 +606,7 @@ class _DnsConfigCardState extends State<DnsConfigCard> {
       const SizedBox(height: 12),
 
       _buildSwitch(
-        label: trans.dnsSettings.useHosts,
+        label: trans.dns_settings.use_hosts,
         value: _useHosts,
         onChanged: (value) {
           setState(() => _useHosts = value);
@@ -610,7 +617,7 @@ class _DnsConfigCardState extends State<DnsConfigCard> {
       const SizedBox(height: 12),
 
       _buildSwitch(
-        label: trans.dnsSettings.useSystemHosts,
+        label: trans.dns_settings.use_system_hosts,
         value: _useSystemHosts,
         onChanged: (value) {
           setState(() => _useSystemHosts = value);
@@ -621,7 +628,7 @@ class _DnsConfigCardState extends State<DnsConfigCard> {
       const SizedBox(height: 12),
 
       _buildSwitch(
-        label: trans.dnsSettings.directNameserverFollowPolicy,
+        label: trans.dns_settings.direct_nameserver_follow_policy,
         value: _directNameserverFollowPolicy,
         onChanged: (value) {
           setState(() => _directNameserverFollowPolicy = value);
@@ -633,7 +640,7 @@ class _DnsConfigCardState extends State<DnsConfigCard> {
 
       // DNS 服务器配置
       Text(
-        trans.dnsSettings.domainDnsOverride,
+        trans.dns_settings.domain_dns_override,
         style: Theme.of(context).textTheme.titleSmall?.copyWith(
           fontWeight: FontWeight.bold,
           color: Theme.of(context).colorScheme.primary,
@@ -643,7 +650,7 @@ class _DnsConfigCardState extends State<DnsConfigCard> {
 
       _buildMultilineTextField(
         controller: _nameserverPolicyController,
-        label: trans.dnsSettings.nameserverPolicy,
+        label: trans.dns_settings.nameserver_policy,
         hint: '*.google.com=8.8.8.8,8.8.4.4, +.cn=223.5.5.5',
         maxLines: 3,
       ),
@@ -652,7 +659,7 @@ class _DnsConfigCardState extends State<DnsConfigCard> {
 
       _buildMultilineTextField(
         controller: _hostsController,
-        label: trans.dnsSettings.hosts,
+        label: trans.dns_settings.hosts,
         hint: 'localhost=127.0.0.1,*.test.com=1.2.3.4',
         maxLines: 3,
       ),
@@ -661,7 +668,7 @@ class _DnsConfigCardState extends State<DnsConfigCard> {
 
       _buildMultilineTextField(
         controller: _nameserverController,
-        label: trans.dnsSettings.nameserver,
+        label: trans.dns_settings.nameserver,
         hint: '8.8.8.8,https://doh.pub/dns-query',
         maxLines: 2,
       ),
@@ -670,7 +677,7 @@ class _DnsConfigCardState extends State<DnsConfigCard> {
 
       _buildMultilineTextField(
         controller: _defaultNameserverController,
-        label: trans.dnsSettings.defaultNameserver,
+        label: trans.dns_settings.default_nameserver,
         hint: '8.8.8.8,https://doh.pub/dns-query',
         maxLines: 2,
       ),
@@ -679,7 +686,7 @@ class _DnsConfigCardState extends State<DnsConfigCard> {
 
       _buildMultilineTextField(
         controller: _fallbackController,
-        label: trans.dnsSettings.fallback,
+        label: trans.dns_settings.fallback,
         hint: '8.8.8.8,https://doh.pub/dns-query',
         maxLines: 2,
       ),
@@ -688,7 +695,7 @@ class _DnsConfigCardState extends State<DnsConfigCard> {
 
       _buildMultilineTextField(
         controller: _proxyServerNameserverController,
-        label: trans.dnsSettings.proxyServerNameserver,
+        label: trans.dns_settings.proxy_server_nameserver,
         hint: 'https://doh.pub/dns-query,https://dns.alidns.com/dns-query',
         maxLines: 2,
       ),
@@ -697,7 +704,7 @@ class _DnsConfigCardState extends State<DnsConfigCard> {
 
       _buildMultilineTextField(
         controller: _directNameserverController,
-        label: trans.dnsSettings.directNameserver,
+        label: trans.dns_settings.direct_nameserver,
         hint: 'system,223.6.6.6',
         maxLines: 2,
       ),
@@ -706,7 +713,7 @@ class _DnsConfigCardState extends State<DnsConfigCard> {
 
       _buildMultilineTextField(
         controller: _fakeIpFilterController,
-        label: trans.dnsSettings.fakeIpFilter,
+        label: trans.dns_settings.fake_ip_filter,
         hint: '*.lan,*.local,localhost.ptlogin2.qq.com',
         maxLines: 3,
       ),
@@ -715,7 +722,7 @@ class _DnsConfigCardState extends State<DnsConfigCard> {
 
       // Fallback 过滤器配置
       Text(
-        trans.dnsSettings.fallbackFilter,
+        trans.dns_settings.fallback_filter,
         style: Theme.of(context).textTheme.titleSmall?.copyWith(
           fontWeight: FontWeight.bold,
           color: Theme.of(context).colorScheme.primary,
@@ -724,7 +731,7 @@ class _DnsConfigCardState extends State<DnsConfigCard> {
       const SizedBox(height: 12),
 
       _buildSwitch(
-        label: trans.dnsSettings.fallbackGeoip,
+        label: trans.dns_settings.fallback_geoip,
         value: _fallbackGeoip,
         onChanged: (value) {
           setState(() => _fallbackGeoip = value);
@@ -736,7 +743,7 @@ class _DnsConfigCardState extends State<DnsConfigCard> {
 
       _buildTextField(
         controller: _fallbackGeoipCodeController,
-        label: trans.dnsSettings.fallbackGeoipCode,
+        label: trans.dns_settings.fallback_geoip_code,
         hint: 'CN',
       ),
 
@@ -744,7 +751,7 @@ class _DnsConfigCardState extends State<DnsConfigCard> {
 
       _buildMultilineTextField(
         controller: _fallbackIpcidrController,
-        label: trans.dnsSettings.fallbackIpcidr,
+        label: trans.dns_settings.fallback_ipcidr,
         hint: '240.0.0.0/4,0.0.0.0/32',
         maxLines: 2,
       ),
@@ -753,7 +760,7 @@ class _DnsConfigCardState extends State<DnsConfigCard> {
 
       _buildMultilineTextField(
         controller: _fallbackDomainController,
-        label: trans.dnsSettings.fallbackDomain,
+        label: trans.dns_settings.fallback_domain,
         hint: '+.google.com,+.facebook.com,+.youtube.com',
         maxLines: 2,
       ),

@@ -1,11 +1,13 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:provider/provider.dart';
 import 'package:stelliberty/providers/content_provider.dart';
 import 'package:stelliberty/i18n/i18n.dart';
 import 'package:package_info_plus/package_info_plus.dart';
-import 'package:stelliberty/utils/logger.dart';
+import 'package:stelliberty/services/log_print_service.dart';
 import 'package:stelliberty/ui/constants/spacing.dart';
+import 'package:stelliberty/src/bindings/signals/signals.dart';
 
 export 'behavior_settings_page.dart';
 
@@ -19,6 +21,9 @@ class SettingsOverviewPage extends StatefulWidget {
 class _SettingsOverviewPageState extends State<SettingsOverviewPage> {
   String _version = '';
   bool _versionLoaded = false;
+
+  static const String _githubUrl =
+      'https://github.com/Kindness-Kismet/Stelliberty';
 
   @override
   void initState() {
@@ -91,8 +96,8 @@ class _SettingsOverviewPageState extends State<SettingsOverviewPage> {
                 borderRadius: BorderRadius.circular(8),
               ),
               leading: const Icon(Icons.settings_suggest_outlined),
-              title: Text(trans.clashFeatures.title),
-              subtitle: Text(trans.clashFeatures.description),
+              title: Text(trans.clash_features.title),
+              subtitle: Text(trans.clash_features.description),
               onTap: () =>
                   provider.switchView(ContentView.settingsClashFeatures),
               // 只移除点击时的水波纹扩散效果，保留悬停效果
@@ -126,8 +131,8 @@ class _SettingsOverviewPageState extends State<SettingsOverviewPage> {
                   borderRadius: BorderRadius.circular(8),
                 ),
                 leading: const Icon(Icons.new_releases_outlined),
-                title: Text(trans.appUpdate.title),
-                subtitle: Text(trans.appUpdate.description),
+                title: Text(trans.app_update.title),
+                subtitle: Text(trans.app_update.description),
                 onTap: () => provider.switchView(ContentView.settingsAppUpdate),
                 // 只移除点击时的水波纹扩散效果，保留悬停效果
                 splashColor: Colors.transparent,
@@ -139,6 +144,11 @@ class _SettingsOverviewPageState extends State<SettingsOverviewPage> {
               leading: const Icon(Icons.info_outline),
               title: Text(trans.about.title),
               subtitle: Text(_version.isEmpty ? '…' : _version),
+              trailing: IconButton(
+                icon: const FaIcon(FontAwesomeIcons.github, size: 20),
+                tooltip: 'GitHub',
+                onPressed: () => OpenUrl(url: _githubUrl).sendSignalToRust(),
+              ),
               onTap: null,
               splashColor: Colors.transparent,
             ),

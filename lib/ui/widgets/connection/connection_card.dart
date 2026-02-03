@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:stelliberty/clash/data/connection_model.dart';
+import 'package:stelliberty/clash/model/connection_model.dart';
 import 'package:stelliberty/i18n/i18n.dart';
 import 'package:stelliberty/ui/widgets/modern_tooltip.dart';
 
@@ -93,7 +93,7 @@ class ConnectionCard extends StatelessWidget {
                       ),
                     ),
                     ModernTooltip(
-                      message: trans.connection.closeConnection,
+                      message: trans.connection.close_connection,
                       child: IconButton(
                         icon: const Icon(Icons.close_rounded, size: 16),
                         onPressed: onClose,

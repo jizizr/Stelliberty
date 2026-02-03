@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:stelliberty/atomic/platform_helper.dart';
 
-// 横向选项间距常量
-// 2 选项时的单边间距
+// 横向选项间距常量（按选项数量调整）。
 const double _kHorizontalSpacingTwoOptions = 6.0;
-// 3 选项时的单边间距
 const double _kHorizontalSpacingThreeOptions = 4.0;
+const double _kHorizontalSpacingTwoOptionsMobile = 4.0;
+const double _kHorizontalSpacingThreeOptionsMobile = 3.0;
 
 // 选项数据模型
 class OptionItem<T> {
@@ -21,9 +22,8 @@ class OptionItem<T> {
   });
 }
 
-// 通用选项选择器组件
-// 支持横向和纵向排列的单选选项卡片
-// 用于导入方式选择、自动更新模式选择、代理模式选择等场景
+// 通用选项选择器：支持横向/纵向排列的单选选项卡片。
+// 用于导入方式、更新模式、代理模式等选择场景。
 class OptionSelectorWidget<T> extends StatelessWidget {
   // 标题
   final String title;
@@ -62,11 +62,18 @@ class OptionSelectorWidget<T> extends StatelessWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final colorScheme = Theme.of(context).colorScheme;
     final effectiveTitleColor = titleColor ?? colorScheme.primary;
+    final isMobile = PlatformHelper.isMobile;
+
+    final containerPadding = isMobile
+        ? const EdgeInsets.all(12)
+        : const EdgeInsets.all(16);
+    final titleIconSize = isMobile ? 14.0 : 16.0;
+    final titleFontSize = isMobile ? 12.0 : 14.0;
 
     return Material(
       color: Colors.transparent,
       child: Container(
-        padding: const EdgeInsets.all(16),
+        padding: containerPadding,
         decoration: BoxDecoration(
           color: isDark
               ? Colors.white.withValues(alpha: 0.04)
@@ -83,19 +90,23 @@ class OptionSelectorWidget<T> extends StatelessWidget {
             // 标题行
             Row(
               children: [
-                Icon(titleIcon, color: effectiveTitleColor, size: 16),
+                Icon(
+                  titleIcon,
+                  color: effectiveTitleColor,
+                  size: titleIconSize,
+                ),
                 const SizedBox(width: 8),
                 Text(
                   title,
                   style: TextStyle(
                     color: effectiveTitleColor,
                     fontWeight: FontWeight.w600,
-                    fontSize: 14,
+                    fontSize: titleFontSize,
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 12),
+            SizedBox(height: isMobile ? 10 : 12),
 
             // 选项列表
             if (isHorizontal)
@@ -114,10 +125,15 @@ class OptionSelectorWidget<T> extends StatelessWidget {
     bool isDark,
     ColorScheme colorScheme,
   ) {
+    final isMobile = PlatformHelper.isMobile;
     // 根据选项数量动态设置间距
     final spacing = options.length == 2
-        ? _kHorizontalSpacingTwoOptions
-        : _kHorizontalSpacingThreeOptions;
+        ? (isMobile
+              ? _kHorizontalSpacingTwoOptionsMobile
+              : _kHorizontalSpacingTwoOptions)
+        : (isMobile
+              ? _kHorizontalSpacingThreeOptionsMobile
+              : _kHorizontalSpacingThreeOptions);
 
     return Row(
       children: List.generate(options.length, (index) {
@@ -144,10 +160,13 @@ class OptionSelectorWidget<T> extends StatelessWidget {
     bool isDark,
     ColorScheme colorScheme,
   ) {
+    final isMobile = PlatformHelper.isMobile;
     return Column(
       children: options.map((option) {
         return Padding(
-          padding: EdgeInsets.only(bottom: option == options.last ? 0 : 8),
+          padding: EdgeInsets.only(
+            bottom: option == options.last ? 0 : (isMobile ? 6 : 8),
+          ),
           child: _buildOptionCard(context, option, isDark, colorScheme),
         );
       }).toList(),
@@ -163,6 +182,20 @@ class OptionSelectorWidget<T> extends StatelessWidget {
   ) {
     final isSelected = option.value == selectedValue;
     final effectiveTitleColor = titleColor ?? colorScheme.primary;
+    final isMobile = PlatformHelper.isMobile;
+
+    final cardPadding = isMobile
+        ? const EdgeInsets.all(10)
+        : const EdgeInsets.all(12);
+    final radioIconSize = isMobile
+        ? (isHorizontal ? 16.0 : 18.0)
+        : (isHorizontal ? 18.0 : 20.0);
+    final titleFontSize = isMobile
+        ? (isHorizontal ? 11.0 : 12.0)
+        : (isHorizontal ? 13.0 : 14.0);
+    final subtitleFontSize = isMobile
+        ? (isHorizontal ? 9.0 : 10.0)
+        : (isHorizontal ? 11.0 : 12.0);
 
     return Material(
       color: Colors.transparent,
@@ -171,7 +204,7 @@ class OptionSelectorWidget<T> extends StatelessWidget {
         borderRadius: BorderRadius.circular(10),
         onTap: () => onChanged(option.value),
         child: Container(
-          padding: const EdgeInsets.all(12),
+          padding: cardPadding,
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(10),
             border: isSelected
@@ -195,9 +228,13 @@ class OptionSelectorWidget<T> extends StatelessWidget {
                 color: isSelected
                     ? effectiveTitleColor
                     : colorScheme.onSurface.withValues(alpha: 0.4),
-                size: isHorizontal ? 18 : 20,
+                size: radioIconSize,
               ),
-              SizedBox(width: isHorizontal ? 8 : 12),
+              SizedBox(
+                width: isMobile
+                    ? (isHorizontal ? 6 : 10)
+                    : (isHorizontal ? 8 : 12),
+              ),
 
               // 内容
               Expanded(
@@ -208,7 +245,7 @@ class OptionSelectorWidget<T> extends StatelessWidget {
                     Text(
                       option.title,
                       style: TextStyle(
-                        fontSize: isHorizontal ? 13 : 14,
+                        fontSize: titleFontSize,
                         fontWeight: isSelected
                             ? FontWeight.w600
                             : FontWeight.w500,
@@ -221,7 +258,7 @@ class OptionSelectorWidget<T> extends StatelessWidget {
                       Text(
                         option.subtitle!,
                         style: TextStyle(
-                          fontSize: isHorizontal ? 11 : 12,
+                          fontSize: subtitleFontSize,
                           color: colorScheme.onSurface.withValues(alpha: 0.6),
                         ),
                       ),

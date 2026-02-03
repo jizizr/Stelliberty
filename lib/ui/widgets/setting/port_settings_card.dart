@@ -2,13 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:stelliberty/i18n/i18n.dart';
-import 'package:stelliberty/clash/manager/manager.dart';
 import 'package:stelliberty/clash/providers/clash_provider.dart';
 import 'package:stelliberty/clash/config/clash_defaults.dart';
 import 'package:stelliberty/ui/common/modern_feature_card.dart';
 import 'package:stelliberty/ui/common/modern_text_field.dart';
 import 'package:stelliberty/ui/widgets/modern_toast.dart';
-import 'package:stelliberty/utils/logger.dart';
+import 'package:stelliberty/services/log_print_service.dart';
 
 // 端口设置配置卡片
 class PortSettingsCard extends StatefulWidget {
@@ -36,15 +35,15 @@ class _PortSettingsCardState extends State<PortSettingsCard> {
   void initState() {
     super.initState();
     _clashProvider = Provider.of<ClashProvider>(context, listen: false);
-    final clashManager = ClashManager.instance;
+    final configState = _clashProvider.configState;
     _mixedPortController = TextEditingController(
-      text: clashManager.mixedPort.toString(),
+      text: configState.mixedPort.toString(),
     );
     _socksPortController = TextEditingController(
-      text: clashManager.socksPort?.toString() ?? '',
+      text: configState.socksPort?.toString() ?? '',
     );
     _httpPortController = TextEditingController(
-      text: clashManager.httpPort?.toString() ?? '',
+      text: configState.httpPort?.toString() ?? '',
     );
   }
 
@@ -56,22 +55,21 @@ class _PortSettingsCardState extends State<PortSettingsCard> {
     super.dispose();
   }
 
-  // 验证端口号
-  // [value] 端口字符串
-  // [allowEmpty] 是否允许为空（用于可选端口）
+  // 验证端口号字符串，返回错误提示或 null。
+  // allowEmpty 用于可选端口场景。
   String? _validatePort(String value, {bool allowEmpty = false}) {
     final trans = context.translate;
     if (value.isEmpty) {
-      return allowEmpty ? null : trans.portSettings.portError;
+      return allowEmpty ? null : trans.port_settings.port_error;
     }
 
     final port = int.tryParse(value);
     if (port == null) {
-      return trans.portSettings.portInvalid;
+      return trans.port_settings.port_invalid;
     }
 
     if (port < 1 || port > 65535) {
-      return trans.portSettings.portRange;
+      return trans.port_settings.port_range;
     }
 
     return null;
@@ -140,33 +138,32 @@ class _PortSettingsCardState extends State<PortSettingsCard> {
     try {
       // 保存混合端口
       final mixedPort = int.parse(_mixedPortController.text);
-      _clashProvider.configService.setMixedPort(mixedPort);
+      _clashProvider.setMixedPort(mixedPort);
 
       // 保存 SOCKS 端口
       if (_socksPortController.text.isEmpty) {
-        _clashProvider.configService.setSocksPort(null);
+        _clashProvider.setSocksPort(null);
       } else {
         final socksPort = int.parse(_socksPortController.text);
-        _clashProvider.configService.setSocksPort(socksPort);
+        _clashProvider.setSocksPort(socksPort);
       }
 
       // 保存 HTTP 端口
       if (_httpPortController.text.isEmpty) {
-        _clashProvider.configService.setHttpPort(null);
+        _clashProvider.setHttpPort(null);
       } else {
         final httpPort = int.parse(_httpPortController.text);
-        _clashProvider.configService.setHttpPort(httpPort);
+        _clashProvider.setHttpPort(httpPort);
       }
 
       if (mounted) {
-        ModernToast.success(context, trans.portSettings.saveSuccess);
+        ModernToast.success(trans.port_settings.save_success);
       }
     } catch (e) {
       Logger.error('保存端口配置失败: $e');
       if (mounted) {
         ModernToast.error(
-          context,
-          trans.portSettings.saveFailed.replaceAll('{error}', e.toString()),
+          trans.port_settings.save_failed.replaceAll('{error}', e.toString()),
         );
       }
     } finally {
@@ -199,11 +196,11 @@ class _PortSettingsCardState extends State<PortSettingsCard> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    trans.clashFeatures.portSettings.title,
+                    trans.clash_features.port_settings.title,
                     style: Theme.of(context).textTheme.titleMedium,
                   ),
                   Text(
-                    trans.clashFeatures.portSettings.subtitle,
+                    trans.clash_features.port_settings.subtitle,
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
                 ],
@@ -215,7 +212,7 @@ class _PortSettingsCardState extends State<PortSettingsCard> {
           ModernTextField(
             controller: _mixedPortController,
             keyboardType: TextInputType.number,
-            labelText: trans.clashFeatures.portSettings.mixedPort,
+            labelText: trans.clash_features.port_settings.mixed_port,
             hintText: ClashDefaults.mixedPort.toString(),
             errorText: _mixedPortError,
             minLines: 1,
@@ -228,8 +225,8 @@ class _PortSettingsCardState extends State<PortSettingsCard> {
           ModernTextField(
             controller: _socksPortController,
             keyboardType: TextInputType.number,
-            labelText: trans.clashFeatures.portSettings.socksPort,
-            hintText: trans.clashFeatures.portSettings.emptyToDisable,
+            labelText: trans.clash_features.port_settings.socks_port,
+            hintText: trans.clash_features.port_settings.empty_to_disable,
             errorText: _socksPortError,
             minLines: 1,
             inputFormatters: [
@@ -241,8 +238,8 @@ class _PortSettingsCardState extends State<PortSettingsCard> {
           ModernTextField(
             controller: _httpPortController,
             keyboardType: TextInputType.number,
-            labelText: trans.clashFeatures.portSettings.httpPort,
-            hintText: trans.clashFeatures.portSettings.emptyToDisable,
+            labelText: trans.clash_features.port_settings.http_port,
+            hintText: trans.clash_features.port_settings.empty_to_disable,
             errorText: _httpPortError,
             minLines: 1,
             inputFormatters: [
@@ -265,7 +262,7 @@ class _PortSettingsCardState extends State<PortSettingsCard> {
                       )
                     : const Icon(Icons.save, size: 18),
                 label: Text(
-                  _isSaving ? trans.portSettings.saving : trans.common.save,
+                  _isSaving ? trans.port_settings.saving : trans.common.save,
                 ),
               ),
             ],

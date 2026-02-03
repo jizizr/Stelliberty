@@ -1,10 +1,12 @@
 import 'dart:io';
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:path/path.dart' as path;
 import 'package:provider/provider.dart';
 import 'package:reorderable_grid_view/reorderable_grid_view.dart';
 import 'package:stelliberty/clash/providers/subscription_provider.dart';
-import 'package:stelliberty/clash/data/subscription_model.dart';
+import 'package:stelliberty/clash/model/subscription_model.dart';
+import 'package:stelliberty/clash/services/geo_service.dart';
 import 'package:stelliberty/ui/widgets/subscription/subscription_card.dart';
 import 'package:stelliberty/ui/widgets/subscription/subscription_dialog.dart';
 import 'package:stelliberty/ui/widgets/override/override_selector_dialog.dart';
@@ -14,8 +16,8 @@ import 'package:stelliberty/ui/widgets/modern_toast.dart';
 import 'package:stelliberty/ui/widgets/confirm_dialog.dart';
 import 'package:stelliberty/providers/content_provider.dart';
 import 'package:stelliberty/i18n/i18n.dart';
-import 'package:stelliberty/utils/logger.dart';
-import 'package:stelliberty/src/bindings/signals/signals.dart';
+import 'package:stelliberty/services/log_print_service.dart';
+import 'package:stelliberty/ui/common/modern_top_toolbar.dart';
 import 'package:stelliberty/ui/constants/spacing.dart';
 
 // 订阅页布局常量
@@ -116,105 +118,85 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
       padding: const EdgeInsets.symmetric(vertical: 12.0),
       child: Row(
         children: [
-          // 订阅数统计（使用 Badge 风格）
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            decoration: BoxDecoration(
-              color: colorScheme.primaryContainer,
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  Icons.rss_feed_rounded,
-                  size: 16,
-                  color: colorScheme.onPrimaryContainer,
-                ),
-                const SizedBox(width: 6),
-                Text(
-                  trans.subscription.configCount.replaceAll(
-                    '{count}',
-                    data.subscriptionCount.toString(),
+          Expanded(
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                alignment: WrapAlignment.end,
+                children: [
+                  OutlinedButton.icon(
+                    onPressed: () => _navigateToOverrideManagement(context),
+                    icon: const Icon(Icons.rule, size: 18),
+                    label: Text(trans.subscription.override_management),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 10,
+                      ),
+                      shape: modernTopToolbarButtonShape(),
+                      textStyle: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                   ),
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: colorScheme.onPrimaryContainer,
+                  FilledButton.icon(
+                    onPressed: () =>
+                        _showAddSubscriptionDialog(context, provider),
+                    icon: const Icon(Icons.add_rounded, size: 18),
+                    label: Text(trans.subscription.add_config),
+                    style: FilledButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 10,
+                      ),
+                      shape: modernTopToolbarButtonShape(),
+                      textStyle: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                   ),
-                ),
-              ],
-            ),
-          ),
-
-          const Spacer(),
-
-          // 覆写管理按钮
-          OutlinedButton.icon(
-            onPressed: () => _navigateToOverrideManagement(context),
-            icon: const Icon(Icons.rule, size: 18),
-            label: Text(trans.subscription.overrideManagement),
-            style: OutlinedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              textStyle: const TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-
-          const SizedBox(width: 8),
-
-          // 添加订阅按钮（FilledButton 风格）
-          FilledButton.icon(
-            onPressed: () => _showAddSubscriptionDialog(context, provider),
-            icon: const Icon(Icons.add_rounded, size: 18),
-            label: Text(trans.subscription.addConfig),
-            style: FilledButton.styleFrom(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              textStyle: const TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-
-          const SizedBox(width: 8),
-
-          // 更新所有按钮（FilledTonal 风格）
-          if (data.subscriptionCount > 0)
-            FilledButton.tonalIcon(
-              onPressed: data.isLoading
-                  ? null
-                  : () => _updateAllSubscriptions(context, provider),
-              icon: data.isLoading
-                  ? SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        valueColor: AlwaysStoppedAnimation<Color>(
-                          colorScheme.onSecondaryContainer,
+                  if (data.subscriptionCount > 0)
+                    FilledButton.tonalIcon(
+                      onPressed: data.isLoading
+                          ? null
+                          : () => _updateAllSubscriptions(context, provider),
+                      icon: data.isLoading
+                          ? SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                  colorScheme.onSecondaryContainer,
+                                ),
+                              ),
+                            )
+                          : const Icon(Icons.sync_rounded, size: 18),
+                      label: Text(
+                        data.isLoading
+                            ? trans.subscription.updating
+                            : trans.subscription.update_all,
+                      ),
+                      style: FilledButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 10,
+                        ),
+                        shape: modernTopToolbarButtonShape(),
+                        textStyle: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
-                    )
-                  : const Icon(Icons.sync_rounded, size: 18),
-              label: Text(
-                data.isLoading
-                    ? trans.subscription.updating
-                    : trans.subscription.updateAll,
-              ),
-              style: FilledButton.styleFrom(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 10,
-                ),
-                textStyle: const TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                ),
+                    ),
+                ],
               ),
             ),
+          ),
         ],
       ),
     );
@@ -265,7 +247,7 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
             ),
             const SizedBox(height: 8),
             Text(
-              trans.subscription.emptyHint,
+              trans.subscription.empty_hint,
               style: const TextStyle(color: Colors.grey),
             ),
           ],
@@ -274,6 +256,15 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
     }
 
     // 显示订阅列表（支持拖动排序，响应式布局）
+    return _buildSubscriptionGrid(context, provider, data);
+  }
+
+  // 构建订阅网格列表
+  Widget _buildSubscriptionGrid(
+    BuildContext context,
+    SubscriptionProvider provider,
+    _SubscriptionListState data,
+  ) {
     return LayoutBuilder(
       builder: (context, constraints) {
         // 当宽度超过 600 时显示两列，否则一列
@@ -392,7 +383,7 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
     await WidgetsBinding.instance.endOfFrame;
     if (!context.mounted) return;
 
-    // 从 Provider 获取最新的订阅数据，避免使用缓存的旧对象
+    // 从 Provider 获取订阅数据
     final latestSubscription = provider.subscriptions.firstWhere(
       (s) => s.id == subscription.id,
       orElse: () => subscription, // 降级：如果找不到则使用传入的订阅
@@ -407,7 +398,7 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
 
     final result = await SubscriptionDialog.showEditDialog(
       context,
-      latestSubscription, // 使用最新的订阅数据
+      latestSubscription, // 使用订阅数据
     );
 
     if (result != null && context.mounted) {
@@ -434,14 +425,13 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
     Subscription subscription,
   ) async {
     final trans = context.translate;
-    final success = await provider.updateSubscription(subscription.id);
+    final isSuccess = await provider.updateSubscription(subscription.id);
 
     if (!context.mounted) return;
 
-    if (success) {
+    if (isSuccess) {
       ModernToast.success(
-        context,
-        trans.subscription.updateSuccess.replaceAll(
+        trans.subscription.update_success.replaceAll(
           '{name}',
           subscription.name,
         ),
@@ -454,7 +444,7 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
       );
       final errorMsg = _getErrorMessage(context, updatedSubscription.lastError);
 
-      ModernToast.error(context, '${subscription.name}: $errorMsg');
+      ModernToast.error('${subscription.name}: $errorMsg');
     }
   }
 
@@ -463,26 +453,26 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
     final trans = context.translate;
 
     if (errorTypeName == null) {
-      return trans.subscription.updateFailed;
+      return trans.subscription.update_failed;
     }
 
     switch (errorTypeName) {
       case 'network':
-        return trans.subscription.updateFailedNetwork;
+        return trans.subscription.update_failed_network;
       case 'timeout':
-        return trans.subscription.updateFailedTimeout;
+        return trans.subscription.update_failed_timeout;
       case 'notFound':
-        return trans.subscription.updateFailedNotFound;
+        return trans.subscription.update_failed_not_found;
       case 'forbidden':
-        return trans.subscription.updateFailedForbidden;
+        return trans.subscription.update_failed_forbidden;
       case 'serverError':
-        return trans.subscription.updateFailedServer;
+        return trans.subscription.update_failed_server;
       case 'formatError':
-        return trans.subscription.updateFailedFormat;
+        return trans.subscription.update_failed_format;
       case 'certificate':
-        return trans.subscription.updateFailedCertificate;
+        return trans.subscription.update_failed_certificate;
       default:
-        return trans.subscription.updateFailedUnknown;
+        return trans.subscription.update_failed_unknown;
     }
   }
 
@@ -497,19 +487,18 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
     if (!context.mounted) return;
 
     if (errors.isEmpty) {
-      ModernToast.success(context, trans.subscription.updateAllSuccess);
+      ModernToast.success(trans.subscription.update_all_success);
     } else {
       // 只显示成功/失败统计，不显示具体错误
       final successCount = provider.subscriptions.length - errors.length;
       if (successCount > 0) {
         ModernToast.warning(
-          context,
-          trans.subscription.updatePartialSuccess
+          trans.subscription.update_partial_success
               .replaceAll('{success}', successCount.toString())
               .replaceAll('{failed}', errors.length.toString()),
         );
       } else {
-        ModernToast.error(context, trans.subscription.updateAllFailed);
+        ModernToast.error(trans.subscription.update_all_failed);
       }
     }
   }
@@ -521,10 +510,10 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
     Subscription subscription,
   ) async {
     final trans = context.translate;
-    final confirmed = await showConfirmDialog(
+    final isConfirmed = await showConfirmDialog(
       context: context,
-      title: trans.subscription.deleteConfirm,
-      message: trans.subscription.deleteConfirmMessage.replaceAll(
+      title: trans.subscription.delete_confirm,
+      message: trans.subscription.delete_confirm_message.replaceAll(
         '{name}',
         subscription.name,
       ),
@@ -532,7 +521,7 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
       isDanger: true,
     );
 
-    if (confirmed == true && context.mounted) {
+    if (isConfirmed == true && context.mounted) {
       await provider.deleteSubscription(subscription.id);
     }
   }
@@ -546,7 +535,7 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
     await WidgetsBinding.instance.endOfFrame;
     if (!context.mounted) return;
 
-    // 从 Provider 获取最新的订阅数据，避免使用缓存的旧对象
+    // 从 Provider 获取订阅数据
     final latestSubscription = provider.subscriptions.firstWhere(
       (s) => s.id == subscription.id,
       orElse: () => subscription, // 降级：如果找不到则使用传入的订阅
@@ -560,7 +549,7 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
     final result = await OverrideSelectorDialog.show(
       context,
       initialSelectedIds: latestSubscription.overrideIds,
-      initialSortPreference: latestSubscription.overrideSortPreference,
+      initialSortPreference: latestSubscription.overrideSortPreferences,
     );
 
     if (result == null || !context.mounted) return;
@@ -599,7 +588,7 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
       await WidgetsBinding.instance.endOfFrame;
       if (!context.mounted) return;
 
-      // 从 Provider 获取最新的订阅数据，保持与其他对话框一致
+      // 从 Provider 获取订阅数据
       final latestSubscription = provider.subscriptions.firstWhere(
         (s) => s.id == subscription.id,
         orElse: () => subscription,
@@ -609,29 +598,26 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
       Logger.debug('订阅名称：${latestSubscription.name}');
 
       // 读取订阅文件内容
-      final content = await provider.service.readSubscriptionConfig(
-        latestSubscription,
-      );
+      final content = await provider.readSubscriptionConfig(latestSubscription);
       if (!context.mounted) return;
 
       await FileEditorDialog.show(
         context,
         fileName: '${latestSubscription.name}.yaml',
         initialContent: content,
-        onSave: (newContent) async {
+        onSave: (nextContent) async {
           // 保存文件并重载配置
           return await provider.saveSubscriptionFile(
             subscription.id,
-            newContent,
+            nextContent,
           );
         },
       );
-    } catch (error) {
+    } catch (e) {
       if (!context.mounted) return;
 
       ModernToast.error(
-        context,
-        trans.fileEditor.readError.replaceAll('{error}', error.toString()),
+        trans.file_editor.read_error.replaceAll('{error}', e.toString()),
       );
     }
   }
@@ -648,7 +634,7 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
       await WidgetsBinding.instance.endOfFrame;
       if (!context.mounted) return;
 
-      // 从 Provider 获取最新的订阅数据
+      // 从 Provider 获取订阅数据
       final latestSubscription = provider.subscriptions.firstWhere(
         (s) => s.id == subscription.id,
         orElse: () => subscription,
@@ -657,27 +643,33 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
       Logger.debug('打开运行配置查看器');
       Logger.debug('订阅名称：${latestSubscription.name}');
 
-      // 读取订阅文件内容
-      final content = await provider.service.readSubscriptionConfig(
-        latestSubscription,
-      );
+      // 读取运行时配置文件（runtime_config.yaml）
+      final geoDataDir = await GeoService.getGeoDataDir();
+      final runtimeConfigPath = path.join(geoDataDir, 'runtime_config.yaml');
+      final runtimeConfigFile = File(runtimeConfigPath);
+
+      // 检查运行时配置文件是否存在
+      if (!await runtimeConfigFile.exists()) {
+        throw Exception('运行时配置文件不存在，请先启动 Clash 核心');
+      }
+
+      final content = await runtimeConfigFile.readAsString();
       if (!context.mounted) return;
 
       await FileEditorDialog.show(
         context,
-        fileName: '${latestSubscription.name}.yaml',
+        fileName: 'runtime_config.yaml',
         initialContent: content,
         readOnly: true, // 只读模式
         customTitle: '运行时配置', // 自定义标题
-        hideSubtitle: true, // 隐藏副标题（文件名）
+        hideSubtitle: false, // 显示文件名
         onSave: null, // 只读模式无需保存回调
       );
-    } catch (error) {
+    } catch (e) {
       if (!context.mounted) return;
 
       ModernToast.error(
-        context,
-        trans.fileEditor.readError.replaceAll('{error}', error.toString()),
+        trans.file_editor.read_error.replaceAll('{error}', e.toString()),
       );
     }
   }
@@ -693,71 +685,10 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
     SubscriptionProvider provider,
     SubscriptionDialogResult result,
   ) async {
-    StreamSubscription? streamListener;
-
-    try {
-      final file = File(result.localFilePath!);
-      final dialogTrans = context.translate.subscriptionDialog;
-
-      if (!await file.exists()) {
-        throw Exception(dialogTrans.fileNotExist);
-      }
-
-      // 读取文件内容
-      final content = await file.readAsString();
-
-      // 使用 ProxyParser 解析订阅内容（支持标准 YAML、Base64 编码、纯文本代理链接）
-      // 创建 Completer 等待解析结果
-      final completer = Completer<String>();
-      final requestId = 'import-${DateTime.now().millisecondsSinceEpoch}';
-
-      // 订阅 Rust 信号流，只接收匹配的 request_id
-      StreamSubscription? listener;
-      listener = ParseSubscriptionResponse.rustSignalStream.listen((
-        rustResult,
-      ) {
-        if (completer.isCompleted) return;
-        if (rustResult.message.requestId != requestId) return;
-
-        if (rustResult.message.isSuccessful) {
-          completer.complete(rustResult.message.parsedConfig);
-        } else {
-          completer.completeError(Exception(rustResult.message.errorMessage));
-        }
-        listener?.cancel(); // 收到响应后立即取消监听
-      });
-      streamListener = listener;
-
-      // 发送解析请求到 Rust
-      final parseRequest = ParseSubscriptionRequest(
-        requestId: requestId,
-        content: content,
-      );
-      parseRequest.sendSignalToRust();
-
-      // 等待解析结果
-      final parsedConfig = await completer.future.timeout(
-        const Duration(seconds: 30),
-        onTimeout: () {
-          throw Exception('订阅解析超时');
-        },
-      );
-
-      // 创建本地配置订阅（使用解析后的配置）
-      final success = await provider.addLocalSubscription(
-        name: result.name,
-        filePath: result.localFilePath!,
-        content: parsedConfig,
-      );
-
-      return success;
-    } catch (error) {
-      Logger.error('导入本地文件失败：$error');
-      return false;
-    } finally {
-      // 停止监听信号流，防止内存泄漏
-      await streamListener?.cancel();
-    }
+    return await provider.importLocalFile(
+      name: result.name,
+      filePath: result.localFilePath!,
+    );
   }
 }
 

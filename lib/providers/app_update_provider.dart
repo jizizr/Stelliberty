@@ -2,7 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:stelliberty/services/app_update_service.dart';
 import 'package:stelliberty/storage/preferences.dart';
-import 'package:stelliberty/utils/logger.dart';
+import 'package:stelliberty/services/log_print_service.dart';
 
 // 应用更新 Provider
 // 管理自动更新检测、定时器和更新状态
@@ -46,7 +46,7 @@ class AppUpdateProvider extends ChangeNotifier {
     switch (interval) {
       case 'startup':
         // 每次启动时检查
-        Logger.info('配置为启动时检查，3秒后执行');
+        Logger.info('配置为启动时检查，3 秒后执行');
         _updateCheckTimer?.cancel();
         _updateCheckTimer = Timer(const Duration(seconds: 3), () async {
           await _performCheck(isAutoCheck: true);
@@ -229,6 +229,11 @@ class AppUpdateProvider extends ChangeNotifier {
     _updateCheckTimer?.cancel();
     _updateCheckTimer = null;
     await _scheduleNextCheck();
+  }
+
+  Future<void> refreshFromPreferences() async {
+    _lastCheckTime = AppPreferences.instance.getLastAppUpdateCheckTime();
+    await restartSchedule();
   }
 
   // 格式化时长

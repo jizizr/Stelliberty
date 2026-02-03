@@ -1,0 +1,24 @@
+gradle-wrapper.jar
+/.gradle
+/captures/
+/gradlew
+/gradlew.bat
+/local.properties
+GeneratedPluginRegistrant.java
+.cxx/
+
+# 构建输出目录
+/build/
+app/build/
+
+# 本地配置和缓存
+.externalNativeBuild/
+.idea/
+*.iml
+
+# Remember to never publicly share your keystore.
+# See https://flutter.dev/to/reference-keystore
+key.properties
+**/*.keystore
+**/*.jks
+release/

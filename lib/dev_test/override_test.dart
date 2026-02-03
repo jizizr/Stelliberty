@@ -1,11 +1,9 @@
 import 'dart:io';
 import 'package:path/path.dart' as path;
-import 'package:stelliberty/utils/logger.dart';
+import 'package:stelliberty/services/log_print_service.dart';
 import 'package:stelliberty/src/bindings/signals/signals.dart';
 
-// 覆写测试
-//
-// 测试 YAML 和 JavaScript 覆写功能
+// 覆写测试：验证 YAML 与 JavaScript 覆写能力。
 class OverrideTest {
   // 运行覆写测试流程
   static Future<void> run() async {
@@ -104,7 +102,7 @@ class OverrideTest {
         .timeout(
           const Duration(seconds: 30),
           onTimeout: () {
-            throw Exception('Rust 订阅解析超时（30秒）');
+            throw Exception('Rust 订阅解析超时（30 秒）');
           },
         );
 
@@ -185,7 +183,7 @@ class OverrideTest {
         .timeout(
           const Duration(seconds: 30),
           onTimeout: () {
-            throw Exception('Rust 覆写处理超时（30秒）');
+            throw Exception('Rust 覆写处理超时（30 秒）');
           },
         );
 
@@ -223,7 +221,7 @@ class OverrideTest {
     Logger.info('📍 Clash: $clashPath');
     Logger.info('📍 配置: ${configFile.absolute.path}');
     Logger.info('📍 数据目录: $geoDataDir');
-    Logger.info('⏳ 启动中，按 Ctrl+C 停止...');
+    Logger.info('⏳ 启动中，6 秒后自动结束...');
 
     final process = await Process.start(clashPath, [
       '-f',
@@ -232,14 +230,30 @@ class OverrideTest {
       geoDataDir,
     ], mode: ProcessStartMode.inheritStdio);
 
-    final exitCode = await process.exitCode;
+    // 启动后等待一段时间，验证核心能正常运行
+    const timeout = Duration(seconds: 6);
+    final exitCode = await Future.any<int?>([
+      process.exitCode.then((code) => code),
+      Future<int?>.delayed(timeout, () => null),
+    ]);
+
+    if (exitCode == null) {
+      Logger.info('测试时间到，结束 Clash 核心');
+      final isKilled = process.kill();
+      if (!isKilled) {
+        Logger.warning('结束 Clash 核心失败，尝试等待退出');
+      }
+      await process.exitCode;
+      return;
+    }
 
     if (exitCode == 0) {
       Logger.info('Clash 正常退出');
-    } else {
-      Logger.error('Clash 异常退出，退出码: $exitCode');
-      throw Exception('Clash 异常退出');
+      return;
     }
+
+    Logger.error('Clash 异常退出，退出码: $exitCode');
+    throw Exception('Clash 异常退出');
   }
 
   // 查找 Clash 可执行文件（使用与 ProcessService 相同的逻辑）

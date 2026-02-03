@@ -119,9 +119,11 @@ pub async fn run_console_mode() -> Result<()> {
     // 注册 Ctrl+C 信号处理器
     let shutdown_tx_clone = shutdown_tx.clone();
     tokio::spawn(async move {
-        tokio::signal::ctrl_c()
-            .await
-            .expect("无法注册 Ctrl+C 处理器");
+        if let Err(e) = tokio::signal::ctrl_c().await {
+            log::error!("注册 Ctrl+C 处理器失败: {e}");
+            let _ = shutdown_tx_clone.send(()).await;
+            return;
+        }
         log::info!("收到 Ctrl+C 信号");
         let _ = shutdown_tx_clone.send(()).await;
     });
@@ -184,7 +186,7 @@ pub async fn run_console_mode() -> Result<()> {
         Ok(Ok(())) => log::info!("Clash 已正常停止"),
         Ok(Err(e)) => log::error!("停止 Clash 失败: {e}, 服务将继续退出"),
         Err(_) => {
-            log::error!("停止 Clash 超时 (5秒)，服务将强制退出");
+            log::error!("停止 Clash 超时 (5 秒)，服务将强制退出");
             drop(clash_manager);
         }
     }

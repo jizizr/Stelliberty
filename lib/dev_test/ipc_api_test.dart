@@ -1,16 +1,14 @@
-import 'package:stelliberty/clash/storage/preferences.dart';
-import 'package:stelliberty/clash/network/ipc_request_helper.dart';
+import 'package:stelliberty/storage/clash_preferences.dart';
+import 'package:stelliberty/clash/client/ipc_request_helper.dart';
 import 'package:stelliberty/clash/services/process_service.dart';
 import 'package:stelliberty/clash/config/config_injector.dart';
 import 'package:stelliberty/services/path_service.dart';
-import 'package:stelliberty/utils/logger.dart';
+import 'package:stelliberty/services/log_print_service.dart';
 import 'package:stelliberty/src/bindings/signals/signals.dart';
 import 'dart:io';
 import 'dart:async';
 
-// IPC API 测试
-//
-// 测试通过 IPC 调用 Clash API
+// IPC API 测试：验证通过 IPC 调用核心 API 的能力。
 class IpcApiTest {
   static Future<void> run() async {
     Logger.info('======================================');
@@ -33,20 +31,22 @@ class IpcApiTest {
       }
       Logger.info('使用测试配置：$testConfigPath');
 
-      final runtimeConfigPath = await ConfigInjector.injectCustomConfigParams(
+      final generatedConfig = await ConfigInjector.generateRuntimeConfig(
         configPath: testConfigPath,
-        httpPort: 17890,
+        mixedPort: 17890,
+        socksPort: null,
+        httpPort: null,
         isIpv6Enabled: false,
         isTunEnabled: false,
         tunStack: 'mixed',
         tunDevice: 'Stelliberty-Test',
         isTunAutoRouteEnabled: false,
         isTunAutoDetectInterfaceEnabled: false,
-        tunDnsHijack: const ['any:53'],
+        tunDnsHijacks: const ['any:53'],
         isTunStrictRouteEnabled: false,
         tunMtu: 1500,
         isTunAutoRedirectEnabled: false,
-        tunRouteExcludeAddress: const [],
+        tunRouteExcludeAddresses: const [],
         isTunIcmpForwardingDisabled: false,
         isAllowLanEnabled: false,
         isTcpConcurrentEnabled: false,
@@ -59,9 +59,10 @@ class IpcApiTest {
         outboundMode: 'rule',
       );
 
-      if (runtimeConfigPath == null) {
+      if (generatedConfig == null) {
         throw Exception('运行时配置生成失败');
       }
+      final runtimeConfigPath = generatedConfig.runtimeConfigPath;
 
       // 使用项目目录下的 clash-core（不使用构建后的副本）
       const execPath = 'assets/clash-core/clash-core';
@@ -70,7 +71,7 @@ class IpcApiTest {
       }
 
       final processService = ProcessService();
-      await processService.start(
+      await processService.startProcess(
         executablePath: execPath,
         configPath: runtimeConfigPath,
         apiHost: '127.0.0.1',
@@ -128,7 +129,7 @@ class IpcApiTest {
       Logger.info('测试 6: WebSocket 流量监控');
       await _testTrafficStream();
 
-      // 8. 测试 WebSocket 日��监控
+      // 8. 测试 WebSocket 日志监控
       Logger.info('');
       Logger.info('测试 7: WebSocket 日志监控');
       await _testLogStream();
@@ -232,7 +233,7 @@ class IpcApiTest {
       const StartLogStream().sendSignalToRust();
       Logger.info('  已发送启动日志监控信号...');
 
-      // 4. 等待连接或数据（5秒超时）
+      // 4. 等待连接或数据（5 秒超时）
       // 注：最小配置可能不产生日志，只验证连接成功即可
       await Future.any([
         completer.future,

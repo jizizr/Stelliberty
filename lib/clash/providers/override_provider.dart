@@ -1,18 +1,28 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
-import 'package:stelliberty/clash/core/override_state.dart';
-import 'package:stelliberty/clash/data/override_model.dart';
-import 'package:stelliberty/clash/services/override_service.dart';
+import 'package:stelliberty/clash/state/override_states.dart';
+import 'package:stelliberty/clash/model/override_model.dart';
+import 'package:stelliberty/clash/services/override_service.dart'; // 仍需要，用于构造函数参数类型
+import 'package:stelliberty/clash/manager/clash_manager.dart';
+import 'package:stelliberty/clash/manager/override_manager.dart';
+import 'package:stelliberty/storage/clash_preferences.dart';
 import 'package:stelliberty/services/path_service.dart';
-import 'package:stelliberty/utils/logger.dart';
+import 'package:stelliberty/services/log_print_service.dart';
 
 // 全局覆写管理 Provider
 class OverrideProvider extends ChangeNotifier {
-  final OverrideService _service;
+  final OverrideManager _manager;
 
-  // 状态管理器
-  final OverrideStateManager _stateManager = OverrideStateManager.instance;
+  // 覆写状态（Provider 直接管理）
+  OverrideState _state = OverrideState.idle();
+  OverrideState get overrideState => _state;
+
+  // 更新状态并通知
+  void _updateState(OverrideState nextState) {
+    _state = nextState;
+    notifyListeners();
+  }
 
   // 全局覆写列表
   List<OverrideConfig> _overrides = [];
@@ -25,32 +35,43 @@ class OverrideProvider extends ChangeNotifier {
   Future<void> Function(String overrideId)? _onOverrideContentUpdated;
 
   // 设置覆写删除回调
-  void setOnOverrideDeleted(Future<void> Function(String) callback) {
-    _onOverrideDeleted = callback;
+  void setOnOverrideDeleted(Future<void> Function(String) handler) {
+    _onOverrideDeleted = handler;
     Logger.debug('已设置覆写删除回调');
   }
 
   // 设置覆写内容更新回调
-  void setOnOverrideContentUpdated(Future<void> Function(String) callback) {
-    _onOverrideContentUpdated = callback;
+  void setOnOverrideContentUpdated(Future<void> Function(String) handler) {
+    _onOverrideContentUpdated = handler;
     Logger.debug('已设置覆写内容更新回调');
   }
 
-  // 状态委托给状态管理器
-  bool get isLoading => _stateManager.isLoading;
-  bool get isBatchUpdatingOverrides => _stateManager.isBatchUpdating;
-  String? get errorMessage => _stateManager.errorMessage;
+  bool get isLoading => _state.isLoading;
+  bool get isBatchUpdatingOverrides => _state.isBatchUpdating;
+  String? get errorMessage => _state.errorMessage;
 
   // 检查指定覆写是否正在更新
   bool isOverrideUpdating(String overrideId) {
-    return _stateManager.isOverrideUpdating(overrideId);
+    return _state.isOverrideUpdating(overrideId);
   }
 
-  OverrideProvider(this._service);
+  OverrideProvider(OverrideService service)
+    : _manager = OverrideManager(
+        service: service,
+        isCoreRunning: () => ClashManager.instance.isCoreRunning,
+        getMixedPort: () => ClashPreferences.instance.getMixedPort(),
+        getDefaultUserAgent: () =>
+            ClashPreferences.instance.getDefaultUserAgent(),
+      );
 
   // 初始化 Provider
   Future<void> initialize() async {
-    _stateManager.setLoading(reason: '初始化覆写管理');
+    _updateState(
+      _state.copyWith(
+        operationState: OverrideOperationState.loading,
+        clearError: true,
+      ),
+    ); // '初始化覆写管理');
     notifyListeners();
 
     try {
@@ -58,15 +79,16 @@ class OverrideProvider extends ChangeNotifier {
       _overrides = await _loadOverrideList();
 
       Logger.info('覆写 Provider 初始化成功，共 ${_overrides.length} 个覆写');
-      _stateManager.setIdle(reason: '初始化完成');
+      _updateState(OverrideState.idle()); // '初始化完成');
     } catch (e) {
       final errorMsg = '初始化覆写失败: $e';
       Logger.error(errorMsg);
       _overrides = [];
-      _stateManager.setError(
-        errorState: OverrideErrorState.initializationError,
-        errorMessage: errorMsg,
-        reason: '初始化失败',
+      _updateState(
+        _state.copyWith(
+          errorState: OverrideErrorState.initializationError,
+          errorMessage: errorMsg,
+        ),
       );
     } finally {
       notifyListeners();
@@ -88,7 +110,7 @@ class OverrideProvider extends ChangeNotifier {
         Logger.info('URL：${override.url}');
 
         try {
-          final content = await _service.downloadRemoteOverride(override);
+          final content = await _manager.downloadRemoteOverride(override);
           Logger.info('远程覆写下载成功，内容长度：${content.length}');
 
           // 下载成功，更新覆写配置
@@ -123,7 +145,7 @@ class OverrideProvider extends ChangeNotifier {
           // 直接使用提供的内容（可能是空字符串）
           content = override.content!;
           // 保存到覆写目录
-          await _service.saveOverrideContent(override, content);
+          await _manager.saveOverrideContent(override, content);
           Logger.info('空白覆写文件创建成功');
         } else {
           // 导入本地文件模式
@@ -138,7 +160,7 @@ class OverrideProvider extends ChangeNotifier {
 
           // 从源文件复制到覆写目录
           Logger.info('调用 saveLocalOverride 保存文件，源路径：$sourceFilePath');
-          content = await _service.saveLocalOverride(override, sourceFilePath);
+          content = await _manager.saveLocalOverride(override, sourceFilePath);
           Logger.info('本地覆写文件保存成功，内容长度：${content.length}');
         }
 
@@ -206,14 +228,16 @@ class OverrideProvider extends ChangeNotifier {
     }
 
     // 添加到更新中列表
-    _stateManager.addUpdatingOverride(overrideId, reason: '开始更新远程覆写');
+    _updateState(
+      _state.copyWith(updatingIds: {..._state.updatingIds, overrideId}),
+    ); // '开始更新远程覆写');
     notifyListeners();
 
     try {
       Logger.info('开始更新远程覆写：${override.name}');
 
       // 下载远程覆写
-      final content = await _service.downloadRemoteOverride(override);
+      final content = await _manager.downloadRemoteOverride(override);
 
       // 更新覆写配置
       _overrides[index] = override.copyWith(
@@ -226,14 +250,21 @@ class OverrideProvider extends ChangeNotifier {
       return true;
     } catch (e) {
       Logger.error('更新远程覆写失败：${override.name} - $e');
-      _stateManager.setError(
-        errorState: OverrideErrorState.networkError,
-        errorMessage: '更新远程覆写失败: $e',
-        reason: '远程覆写更新失败',
+      _updateState(
+        _state.copyWith(
+          errorState: OverrideErrorState.networkError,
+          errorMessage: '更新远程覆写失败: $e',
+        ),
       );
       return false;
     } finally {
-      _stateManager.removeUpdatingOverride(overrideId, reason: '更新完成');
+      _updateState(
+        _state.copyWith(
+          updatingIds: _state.updatingIds
+              .where((id) => id != overrideId)
+              .toSet(),
+        ),
+      ); // '更新完成');
       notifyListeners();
     }
   }
@@ -254,7 +285,7 @@ class OverrideProvider extends ChangeNotifier {
       await _saveOverrideList();
 
       // 删除覆写文件
-      await _service.deleteOverride(override.id, override.format);
+      await _manager.deleteOverride(override.id, override.format);
 
       // 通知订阅系统清理引用
       if (_onOverrideDeleted != null) {
@@ -275,11 +306,8 @@ class OverrideProvider extends ChangeNotifier {
     }
   }
 
-  // 重新排序覆写
-  //
-  // [autoAdjust] 是否自动调整索引（默认 true）
-  // - true: 用于 ReorderableListView（需要调整插入点）
-  // - false: 用于 GridView DragTarget（目标索引即实际位置）
+  // 重新排序覆写（支持可选的索引自动修正）。
+  // `autoAdjust` 用于兼容不同拖拽组件的插入点语义。
   Future<bool> reorderOverrides(
     int oldIndex,
     int newIndex, {
@@ -329,7 +357,7 @@ class OverrideProvider extends ChangeNotifier {
       final loadedOverrides = await Future.wait(
         overrides.map((override) async {
           try {
-            final fileContent = await _service.getOverrideContent(
+            final fileContent = await _manager.getOverrideContent(
               override.id,
               override.format,
             );
@@ -395,9 +423,12 @@ class OverrideProvider extends ChangeNotifier {
       return errors;
     }
 
-    _stateManager.setBatchUpdating(
-      total: remoteOverrides.length,
-      reason: '开始批量更新远程覆写',
+    _updateState(
+      _state.copyWith(
+        operationState: OverrideOperationState.batchUpdating,
+        updateTotal: remoteOverrides.length,
+        updateCurrent: 0,
+      ),
     );
     notifyListeners();
 
@@ -426,7 +457,7 @@ class OverrideProvider extends ChangeNotifier {
         '批量更新完成: 成功=${remoteOverrides.length - errors.length}, 失败=${errors.length}',
       );
 
-      // 批量更新完成后，检查当前订阅是否使用了任何已更新的覆写
+      // 批量更新完成后，检查订阅是否使用了已更新的覆写
       if (_onOverrideContentUpdated != null) {
         final updatedOverrideIds = remoteOverrides
             .where((o) => !errors.any((err) => err.contains(o.name)))
@@ -441,7 +472,7 @@ class OverrideProvider extends ChangeNotifier {
         }
       }
     } finally {
-      _stateManager.setIdle(reason: '批量更新完成');
+      _updateState(OverrideState.idle()); // '批量更新完成');
       notifyListeners();
     }
 
@@ -455,7 +486,7 @@ class OverrideProvider extends ChangeNotifier {
   ) async {
     try {
       Logger.info('保存覆写文件内容：${override.name}');
-      await _service.saveOverrideContent(override, content);
+      await _manager.saveOverrideContent(override, content);
       Logger.info('覆写文件内容保存成功');
 
       // 通知订阅系统：如果当前订阅使用了这个覆写，需要重载配置
@@ -473,7 +504,11 @@ class OverrideProvider extends ChangeNotifier {
   OverrideConfig? getOverrideById(String id) {
     try {
       return _overrides.firstWhere((o) => o.id == id);
-    } catch (_) {
+    } catch (e) {
+      assert(() {
+        Logger.debug('未找到覆写：$e');
+        return true;
+      }());
       return null;
     }
   }
@@ -482,6 +517,7 @@ class OverrideProvider extends ChangeNotifier {
   void dispose() {
     // 清理回调，避免内存泄漏
     _onOverrideDeleted = null;
+    _onOverrideContentUpdated = null;
     super.dispose();
   }
 }

@@ -4,7 +4,7 @@
 
 use chrono::Local;
 use std::collections::VecDeque;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, LazyLock, Mutex};
 use tokio::sync::broadcast;
 
 // 日志缓冲区容量
@@ -14,17 +14,14 @@ const LOG_BUFFER_CAPACITY: usize = 500;
 const LOG_BROADCAST_CAPACITY: usize = 100;
 
 // 全局日志缓冲区
-static LOG_BUFFER: once_cell::sync::Lazy<Arc<Mutex<VecDeque<String>>>> =
-    once_cell::sync::Lazy::new(|| {
-        Arc::new(Mutex::new(VecDeque::with_capacity(LOG_BUFFER_CAPACITY)))
-    });
+static LOG_BUFFER: LazyLock<Arc<Mutex<VecDeque<String>>>> =
+    LazyLock::new(|| Arc::new(Mutex::new(VecDeque::with_capacity(LOG_BUFFER_CAPACITY))));
 
 // 全局日志广播通道（用于实时日志流）
-static LOG_BROADCASTER: once_cell::sync::Lazy<broadcast::Sender<String>> =
-    once_cell::sync::Lazy::new(|| {
-        let (tx, _) = broadcast::channel(LOG_BROADCAST_CAPACITY);
-        tx
-    });
+static LOG_BROADCASTER: LazyLock<broadcast::Sender<String>> = LazyLock::new(|| {
+    let (tx, _) = broadcast::channel(LOG_BROADCAST_CAPACITY);
+    tx
+});
 
 // 获取最近的 N 行日志
 pub fn get_recent_logs(lines: usize) -> Vec<String> {
@@ -99,9 +96,12 @@ impl log::Log for MemoryLogger {
 pub fn init_logger() {
     static LOGGER: MemoryLogger = MemoryLogger;
 
-    log::set_logger(&LOGGER)
-        .map(|()| log::set_max_level(log::LevelFilter::Debug))
-        .expect("无法初始化日志系统");
+    log::set_max_level(log::LevelFilter::Debug);
+
+    if log::set_logger(&LOGGER).is_err() {
+        // 避免重复初始化导致程序崩溃
+        return;
+    }
 
     log::info!("日志系统初始化完成 (内存缓冲模式)");
 }

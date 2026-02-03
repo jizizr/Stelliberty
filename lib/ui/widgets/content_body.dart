@@ -2,9 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:stelliberty/providers/window_effect_provider.dart';
 
-// 页面主要内容区域的容器组件。
-//
-// 具有左上角圆角和自适应主题的背景色。
+// 主内容容器：提供圆角与自适应主题背景色。
+// 用于承载页面主体区域内容。
 class ContentBody extends StatelessWidget {
   final Widget child;
   final Color? color;

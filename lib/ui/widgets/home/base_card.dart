@@ -1,11 +1,7 @@
 import 'package:flutter/material.dart';
 
-// 通用基础卡片组件
-//
-// 提供统一的卡片视觉样式，包括：
-// - 圆角、背景色、边框、阴影
-// - 标题栏（图标 + 标题文字 + 可选操作）
-// - 内容区域
+// 通用基础卡片组件：统一圆角、边框、阴影与标题栏布局。
+// 支持可选操作区与自定义内容区域。
 class BaseCard extends StatelessWidget {
   // 卡片标题图标
   final IconData icon;
@@ -19,23 +15,27 @@ class BaseCard extends StatelessWidget {
   // 卡片内容区域
   final Widget child;
 
-  // 是否显示标题栏（默认显示）
-  final bool shouldShowHeader;
-
   const BaseCard({
     super.key,
     required this.icon,
     required this.title,
     required this.child,
     this.trailing,
-    this.shouldShowHeader = true,
   });
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final shadowColor = isDark
+        ? Colors.white.withValues(alpha: 0.08)
+        : Colors.black.withValues(alpha: 0.1);
+    final screenWidth = MediaQuery.sizeOf(context).width;
+    final isCompactLayout = screenWidth < 360;
+    final contentPadding = isCompactLayout ? 16.0 : 24.0;
+
     return Container(
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(15),
         color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.4),
         border: Border.all(
           color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
@@ -43,43 +43,79 @@ class BaseCard extends StatelessWidget {
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.1),
-            blurRadius: 20,
+            color: shadowColor,
+            blurRadius: 15,
             offset: const Offset(0, 4),
           ),
         ],
       ),
       child: Padding(
-        padding: const EdgeInsets.all(24.0),
+        padding: EdgeInsets.all(contentPadding),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
-          children: [
-            if (shouldShowHeader) ...[
-              _buildHeader(context),
-              const SizedBox(height: 16),
-            ],
-            child,
-          ],
+          children: [_buildHeader(context), const SizedBox(height: 16), child],
         ),
       ),
     );
   }
 
   Widget _buildHeader(BuildContext context) {
-    return Row(
-      children: [
-        Icon(icon, size: 20, color: Theme.of(context).colorScheme.primary),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Text(
-            title,
-            style: Theme.of(
-              context,
-            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+    final titleWidget = Transform.translate(
+      offset: const Offset(0, -2),
+      child: Text(
+        title,
+        style: Theme.of(
+          context,
+        ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+        overflow: TextOverflow.ellipsis,
+      ),
+    );
+
+    final trailingWidget = trailing;
+    if (trailingWidget == null) {
+      return Row(
+        children: [
+          Icon(icon, size: 20, color: Theme.of(context).colorScheme.primary),
+          const SizedBox(width: 8),
+          Expanded(child: titleWidget),
+        ],
+      );
+    }
+
+    final screenWidth = MediaQuery.sizeOf(context).width;
+    final isNarrowHeader = screenWidth < 500;
+
+    if (!isNarrowHeader) {
+      return Row(
+        children: [
+          Icon(icon, size: 20, color: Theme.of(context).colorScheme.primary),
+          const SizedBox(width: 8),
+          Expanded(child: titleWidget),
+          const SizedBox(width: 8),
+          Flexible(
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: trailingWidget,
+            ),
           ),
+        ],
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Row(
+          children: [
+            Icon(icon, size: 20, color: Theme.of(context).colorScheme.primary),
+            const SizedBox(width: 8),
+            Expanded(child: titleWidget),
+          ],
         ),
-        if (trailing != null) trailing!,
+        const SizedBox(height: 8),
+        Align(alignment: Alignment.centerRight, child: trailingWidget),
       ],
     );
   }

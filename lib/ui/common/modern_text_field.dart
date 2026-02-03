@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-// 现代化的文本输入框组件（基于原生 TextField 重构）
-//
-// 更简单、更稳定的实现，使用 Flutter 原生组件
+// 文本输入框组件：基于原生 TextField 的简化封装。
+// 优先保证稳定性与一致的样式。
 class ModernTextField extends StatefulWidget {
   final TextEditingController? controller;
   final String? labelText;

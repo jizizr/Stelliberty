@@ -6,6 +6,7 @@ list(APPEND FLUTTER_PLUGIN_LIST
   bitsdojo_window_linux
   desktop_drop
   flutter_acrylic
+  hotkey_manager_linux
   screen_retriever_linux
   system_theme
   tray_manager

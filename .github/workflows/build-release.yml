@@ -178,10 +178,34 @@ jobs:
             # 遍历每个提交
             for hash in $commit_hashes; do
               total_count=$((total_count + 1))
-              
+
+              # 获取提交信息（标题和正文）
+              subject=$(git log -1 --pretty=format:"%s" "$hash")
+              body=$(git log -1 --pretty=format:"%b" "$hash")
+
+              # 检查提交信息是否包含"无作用"相关关键词（中英文）
+              # 中文关键词：
+              #   - 无 X 变化/影响/改动：无作用、无影响、无效果、无实际作用、无功能变化、无功能影响、无功能改动、
+              #     无逻辑变化、无逻辑改动、无逻辑影响、无行为变化、无行为改动、无行为影响、无业务变化、无业务影响、
+              #     无实质变化、无实质改动
+              #   - 不 X 功能：不影响、不改变功能、不影响功能、不涉及功能
+              #   - 仅/纯 X：仅调整、仅格式、仅重命名、仅命名、仅重构、纯重构、纯格式、纯样式
+              #   - X 调整：格式调整、样式调整、空白调整、注释调整、命名调整、缩进调整、导入排序
+              #   - 其他：无关紧要、无意义、命名规范、变量命名、代码风格、代码清理、代码整理
+              # 英文关键词：
+              #   - no X change：no effect、no impact、no change、no functional change、no behavior change、
+              #     no behavioural change、no logic change
+              #   - X only：formatting only、style only、comment only、rename only、refactor only、cleanup only
+              #   - 其他：cosmetic、whitespace、trivial、code style、style fix、lint fix、linting、
+              #     noop、no-op、reformat、reformatting、import sort、organize imports
+              if echo "$subject $body" | grep -qiE '无作用|无影响|无效果|无实际作用|无功能变化|无功能影响|无功能改动|无逻辑变化|无逻辑改动|无逻辑影响|无行为变化|无行为改动|无行为影响|无业务变化|无业务影响|无实质变化|无实质改动|不影响|不改变功能|不影响功能|不涉及功能|仅调整|仅格式|仅重命名|仅命名|仅重构|纯重构|纯格式|纯样式|格式调整|样式调整|空白调整|注释调整|命名调整|缩进调整|导入排序|无关紧要|无意义|命名规范|变量命名|代码风格|代码清理|代码整理|no effect|no impact|no change|no functional change|no behavior change|no behavioural change|no logic change|formatting only|style only|comment only|rename only|refactor only|cleanup only|cosmetic|whitespace|trivial|code style|style fix|lint fix|linting|noop|no-op|reformat|reformatting|import sort|organize imports'; then
+                filtered_count=$((filtered_count + 1))
+                continue
+              fi
+
               # 获取提交涉及的文件列表
               changed_files=$(git diff-tree --no-commit-id --name-only -r "$hash")
-              
+
               # 检查是否所有文件都匹配忽略模式
               should_ignore=true
               for file in $changed_files; do
@@ -190,18 +214,15 @@ jobs:
                   break
                 fi
               done
-              
+
               # 如果所有文件都是要忽略的类型，跳过这个提交
               if [ "$should_ignore" = true ]; then
                 filtered_count=$((filtered_count + 1))
                 continue
               fi
-              
+
               included_count=$((included_count + 1))
-              
-              # 获取提交信息（标题和正文）
-              subject=$(git log -1 --pretty=format:"%s" "$hash")
-              body=$(git log -1 --pretty=format:"%b" "$hash")
+
               author=$(git log -1 --pretty=format:"%an" "$hash")
               
               # 输出格式化的提交信息
@@ -252,6 +273,12 @@ jobs:
           - platform: linux
             os: ubuntu-24.04-arm
             arch: arm64
+          - platform: android
+            os: ubuntu-latest
+            arch: x64
+          - platform: android
+            os: ubuntu-latest
+            arch: arm64
     runs-on: ${{ matrix.os }}
 
     steps:
@@ -273,7 +300,14 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: ${{ (matrix.os == 'windows-11-arm' || matrix.os == 'ubuntu-24.04-arm') && 'master' || 'stable' }}
-          
+
+      - name: 配置 Java（Android）
+        if: matrix.platform == 'android'
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
       - name: 配置 Rust
         uses: dtolnay/rust-toolchain@stable
 
@@ -281,10 +315,10 @@ jobs:
         shell: bash
         run: |
           echo "📦 正在安装项目依赖..."
-          if [ "$RUNNER_OS" = "Linux" ]; then
+          if [ "$RUNNER_OS" = "Linux" ] && [ "${{ matrix.platform }}" != "android" ]; then
             echo "  ➤ 安装 Linux 构建依赖..."
             sudo apt-get update
-            sudo apt-get install -y libgtk-3-dev libappindicator3-dev adwaita-icon-theme-full
+            sudo apt-get install -y libgtk-3-dev libappindicator3-dev adwaita-icon-theme-full libkeybinder-3.0-dev
             echo "  ✅ Linux 依赖安装完成"
           fi
           echo "  ➤ 安装 Flutter 主项目依赖"
@@ -298,7 +332,15 @@ jobs:
         working-directory: scripts
 
       - name: 运行预构建脚本
-        run: dart run scripts/prebuild.dart --installer
+        shell: bash
+        run: |
+          ARGS=""
+          if [ "${{ matrix.platform }}" = "android" ]; then
+            ARGS="--android"
+          else
+            ARGS="--installer"
+          fi
+          dart run scripts/prebuild.dart $ARGS
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -309,7 +351,14 @@ jobs:
         run: dart run slang
 
       - name: 运行构建脚本
-        run: dart run scripts/build.dart --with-installer
+        shell: bash
+        run: |
+          if [ "${{ matrix.platform }}" = "android" ]; then
+            ARGS="--android --android-arch=${{ matrix.arch }}"
+          else
+            ARGS="--with-installer"
+          fi
+          dart run scripts/build.dart $ARGS
 
       - name: 复制构建产物到 dist
         shell: bash
@@ -332,7 +381,7 @@ jobs:
                 exit 1
               }
             '
-          elif [ "$RUNNER_OS" = "Linux" ]; then
+          else
             mkdir -p dist
             if [ -d "build/packages" ]; then
               cp -r build/packages/* dist/
@@ -405,21 +454,28 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.prepare.outputs.tag }}
-          name: ${{ needs.prepare.outputs.pkg_capitalized }} ${{ needs.prepare.outputs.version }} 更新
+          name: ${{ needs.prepare.outputs.pkg_capitalized }} ${{ needs.prepare.outputs.version }} Latest
           body: |
             ### 📦 构建信息
-            
+
             | 项目 | 内容 |
             |------|------|
             | **包名** | `${{ needs.prepare.outputs.pkg }}` |
             | **版本号** | `${{ needs.prepare.outputs.version }}` |
             | **Mihomo 核心** | `${{ needs.prepare.outputs.mihomo_version }}` |
-            | **提交哈希** | [`${{ github.sha }}`](${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}) |
-            
+
             ${{ steps.decode_changelog.outputs.changelog }}
-            
+
             ---
-            
+
+            ## 📱 Android 版本说明
+
+            > ⚠️ **注意**：Android 版本始终处于不稳定状态，建议仅用于体验和测试。
+            >
+            > 如遇问题，请在 [Issues](https://github.com/${{ github.repository }}/issues) 中反馈。
+
+            ---
+
             ## ❓ 故障排查
 
             ### Linux 启动问题

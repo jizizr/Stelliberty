@@ -14,7 +14,7 @@
 ![Windows](https://img.shields.io/badge/Windows-0078D6?style=flat-square&logo=windows11&logoColor=white)
 ![Linux](https://img.shields.io/badge/Linux-FCC624?style=flat-square&logo=linux&logoColor=black)
 ![macOS](https://img.shields.io/badge/macOS-实验性-gray?style=flat-square&logo=apple&logoColor=white)
-![Android](https://img.shields.io/badge/Android-暂不支持-lightgray?style=flat-square&logo=android&logoColor=white)
+![Android](https://img.shields.io/badge/Android-barely_working-orange?style=flat-square&logo=android&logoColor=white)
 
 基于 Flutter 和 Rust 构建的现代跨平台 Clash 客户端
 采用独特的 **MD3M**（Material Design 3 Modern）视觉风格
@@ -25,11 +25,13 @@
 
 <table>
   <tr>
-    <td width="50%"><img src="../../.github/screenshots/home-page.jpg" alt="主页"/></td>
-    <td width="50%"><img src="../../.github/screenshots/uwp-loopback-manager.jpg" alt="UWP 回环管理器"/></td>
+    <td width="33%"><img src="../../.github/screenshots/home-page-light.jpg" alt="主页（亮色）"/></td>
+    <td width="33%"><img src="../../.github/screenshots/home-page-dark.jpg" alt="主页（暗色）"/></td>
+    <td width="33%"><img src="../../.github/screenshots/uwp-loopback-manager.jpg" alt="UWP 回环管理器"/></td>
   </tr>
   <tr>
-    <td align="center"><b>主页</b></td>
+    <td align="center"><b>主页（亮色）</b></td>
+    <td align="center"><b>主页（暗色）</b></td>
     <td align="center"><b>UWP 回环管理器</b></td>
   </tr>
 </table>
@@ -329,6 +331,9 @@ flutter run --dart-define=TEST_TYPE=override
 
 # 运行 IPC API 测试
 flutter run --dart-define=TEST_TYPE=ipc-api
+
+# 运行延迟测试流
+flutter run --dart-define=TEST_TYPE=delay-test
 ```
 
 **所需测试文件** 位于 `assets/test/`：
@@ -353,9 +358,17 @@ flutter run --dart-define=TEST_TYPE=ipc-api
       └── test.yaml          # 用于测试的基础配置文件
   ```
 
+- **`delay-test` 测试所需文件：**
+  > **提示**：建议在测试前运行预编译脚本（`dart run scripts/prebuild.dart`）以下载所需资源。
+  ```
+  assets/test/
+  └── config/
+      └── test.yaml          # 用于测试的基础配置文件
+  ```
+
 > 💡 **注意**：测试模式仅在 Debug 构建中可用，Release 模式下自动禁用。
 
-测试实现：`lib/dev_test/`（`override_test.dart`、`ipc_api_test.dart`）
+测试实现：`lib/dev_test/`（`override_test.dart`、`ipc_api_test.dart`、`delay_test_stream.dart`）
 
 </details>
 

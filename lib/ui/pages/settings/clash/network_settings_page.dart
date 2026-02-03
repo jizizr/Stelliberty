@@ -4,10 +4,10 @@ import 'package:provider/provider.dart';
 import 'package:stelliberty/providers/content_provider.dart';
 import 'package:stelliberty/i18n/i18n.dart';
 import 'package:stelliberty/clash/providers/clash_provider.dart';
-import 'package:stelliberty/clash/storage/preferences.dart';
+import 'package:stelliberty/storage/clash_preferences.dart';
 import 'package:stelliberty/ui/common/modern_feature_card.dart';
 import 'package:stelliberty/ui/common/modern_switch.dart';
-import 'package:stelliberty/utils/logger.dart';
+import 'package:stelliberty/services/log_print_service.dart';
 
 class NetworkSettingsPage extends StatefulWidget {
   const NetworkSettingsPage({super.key});
@@ -66,7 +66,7 @@ class _NetworkSettingsPageState extends State<NetworkSettingsPage> {
               ),
               const SizedBox(width: 8),
               Text(
-                trans.clashFeatures.networkSettings.pageTitle,
+                trans.clash_features.network_settings.page_title,
                 style: theme.textTheme.titleLarge,
               ),
             ],
@@ -94,20 +94,20 @@ class _NetworkSettingsPageState extends State<NetworkSettingsPage> {
                     icon: Icons.speed,
                     title: context
                         .translate
-                        .clashFeatures
-                        .networkSettings
-                        .unifiedDelay
+                        .clash_features
+                        .network_settings
+                        .unified_delay
                         .title,
                     subtitle: context
                         .translate
-                        .clashFeatures
-                        .networkSettings
-                        .unifiedDelay
+                        .clash_features
+                        .network_settings
+                        .unified_delay
                         .subtitle,
                     value: _unifiedDelay,
                     onChanged: (value) {
                       setState(() => _unifiedDelay = value);
-                      clashProvider.configService.setUnifiedDelay(value);
+                      clashProvider.setUnifiedDelay(value);
                     },
                   ),
                   const SizedBox(height: 16),
@@ -118,20 +118,20 @@ class _NetworkSettingsPageState extends State<NetworkSettingsPage> {
                     icon: Icons.lan,
                     title: context
                         .translate
-                        .clashFeatures
-                        .networkSettings
-                        .allowLan
+                        .clash_features
+                        .network_settings
+                        .allow_lan
                         .title,
                     subtitle: context
                         .translate
-                        .clashFeatures
-                        .networkSettings
-                        .allowLan
+                        .clash_features
+                        .network_settings
+                        .allow_lan
                         .subtitle,
                     value: _allowLan,
                     onChanged: (value) {
                       setState(() => _allowLan = value);
-                      clashProvider.configService.setAllowLan(value);
+                      clashProvider.setAllowLan(value);
                     },
                   ),
                   const SizedBox(height: 16),
@@ -142,20 +142,20 @@ class _NetworkSettingsPageState extends State<NetworkSettingsPage> {
                     icon: Icons.language,
                     title: context
                         .translate
-                        .clashFeatures
-                        .networkSettings
+                        .clash_features
+                        .network_settings
                         .ipv6
                         .title,
                     subtitle: context
                         .translate
-                        .clashFeatures
-                        .networkSettings
+                        .clash_features
+                        .network_settings
                         .ipv6
                         .subtitle,
                     value: _ipv6,
                     onChanged: (value) {
                       setState(() => _ipv6 = value);
-                      clashProvider.configService.setIpv6(value);
+                      clashProvider.setIpv6(value);
                     },
                   ),
                   const SizedBox(height: 16),
@@ -166,20 +166,20 @@ class _NetworkSettingsPageState extends State<NetworkSettingsPage> {
                     icon: Icons.multiple_stop,
                     title: context
                         .translate
-                        .clashFeatures
-                        .networkSettings
-                        .tcpConcurrent
+                        .clash_features
+                        .network_settings
+                        .tcp_concurrent
                         .title,
                     subtitle: context
                         .translate
-                        .clashFeatures
-                        .networkSettings
-                        .tcpConcurrent
+                        .clash_features
+                        .network_settings
+                        .tcp_concurrent
                         .subtitle,
                     value: _tcpConcurrent,
                     onChanged: (value) {
                       setState(() => _tcpConcurrent = value);
-                      clashProvider.configService.setTcpConcurrent(value);
+                      clashProvider.setTcpConcurrent(value);
                     },
                   ),
                 ],

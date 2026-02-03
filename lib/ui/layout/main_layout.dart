@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:stelliberty/providers/content_provider.dart';
+import 'package:stelliberty/atomic/platform_helper.dart';
+import 'package:stelliberty/atomic/responsive_sizing.dart';
 import 'package:stelliberty/ui/widgets/content_body.dart';
 import 'package:stelliberty/ui/pages/settings/appearance_settings_page.dart';
 import 'package:stelliberty/ui/pages/settings/language_settings_page.dart';
@@ -14,27 +16,74 @@ import 'package:stelliberty/ui/pages/settings/clash/system_integration_page.dart
 import 'package:stelliberty/ui/pages/settings/clash/dns_config_page.dart';
 import 'package:stelliberty/ui/pages/settings/clash/performance_page.dart';
 import 'package:stelliberty/ui/pages/settings/clash/logs_debug_page.dart';
+import 'package:stelliberty/ui/pages/settings/access_control_settings_page.dart';
 import 'package:stelliberty/ui/pages/proxy_page.dart';
 import 'package:stelliberty/ui/pages/subscription_page.dart';
 import 'package:stelliberty/ui/pages/override_page.dart';
 import 'package:stelliberty/ui/pages/home_page.dart';
 import 'package:stelliberty/ui/pages/connection_page.dart';
-import 'package:stelliberty/ui/pages/log_page.dart';
+import 'package:stelliberty/ui/pages/core_log_page.dart';
+import 'package:stelliberty/ui/pages/rules_page.dart';
 
 import 'sidebar.dart';
+import 'mobile_nav_bar.dart';
 
-// 主页面，包含固定的侧边栏和动态的内容区域
+// 桌面端始终使用侧边栏
+// 移动端：横屏（宽>高）使用侧边栏，竖屏使用底部导航
 class HomePage extends StatelessWidget {
   const HomePage({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return const Row(
-      children: [
-        HomeSidebar(),
-        VerticalDivider(width: 2, thickness: 2),
-        Expanded(child: _DynamicContentArea()),
-      ],
+    // 桌面端始终使用侧边栏布局
+    if (PlatformHelper.isDesktop) {
+      return const Row(
+        children: [
+          HomeSidebar(),
+          VerticalDivider(width: 2, thickness: 2),
+          Expanded(child: _DynamicContentArea()),
+        ],
+      );
+    }
+
+    // 移动端根据屏幕方向选择布局
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final showSidebar = ResponsiveSizing.shouldShowSidebar(
+          constraints.maxWidth,
+          constraints.maxHeight,
+        );
+
+        if (showSidebar) {
+          // 横屏：侧边栏布局
+          return const Row(
+            children: [
+              HomeSidebar(),
+              VerticalDivider(width: 2, thickness: 2),
+              Expanded(child: SafeArea(child: _DynamicContentArea())),
+            ],
+          );
+        }
+
+        // 竖屏：底部导航栏布局
+        return Consumer<ContentProvider>(
+          builder: (context, provider, child) {
+            return PopScope(
+              // 首页允许系统处理（预测性返回动画 + 退出），子页面由应用拦截
+              canPop: provider.currentView == ContentView.home,
+              onPopInvokedWithResult: (didPop, result) {
+                if (didPop) return;
+                provider.handleBack();
+              },
+              child: child!,
+            );
+          },
+          child: const Scaffold(
+            body: SafeArea(child: _DynamicContentArea()),
+            bottomNavigationBar: MobileNavBar(),
+          ),
+        );
+      },
     );
   }
 }
@@ -84,6 +133,8 @@ class _DynamicContentArea extends StatelessWidget {
         return const OverridePage(key: ValueKey('overrides'));
       case ContentView.logs:
         return const LogPage(key: ValueKey('logs'));
+      case ContentView.rules:
+        return const RulesPage(key: ValueKey('rules'));
       case ContentView.settingsOverview:
         return const SettingsOverviewPage(key: ValueKey('settings_overview'));
       case ContentView.settingsAppearance:
@@ -121,6 +172,10 @@ class _DynamicContentArea extends StatelessWidget {
       case ContentView.settingsAppUpdate:
         return const AppUpdateSettingsPage(
           key: ValueKey('settings_app_update'),
+        );
+      case ContentView.settingsAccessControl:
+        return const AccessControlSettingsPage(
+          key: ValueKey('settings_access_control'),
         );
     }
   }

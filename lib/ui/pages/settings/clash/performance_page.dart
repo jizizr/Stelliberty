@@ -4,12 +4,12 @@ import 'package:provider/provider.dart';
 import 'package:stelliberty/providers/content_provider.dart';
 import 'package:stelliberty/i18n/i18n.dart';
 import 'package:stelliberty/clash/providers/clash_provider.dart';
-import 'package:stelliberty/clash/storage/preferences.dart';
+import 'package:stelliberty/storage/clash_preferences.dart';
 import 'package:stelliberty/ui/common/modern_feature_card.dart';
 import 'package:stelliberty/ui/common/modern_dropdown_menu.dart';
 import 'package:stelliberty/ui/common/modern_dropdown_button.dart';
 import 'package:stelliberty/ui/widgets/setting/keep_alive_card.dart';
-import 'package:stelliberty/utils/logger.dart';
+import 'package:stelliberty/services/log_print_service.dart';
 
 class PerformancePage extends StatefulWidget {
   const PerformancePage({super.key});
@@ -49,16 +49,16 @@ class _PerformancePageState extends State<PerformancePage> {
       case 'standard':
         return context
             .translate
-            .clashFeatures
+            .clash_features
             .performance
-            .geodataLoader
+            .geodata_loader
             .standard;
       case 'memconservative':
         return context
             .translate
-            .clashFeatures
+            .clash_features
             .performance
-            .geodataLoader
+            .geodata_loader
             .memconservative;
       default:
         return value;
@@ -70,11 +70,11 @@ class _PerformancePageState extends State<PerformancePage> {
 
     switch (value) {
       case 'off':
-        return trans.clashFeatures.performance.findProcess.off;
+        return trans.clash_features.performance.find_process.off;
       case 'strict':
-        return trans.clashFeatures.performance.findProcess.strict;
+        return trans.clash_features.performance.find_process.strict;
       case 'always':
-        return trans.clashFeatures.performance.findProcess.always;
+        return trans.clash_features.performance.find_process.always;
       default:
         return value;
     }
@@ -102,7 +102,7 @@ class _PerformancePageState extends State<PerformancePage> {
               ),
               const SizedBox(width: 8),
               Text(
-                trans.clashFeatures.performance.pageTitle,
+                trans.clash_features.performance.page_title,
                 style: theme.textTheme.titleLarge,
               ),
             ],
@@ -148,18 +148,18 @@ class _PerformancePageState extends State<PerformancePage> {
                                     Text(
                                       context
                                           .translate
-                                          .clashFeatures
+                                          .clash_features
                                           .performance
-                                          .geodataLoader
+                                          .geodata_loader
                                           .title,
                                       style: theme.textTheme.titleMedium,
                                     ),
                                     Text(
                                       context
                                           .translate
-                                          .clashFeatures
+                                          .clash_features
                                           .performance
-                                          .geodataLoader
+                                          .geodata_loader
                                           .subtitle,
                                       style: theme.textTheme.bodySmall
                                           ?.copyWith(
@@ -184,9 +184,7 @@ class _PerformancePageState extends State<PerformancePage> {
                             selectedItem: _geodataLoader,
                             onSelected: (value) {
                               setState(() => _geodataLoader = value);
-                              clashProvider.configService.setGeodataLoader(
-                                value,
-                              );
+                              clashProvider.setGeodataLoader(value);
                             },
                             itemToString: (val) =>
                                 _getGeodataLoaderDisplayName(context, val),
@@ -228,18 +226,18 @@ class _PerformancePageState extends State<PerformancePage> {
                                     Text(
                                       context
                                           .translate
-                                          .clashFeatures
+                                          .clash_features
                                           .performance
-                                          .findProcess
+                                          .find_process
                                           .title,
                                       style: theme.textTheme.titleMedium,
                                     ),
                                     Text(
                                       context
                                           .translate
-                                          .clashFeatures
+                                          .clash_features
                                           .performance
-                                          .findProcess
+                                          .find_process
                                           .subtitle,
                                       style: theme.textTheme.bodySmall
                                           ?.copyWith(
@@ -264,9 +262,7 @@ class _PerformancePageState extends State<PerformancePage> {
                             selectedItem: _findProcessMode,
                             onSelected: (value) {
                               setState(() => _findProcessMode = value);
-                              clashProvider.configService.setFindProcessMode(
-                                value,
-                              );
+                              clashProvider.setFindProcessMode(value);
                             },
                             itemToString: (val) =>
                                 _getFindProcessModeDisplayName(context, val),

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:stelliberty/utils/logger.dart';
+import 'package:stelliberty/services/log_print_service.dart';
 import 'package:re_editor/re_editor.dart';
 import 'package:re_highlight/languages/yaml.dart';
 import 'package:re_highlight/styles/github-dark.dart';
@@ -10,13 +10,8 @@ import 'package:stelliberty/i18n/i18n.dart';
 import 'package:stelliberty/ui/widgets/modern_toast.dart';
 import 'package:stelliberty/ui/common/modern_dialog.dart';
 
-// 订阅文件编辑器对话框
-//
-// 支持编辑订阅配置文件（YAML格式），提供：
-// - 代码高亮和行号显示
-// - 异步加载优化（大文件友好）
-// - 修改状态跟踪和警告
-// - 文件保存和验证
+// 文件编辑对话框：用于编辑 YAML 文本并支持高亮与保存。
+// 提供大文件加载优化与修改状态提示。
 class FileEditorDialog extends StatefulWidget {
   // 文件名称
   final String fileName;
@@ -117,7 +112,7 @@ class _FileEditorDialogState extends State<FileEditorDialog> {
 
   // 搜索框文本变化回调
   void _onSearchTextChanged() {
-    // 如果搜索框内容变化且之前有搜索结果，清空结果提示用户重新搜索
+    // 搜索框内容变化时清空结果，提示用户重新搜索
     if (_searchResultCount > 0) {
       setState(() {
         _searchResultCount = 0;
@@ -301,15 +296,15 @@ class _FileEditorDialogState extends State<FileEditorDialog> {
   void _updateStats() {
     if (_disposed) return;
     final text = _controller.text;
-    final newCharCount = text.length;
-    final newLineCount = text.split('\n').length;
+    final nextCharCount = text.length;
+    final nextLineCount = text.split('\n').length;
 
-    if (newCharCount != _charCount || newLineCount != _lineCount) {
+    if (nextCharCount != _charCount || nextLineCount != _lineCount) {
       SchedulerBinding.instance.addPostFrameCallback((_) {
         if (_disposed || !mounted) return;
         setState(() {
-          _charCount = newCharCount;
-          _lineCount = newLineCount;
+          _charCount = nextCharCount;
+          _lineCount = nextLineCount;
         });
       });
     }
@@ -346,7 +341,7 @@ class _FileEditorDialogState extends State<FileEditorDialog> {
     final trans = context.translate;
 
     return ModernDialog(
-      title: widget.customTitle ?? trans.fileEditor.title,
+      title: widget.customTitle ?? trans.file_editor.title,
       subtitle: widget.fileName,
       shouldHideSubtitle: widget.shouldHideSubtitle,
       titleIcon: Icons.code,
@@ -356,7 +351,7 @@ class _FileEditorDialogState extends State<FileEditorDialog> {
       headerWidget: _buildEnhancedSearchBox(),
       content: _buildEditor(),
       actionsLeft: Text(
-        trans.fileEditor.stats
+        trans.file_editor.stats
             .replaceAll('{chars}', _charCount.toString())
             .replaceAll('{lines}', _lineCount.toString()),
         style: TextStyle(
@@ -367,14 +362,14 @@ class _FileEditorDialogState extends State<FileEditorDialog> {
       actionsRight: [
         if (!widget.isReadOnly) ...[
           DialogActionButton(
-            label: trans.fileEditor.cancelButton,
+            label: trans.file_editor.cancel_button,
             isPrimary: false,
             onPressed: _isSaving ? null : () => Navigator.of(context).pop(),
           ),
           DialogActionButton(
             label: _isSaving
-                ? trans.fileEditor.savingButton
-                : trans.fileEditor.saveButton,
+                ? trans.file_editor.saving_button
+                : trans.file_editor.save_button,
             isPrimary: true,
             isLoading: _isSaving,
             onPressed: (_isSaving || !_isModified) ? null : _handleSave,
@@ -611,7 +606,7 @@ class _FileEditorDialogState extends State<FileEditorDialog> {
                       ),
                       const SizedBox(height: 12),
                       Text(
-                        trans.fileEditor.loading,
+                        trans.file_editor.loading,
                         style: TextStyle(
                           fontSize: 12,
                           color: Theme.of(
@@ -663,13 +658,13 @@ class _FileEditorDialogState extends State<FileEditorDialog> {
       if (!mounted) return;
 
       if (success) {
-        ModernToast.success(context, trans.fileEditor.saveSuccess);
+        ModernToast.success(trans.file_editor.save_success);
         Navigator.of(context).pop();
       } else {
         setState(() {
           _isSaving = false;
         });
-        ModernToast.error(context, trans.fileEditor.saveFailed);
+        ModernToast.error(trans.file_editor.save_failed);
       }
     } catch (e) {
       if (!mounted) return;
@@ -680,8 +675,7 @@ class _FileEditorDialogState extends State<FileEditorDialog> {
 
       Logger.error('保存文件失败: $e');
       ModernToast.error(
-        context,
-        trans.fileEditor.saveError.replaceAll('{error}', e.toString()),
+        trans.file_editor.save_error.replaceAll('{error}', e.toString()),
       );
     }
   }

@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:stelliberty/i18n/i18n.dart';
-import 'package:stelliberty/clash/manager/manager.dart';
+import 'package:stelliberty/storage/clash_preferences.dart';
 import 'package:stelliberty/clash/providers/clash_provider.dart';
 import 'package:stelliberty/clash/config/clash_defaults.dart';
 import 'package:stelliberty/ui/common/modern_feature_card.dart';
 import 'package:stelliberty/ui/common/modern_text_field.dart';
 import 'package:stelliberty/ui/widgets/modern_tooltip.dart';
 import 'package:stelliberty/ui/widgets/modern_toast.dart';
-import 'package:stelliberty/utils/logger.dart';
+import 'package:stelliberty/services/log_print_service.dart';
 
 // 延迟测试网址配置卡片
 class TestUrlCard extends StatefulWidget {
@@ -26,7 +26,7 @@ class _TestUrlCardState extends State<TestUrlCard> {
   void initState() {
     super.initState();
     _testUrlController = TextEditingController(
-      text: ClashManager.instance.testUrl,
+      text: ClashPreferences.instance.getTestUrl(),
     );
   }
 
@@ -45,17 +45,16 @@ class _TestUrlCardState extends State<TestUrlCard> {
 
     try {
       final clashProvider = Provider.of<ClashProvider>(context, listen: false);
-      clashProvider.configService.setTestUrl(_testUrlController.text);
+      clashProvider.setTestUrl(_testUrlController.text);
 
       if (mounted) {
-        ModernToast.success(context, trans.clashFeatures.testUrl.saveSuccess);
+        ModernToast.success(trans.clash_features.test_url.save_success);
       }
     } catch (e) {
       Logger.error('保存延迟测试网址失败: $e');
       if (mounted) {
         ModernToast.error(
-          context,
-          trans.clashFeatures.testUrl.saveFailed.replaceAll(
+          trans.clash_features.test_url.save_failed.replaceAll(
             '{error}',
             e.toString(),
           ),
@@ -91,11 +90,11 @@ class _TestUrlCardState extends State<TestUrlCard> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    trans.clashFeatures.testUrl.title,
+                    trans.clash_features.test_url.title,
                     style: Theme.of(context).textTheme.titleMedium,
                   ),
                   Text(
-                    trans.clashFeatures.testUrl.subtitle,
+                    trans.clash_features.test_url.subtitle,
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
                 ],
@@ -107,13 +106,13 @@ class _TestUrlCardState extends State<TestUrlCard> {
           ModernTextField(
             controller: _testUrlController,
             keyboardType: TextInputType.url,
-            labelText: trans.clashFeatures.testUrl.label,
+            labelText: trans.clash_features.test_url.label,
             hintText: ClashDefaults.defaultTestUrl,
             minLines: 1,
             suffixIcon: Padding(
               padding: const EdgeInsets.only(right: 4),
               child: ModernTooltip(
-                message: trans.clashFeatures.testUrl.restoreDefault,
+                message: trans.clash_features.test_url.restore_default,
                 child: IconButton(
                   icon: const Icon(Icons.restore),
                   onPressed: () {
@@ -141,7 +140,7 @@ class _TestUrlCardState extends State<TestUrlCard> {
                     : const Icon(Icons.save, size: 18),
                 label: Text(
                   _isSaving
-                      ? trans.clashFeatures.testUrl.saving
+                      ? trans.clash_features.test_url.saving
                       : trans.common.save,
                 ),
               ),

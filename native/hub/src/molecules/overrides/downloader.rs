@@ -1,0 +1,164 @@
+// 覆写文件下载器
+// 处理覆写文件的 HTTP 下载，支持多种代理模式
+
+use crate::molecules::ProxyMode;
+use reqwest::Client;
+use rinf::{DartSignal, RustSignal};
+use serde::{Deserialize, Serialize};
+use std::time::Duration;
+
+// Dart → Rust：下载覆写文件请求
+#[derive(Deserialize, DartSignal)]
+pub struct DownloadOverrideRequest {
+    pub request_id: String, // 请求标识符，用于响应匹配
+    pub url: String,
+    pub proxy_mode: ProxyMode,
+    pub user_agent: String,
+    pub timeout_seconds: u64,
+    pub mixed_port: u16,
+}
+
+// Rust → Dart：下载覆写文件响应
+#[derive(Serialize, RustSignal)]
+pub struct DownloadOverrideResponse {
+    pub request_id: String, // 请求标识符，用于请求匹配
+    pub is_successful: bool,
+    pub content: String,
+    pub error_message: Option<String>,
+}
+
+impl DownloadOverrideRequest {
+    pub async fn handle(self) {
+        log::info!("收到下载覆写文件请求 [{}]：{}", self.request_id, self.url);
+
+        let result = download_override(
+            &self.url,
+            self.proxy_mode,
+            &self.user_agent,
+            self.timeout_seconds,
+            self.mixed_port,
+        )
+        .await;
+
+        let response = match result {
+            Ok(content) => {
+                log::info!(
+                    "覆写文件下载成功 [{}]，内容长度：{} 字节",
+                    self.request_id,
+                    content.len()
+                );
+                DownloadOverrideResponse {
+                    request_id: self.request_id,
+                    is_successful: true,
+                    content,
+                    error_message: None,
+                }
+            }
+            Err(e) => {
+                log::error!("覆写文件下载失败 [{}]：{}", self.request_id, e);
+                DownloadOverrideResponse {
+                    request_id: self.request_id,
+                    is_successful: false,
+                    content: String::new(),
+                    error_message: Some(e.to_string()),
+                }
+            }
+        };
+
+        response.send_signal_to_dart();
+    }
+}
+
+// 下载覆写文件并返回内容。
+// 支持代理模式、超时与自定义 User-Agent。
+pub async fn download_override(
+    url: &str,
+    proxy_mode: ProxyMode,
+    user_agent: &str,
+    timeout_seconds: u64,
+    mixed_port: u16,
+) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+    log::info!("开始下载覆写文件：{}", url);
+    log::info!("代理模式：{:?}", proxy_mode);
+
+    // 创建 HTTP 客户端
+    let client = create_http_client(proxy_mode, timeout_seconds, mixed_port)?;
+
+    // 发送 HTTP GET 请求
+    let response = client
+        .get(url)
+        .header("User-Agent", user_agent)
+        .send()
+        .await?;
+
+    // 检查 HTTP 状态码
+    let status = response.status();
+    if !status.is_success() {
+        return Err(format!(
+            "HTTP {}: {}",
+            status.as_u16(),
+            status.canonical_reason().unwrap_or("Unknown")
+        )
+        .into());
+    }
+
+    // 读取响应体
+    let content = response.text().await?;
+
+    if content.is_empty() {
+        return Err("覆写文件内容为空".into());
+    }
+
+    log::info!("覆写文件下载成功，内容长度：{} 字节", content.len());
+
+    Ok(content)
+}
+
+// 创建 HTTP 客户端（复用订阅下载的逻辑）
+fn create_http_client(
+    proxy_mode: ProxyMode,
+    timeout_seconds: u64,
+    mixed_port: u16,
+) -> Result<Client, Box<dyn std::error::Error + Send + Sync>> {
+    use reqwest::Proxy;
+
+    let mut builder = Client::builder()
+        .timeout(Duration::from_secs(timeout_seconds))
+        .connect_timeout(Duration::from_secs(10)) // 连接超时
+        .danger_accept_invalid_certs(false); // 验证 SSL 证书
+
+    // 根据代理模式配置客户端
+    match proxy_mode {
+        ProxyMode::Direct => {
+            log::debug!("使用直连模式");
+            // 不设置代理
+        }
+        ProxyMode::System => {
+            log::debug!("使用系统代理模式");
+            // reqwest 默认会读取系统环境变量（HTTP_PROXY, HTTPS_PROXY）
+            // 无需额外配置
+        }
+        ProxyMode::Core => {
+            log::debug!("使用核心代理模式：127.0.0.1:{}", mixed_port);
+            let proxy_url = format!("http://127.0.0.1:{}", mixed_port);
+            let proxy = Proxy::all(&proxy_url)?;
+            builder = builder.proxy(proxy);
+        }
+    }
+
+    Ok(builder.build()?)
+}
+
+pub fn init() {
+    use tokio::spawn;
+
+    // 覆写文件下载请求监听器
+    spawn(async {
+        let receiver = DownloadOverrideRequest::get_dart_signal_receiver();
+        while let Some(dart_signal) = receiver.recv().await {
+            spawn(async move {
+                dart_signal.message.handle().await;
+            });
+        }
+    });
+}

@@ -41,8 +41,101 @@ pub fn install_service() -> Result<()> {
     )
     .context("无法连接到服务管理器。请确保以管理员身份运行。")?;
 
-    if let Ok(service) = manager.open_service(SERVICE_NAME, ServiceAccess::QUERY_STATUS) {
+    // 检查服务是否已安装
+    if let Ok(service) = manager.open_service(
+        SERVICE_NAME,
+        ServiceAccess::QUERY_STATUS | ServiceAccess::START | ServiceAccess::STOP,
+    ) {
         let status = service.query_status()?;
+
+        // 检查是否需要更新（比较当前 exe 和注册的 exe）
+        let needs_update = check_service_needs_update(&service_binary)?;
+
+        if needs_update {
+            println!("检测到服务需要更新");
+
+            // 如果服务正在运行，先停止
+            if status.current_state == ServiceState::Running {
+                println!("正在停止服务以进行更新...");
+                match service.stop() {
+                    Ok(_) => {}
+                    Err(e) => {
+                        println!("警告: {e}, 正在检查服务状态...");
+                    }
+                }
+
+                // 等待服务完全停止
+                let mut retry = 0;
+                while let Ok(status) = service.query_status() {
+                    match status.current_state {
+                        ServiceState::Stopped => {
+                            println!("服务已停止");
+                            break;
+                        }
+                        ServiceState::StopPending => {
+                            if retry >= 30 {
+                                bail!("服务停止超时");
+                            }
+                            if retry == 0 {
+                                print!("等待停止");
+                            }
+                            print!(".");
+                            std::io::Write::flush(&mut std::io::stdout()).ok();
+                            std::thread::sleep(Duration::from_millis(100));
+                            retry += 1;
+                        }
+                        _ => {
+                            std::thread::sleep(Duration::from_millis(100));
+                            retry += 1;
+                        }
+                    }
+                }
+            }
+
+            // 更新服务二进制文件（原地覆盖）
+            println!("正在更新服务文件...");
+            update_service_binary(&service_binary)?;
+            println!("服务文件更新成功");
+
+            // 重新启动服务
+            println!("正在启动更新后的服务...");
+            match service.start(&[] as &[&OsString]) {
+                Ok(_) => {}
+                Err(e) => {
+                    println!("警告: {e}, 正在检查服务状态...");
+                }
+            }
+
+            std::thread::sleep(Duration::from_millis(500));
+
+            let mut retry = 0;
+            loop {
+                let status = service.query_status()?;
+                match status.current_state {
+                    ServiceState::Running => {
+                        println!("服务更新并启动成功");
+                        return Ok(());
+                    }
+                    ServiceState::StartPending => {
+                        if retry >= 30 {
+                            bail!("服务启动超时");
+                        }
+                        if retry == 0 {
+                            print!("等待启动");
+                        }
+                        print!(".");
+                        std::io::Write::flush(&mut std::io::stdout()).ok();
+                        std::thread::sleep(Duration::from_millis(500));
+                        retry += 1;
+                    }
+                    other => {
+                        bail!("服务启动失败: {other:?}");
+                    }
+                }
+            }
+        }
+
+        // 不需要更新，检查运行状态
         match status.current_state {
             ServiceState::Running => {
                 println!("服务已在运行中");
@@ -58,13 +151,20 @@ pub fn install_service() -> Result<()> {
         }
     }
 
+    // 首次安装：复制服务文件到私有目录
+    println!("正在复制服务文件到私有目录...");
+    update_service_binary(&service_binary)?;
+
+    // 注册服务（使用私有目录中的二进制文件，而非当前运行的文件）
+    let private_service_binary = get_service_private_binary()?;
+
     let service_info = ServiceInfo {
         name: OsString::from(SERVICE_NAME),
         display_name: OsString::from(SERVICE_DISPLAY_NAME),
         service_type: ServiceType::OWN_PROCESS,
         start_type: ServiceStartType::AutoStart,
         error_control: ServiceErrorControl::Normal,
-        executable_path: service_binary,
+        executable_path: private_service_binary,
         launch_arguments: vec![],
         dependencies: vec![],
         account_name: None,
@@ -289,13 +389,26 @@ After=network.target
 
 [Service]
 Type=simple
-UMask=0000
+UMask=0077
 ExecStart={binary_path}
 Restart=on-failure
 RestartSec=5s
 StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=stelliberty
+
+# 只授予 Clash 核心所需的最小权限集
+CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_RAW CAP_NET_BIND_SERVICE CAP_SYS_TIME CAP_SYS_PTRACE CAP_DAC_READ_SEARCH CAP_DAC_OVERRIDE
+AmbientCapabilities=CAP_NET_ADMIN CAP_NET_RAW CAP_NET_BIND_SERVICE CAP_SYS_TIME CAP_SYS_PTRACE CAP_DAC_READ_SEARCH CAP_DAC_OVERRIDE
+
+# 权限说明：
+# CAP_NET_ADMIN: 网络管理（TUN 设备、路由表）
+# CAP_NET_RAW: 原始套接字（ICMP、透明代理）
+# CAP_NET_BIND_SERVICE: 绑定特权端口（< 1024）
+# CAP_SYS_TIME: 修改系统时间（NTP 同步）
+# CAP_SYS_PTRACE: 进程追踪（find-process-mode）
+# CAP_DAC_READ_SEARCH: 读取文件权限绕过（配置文件）
+# CAP_DAC_OVERRIDE: 写入文件权限绕过（日志文件）
 
 [Install]
 WantedBy=multi-user.target
@@ -310,9 +423,78 @@ pub fn install_service() -> Result<()> {
     let service_binary = std::env::current_exe().context("无法获取当前程序路径")?;
     println!("服务程序: {}", service_binary.display());
 
+    // 检查服务是否已安装
     if Path::new(SERVICE_FILE).exists() {
         println!("服务文件已存在，正在检查状态...");
 
+        // 检查是否需要更新
+        let needs_update = check_service_needs_update(&service_binary)?;
+
+        if needs_update {
+            println!("检测到服务需要更新");
+
+            // 获取当前服务状态
+            let status = Command::new("systemctl")
+                .args(["is-active", SERVICE_NAME])
+                .output();
+
+            let was_active = if let Ok(output) = status {
+                let status_str = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                status_str == "active"
+            } else {
+                false
+            };
+
+            // 如果服务正在运行，先停止
+            if was_active {
+                println!("正在停止服务以进行更新...");
+                let stop_status = Command::new("systemctl")
+                    .args(["stop", SERVICE_NAME])
+                    .status()
+                    .context("停止服务失败")?;
+
+                if !stop_status.success() {
+                    bail!("停止服务失败");
+                }
+                println!("服务已停止");
+            }
+
+            // 更新服务二进制文件（原地覆盖）
+            println!("正在更新服务文件...");
+            update_service_binary(&service_binary)?;
+            println!("服务文件更新成功");
+
+            // 重载 systemd 配置
+            println!("正在重载 systemd...");
+            let reload_status = Command::new("systemctl")
+                .arg("daemon-reload")
+                .status()
+                .context("执行 systemctl daemon-reload 失败")?;
+
+            if !reload_status.success() {
+                bail!("systemctl daemon-reload 失败");
+            }
+
+            // 如果服务之前在运行，重新启动
+            if was_active {
+                println!("正在启动更新后的服务...");
+                let start_status = Command::new("systemctl")
+                    .args(["start", SERVICE_NAME])
+                    .status()
+                    .context("启动服务失败")?;
+
+                if !start_status.success() {
+                    bail!("启动服务失败");
+                }
+                println!("服务更新并启动成功");
+            } else {
+                println!("服务更新成功（未启动）");
+            }
+
+            return Ok(());
+        }
+
+        // 不需要更新，检查运行状态
         let status = Command::new("systemctl")
             .args(["is-active", SERVICE_NAME])
             .output();
@@ -329,7 +511,13 @@ pub fn install_service() -> Result<()> {
         }
     }
 
-    let unit_content = get_service_unit(&service_binary.display().to_string());
+    // 首次安装：复制服务文件到私有目录
+    println!("正在复制服务文件到私有目录...");
+    update_service_binary(&service_binary)?;
+
+    // 注册服务（使用私有目录中的二进制文件）
+    let private_service_binary = get_service_private_binary()?;
+    let unit_content = get_service_unit(&private_service_binary.display().to_string());
     fs::write(SERVICE_FILE, unit_content)
         .context("创建 systemd unit 文件失败，请确保以 root 身份运行")?;
 
@@ -584,6 +772,46 @@ pub fn install_service() -> Result<()> {
     if Path::new(SERVICE_PLIST_PATH).exists() {
         println!("服务文件已存在，正在检查状态...");
 
+        // 检查是否需要更新
+        let needs_update = check_service_needs_update(&service_binary)?;
+
+        if needs_update {
+            println!("检测到服务需要更新");
+
+            // 检查服务是否在运行
+            let was_running = Command::new("launchctl")
+                .args(["list", SERVICE_LABEL])
+                .output()
+                .map(|output| output.status.success())
+                .unwrap_or(false);
+
+            // 如果服务正在运行，先卸载
+            if was_running {
+                println!("正在卸载服务以进行更新...");
+                let unload_script = format!("launchctl unload {}", SERVICE_PLIST_PATH);
+                execute_with_privilege(&unload_script)?;
+                println!("服务已卸载");
+            }
+
+            // 更新服务二进制文件（原地覆盖）
+            println!("正在更新服务文件...");
+            update_service_binary(&service_binary)?;
+            println!("服务文件更新成功");
+
+            // 如果服务之前在运行，重新加载
+            if was_running {
+                println!("正在加载更新后的服务...");
+                let load_script = format!("launchctl load {}", SERVICE_PLIST_PATH);
+                execute_with_privilege(&load_script)?;
+                println!("服务更新并启动成功");
+            } else {
+                println!("服务更新成功（未启动）");
+            }
+
+            return Ok(());
+        }
+
+        // 不需要更新，检查运行状态
         let status = Command::new("launchctl")
             .args(["list", SERVICE_LABEL])
             .output();
@@ -603,8 +831,13 @@ pub fn install_service() -> Result<()> {
         return Ok(());
     }
 
-    // 生成 plist 内容
-    let plist_content = get_launchd_plist(&service_binary.display().to_string());
+    // 首次安装：复制服务文件到私有目录
+    println!("正在复制服务文件到私有目录...");
+    update_service_binary(&service_binary)?;
+
+    // 注册服务（使用私有目录中的二进制文件）
+    let private_service_binary = get_service_private_binary()?;
+    let plist_content = get_launchd_plist(&private_service_binary.display().to_string());
 
     // 创建临时文件（使用唯一路径避免冲突）
     let temp_plist = "/tmp/stelliberty-service-install.plist";
@@ -705,5 +938,98 @@ pub fn stop_service() -> Result<()> {
     execute_with_privilege(&stop_script)?;
 
     println!("服务停止成功");
+    Ok(())
+}
+
+// ============ 辅助函数 ============
+
+// 获取服务私有目录路径（AppData/Roaming/stelliberty/service）
+#[cfg(any(windows, target_os = "linux", target_os = "macos"))]
+fn get_service_private_dir() -> Result<std::path::PathBuf> {
+    let app_data_dir = dirs::data_dir()
+        .context("无法获取应用数据目录")?
+        .join("stelliberty")
+        .join("service");
+    Ok(app_data_dir)
+}
+
+// 获取私有目录中的服务二进制文件路径
+#[cfg(windows)]
+fn get_service_private_binary() -> Result<std::path::PathBuf> {
+    Ok(get_service_private_dir()?.join("stelliberty-service.exe"))
+}
+
+#[cfg(not(windows))]
+fn get_service_private_binary() -> Result<std::path::PathBuf> {
+    Ok(get_service_private_dir()?.join("stelliberty-service"))
+}
+
+// 检查服务是否需要更新（比较当前二进制文件和私有目录中的文件）
+#[cfg(any(windows, target_os = "linux", target_os = "macos"))]
+fn check_service_needs_update(current_exe: &std::path::Path) -> Result<bool> {
+    let private_binary = get_service_private_binary()?;
+
+    // 如果私有目录中的文件不存在，需要安装
+    if !private_binary.exists() {
+        return Ok(true);
+    }
+
+    // 比较文件大小和修改时间
+    let current_meta = std::fs::metadata(current_exe).context("无法获取当前可执行文件元数据")?;
+    let private_meta =
+        std::fs::metadata(&private_binary).context("无法获取私有目录可执行文件元数据")?;
+
+    // 如果大小不同或当前文件更新，则需要更新
+    let size_different = current_meta.len() != private_meta.len();
+    let time_different = current_meta
+        .modified()
+        .ok()
+        .zip(private_meta.modified().ok())
+        .map(|(current, private)| current > private)
+        .unwrap_or(true);
+
+    Ok(size_different || time_different)
+}
+
+// 更新服务二进制文件（从当前二进制文件复制到私有目录）
+#[cfg(any(windows, target_os = "linux", target_os = "macos"))]
+fn update_service_binary(current_exe: &std::path::Path) -> Result<()> {
+    let private_dir = get_service_private_dir()?;
+    let private_binary = get_service_private_binary()?;
+
+    // 确保私有目录存在
+    if !private_dir.exists() {
+        std::fs::create_dir_all(&private_dir)
+            .with_context(|| format!("无法创建私有目录：{}", private_dir.display()))?;
+    }
+
+    // 获取源文件大小用于验证
+    let source_size = std::fs::metadata(current_exe)
+        .with_context(|| format!("无法获取源文件元数据：{}", current_exe.display()))?
+        .len();
+
+    // 复制文件（覆盖旧版本）
+    std::fs::copy(current_exe, &private_binary).with_context(|| {
+        format!(
+            "无法复制服务程序从 {} 到 {}",
+            current_exe.display(),
+            private_binary.display()
+        )
+    })?;
+
+    // 验证文件完整性
+    let copied_size = std::fs::metadata(&private_binary)
+        .with_context(|| format!("无法获取已复制文件元数据：{}", private_binary.display()))?
+        .len();
+
+    if copied_size != source_size {
+        bail!(
+            "文件复制完整性验证失败：期望 {} 字节，实际 {} 字节",
+            source_size,
+            copied_size
+        );
+    }
+
+    println!("服务程序已复制到私有目录（{} 字节）", copied_size);
     Ok(())
 }

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:stelliberty/i18n/i18n.dart';
-import 'package:stelliberty/clash/manager/manager.dart';
+import 'package:stelliberty/storage/clash_preferences.dart';
 import 'package:stelliberty/clash/providers/clash_provider.dart';
 import 'package:stelliberty/ui/common/modern_feature_card.dart';
 import 'package:stelliberty/ui/common/modern_dropdown_menu.dart';
@@ -31,15 +31,15 @@ enum LogLevel {
     final trans = context.translate;
     switch (this) {
       case LogLevel.silent:
-        return trans.logLevel.silent;
+        return trans.log_level.silent;
       case LogLevel.error:
-        return trans.logLevel.error;
+        return trans.log_level.error;
       case LogLevel.warning:
-        return trans.logLevel.warning;
+        return trans.log_level.warning;
       case LogLevel.info:
-        return trans.logLevel.info;
+        return trans.log_level.info;
       case LogLevel.debug:
-        return trans.logLevel.debug;
+        return trans.log_level.debug;
     }
   }
 }
@@ -59,7 +59,9 @@ class _LogLevelCardState extends State<LogLevelCard> {
   @override
   void initState() {
     super.initState();
-    _logLevel = LogLevel.fromString(ClashManager.instance.clashCoreLogLevel);
+    _logLevel = LogLevel.fromString(
+      ClashPreferences.instance.getCoreLogLevel(),
+    );
   }
 
   @override
@@ -71,29 +73,30 @@ class _LogLevelCardState extends State<LogLevelCard> {
       isHoverEnabled: false,
       isTapEnabled: false,
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          // 左侧图标和标题
-          Row(
-            children: [
-              const Icon(Icons.article_outlined),
-              const SizedBox(width: 12),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    trans.clashFeatures.logLevel.title,
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                  Text(
-                    trans.clashFeatures.logLevel.subtitle,
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                ],
-              ),
-            ],
+          // 左侧图标
+          const Icon(Icons.article_outlined),
+          const SizedBox(width: 12),
+          // 中间标题和描述
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  trans.clash_features.log_level.title,
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                Text(
+                  trans.clash_features.log_level.subtitle,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ],
+            ),
           ),
+          const SizedBox(width: 12),
           // 右侧下拉菜单
           MouseRegion(
             onEnter: (_) => setState(() => _isHoveringOnLogLevelMenu = true),
@@ -107,7 +110,7 @@ class _LogLevelCardState extends State<LogLevelCard> {
                   context,
                   listen: false,
                 );
-                clashProvider.configService.setClashCoreLogLevel(level.value);
+                clashProvider.setClashCoreLogLevel(level.value);
               },
               itemToString: (level) => level.getDisplayName(context),
               child: CustomDropdownButton(

@@ -1,23 +1,23 @@
 import 'dart:io';
 import 'dart:async';
 import 'dart:convert';
-import 'package:stelliberty/clash/data/subscription_model.dart';
-import 'package:stelliberty/clash/data/override_model.dart' as app_override;
+import 'package:stelliberty/clash/model/subscription_model.dart';
+import 'package:stelliberty/clash/model/override_model.dart' as app_override;
 import 'package:stelliberty/clash/services/override_service.dart';
-import 'package:stelliberty/clash/services/override_applicator.dart';
 import 'package:stelliberty/clash/services/dns_service.dart';
-import 'package:stelliberty/clash/storage/preferences.dart';
+import 'package:stelliberty/storage/clash_preferences.dart';
 import 'package:stelliberty/clash/config/clash_defaults.dart';
-import 'package:stelliberty/clash/manager/manager.dart';
-import 'package:stelliberty/utils/logger.dart';
+import 'package:stelliberty/services/log_print_service.dart';
 import 'package:stelliberty/services/path_service.dart';
 import 'package:stelliberty/src/bindings/signals/signals.dart';
 
 // 订阅服务
 // 负责订阅的下载、保存、验证等操作
 class SubscriptionService {
-  // 覆写应用器
-  OverrideApplicator? _overrideApplicator;
+  static int _parseRequestSequence = 0;
+
+  // 覆写服务
+  OverrideService? _overrideService;
 
   // 覆写配置获取回调
   Future<List<app_override.OverrideConfig>> Function(List<String>)?
@@ -25,7 +25,7 @@ class SubscriptionService {
 
   // 设置覆写服务
   void setOverrideService(OverrideService service) {
-    _overrideApplicator = OverrideApplicator(service);
+    _overrideService = service;
     Logger.info('覆写服务已设置到 SubscriptionService');
   }
 
@@ -50,51 +50,92 @@ class SubscriptionService {
   }
 
   // 初始化服务
-  // baseDir 参数保留以向后兼容，但实际不再使用
-  Future<void> initialize(String baseDir) async {
-    // 目录创建已由 PathService 统一管理
-    // 这里只需记录日志
+  Future<void> initialize() async {
     final subscriptionDir = PathService.instance.subscriptionsDir;
     Logger.info('订阅服务初始化完成，路径：$subscriptionDir');
   }
 
-  // 下载订阅配置
-  // 返回更新后的订阅对象
-  Future<Subscription> downloadSubscription(Subscription subscription) async {
-    // 使用订阅ID作为请求标识符
-    final requestId = subscription.id;
-    // 判断 Clash 是否运行
-    final isClashRunning = ClashManager.instance.isCoreRunning;
+  // 解析本地文件（通过 Rust）
+  Future<String> parseLocalFile(String filePath) async {
+    final file = File(filePath);
 
-    // 确定实际使用的代理模式
-    final effectiveProxyMode = isClashRunning
-        ? subscription.proxyMode
-        : SubscriptionProxyMode.direct;
-
-    if (!isClashRunning &&
-        subscription.proxyMode != SubscriptionProxyMode.direct) {
-      Logger.warning(
-        'Clash 未运行，强制使用直连模式（用户配置: ${subscription.proxyMode.value}）',
-      );
+    if (!await file.exists()) {
+      throw Exception('文件不存在');
     }
+
+    final content = await file.readAsString();
+    return await _parseSubscriptionContent(content);
+  }
+
+  // 解析订阅内容（通过 Rust）
+  Future<String> _parseSubscriptionContent(String content) async {
+    final requestId = _buildParseRequestId();
+    final completer = Completer<String>();
+    StreamSubscription? subscription;
+
+    try {
+      subscription = ParseSubscriptionResponse.rustSignalStream.listen((
+        result,
+      ) {
+        if (completer.isCompleted) return;
+        if (result.message.requestId != requestId) return;
+
+        if (result.message.isSuccessful) {
+          completer.complete(result.message.parsedConfig);
+        } else {
+          completer.completeError(Exception(result.message.errorMessage));
+        }
+        subscription?.cancel();
+      });
+
+      final parseRequest = ParseSubscriptionRequest(
+        requestId: requestId,
+        content: content,
+      );
+      parseRequest.sendSignalToRust();
+
+      return await completer.future.timeout(
+        const Duration(seconds: 30),
+        onTimeout: () => throw Exception('订阅解析超时'),
+      );
+    } finally {
+      await subscription?.cancel();
+    }
+  }
+
+  String _buildParseRequestId() {
+    _parseRequestSequence = (_parseRequestSequence + 1) & 0x7fffffff;
+    final timestamp = DateTime.now().microsecondsSinceEpoch;
+    return 'parse-$timestamp-$_parseRequestSequence';
+  }
+
+  // 下载订阅配置并返回更新后的订阅对象。
+  // 代理模式与混合端口由调用方传入。
+  Future<Subscription> downloadSubscription(
+    Subscription subscription,
+    SubscriptionProxyMode proxyMode,
+    int mixedPort,
+  ) async {
+    // 使用订阅 ID 作为请求标识符
+    final requestId = subscription.id;
 
     // 使用 Rust 层下载订阅
     final completer = Completer<DownloadSubscriptionResponse>();
-    StreamSubscription? downloadListener;
+    StreamSubscription? downloadSubscription;
 
     try {
       // 订阅 Rust 下载响应流，只接收匹配的 request_id
-      StreamSubscription? listener;
-      listener = DownloadSubscriptionResponse.rustSignalStream.listen((result) {
-        if (!completer.isCompleted && result.message.requestId == requestId) {
-          completer.complete(result.message);
-          listener?.cancel(); // 收到响应后立即取消监听
-        }
-      });
-      downloadListener = listener;
+      downloadSubscription = DownloadSubscriptionResponse.rustSignalStream
+          .listen((result) {
+            if (!completer.isCompleted &&
+                result.message.requestId == requestId) {
+              completer.complete(result.message);
+              downloadSubscription?.cancel(); // 收到响应后立即取消监听
+            }
+          });
 
       // 转换代理模式枚举
-      final rustProxyMode = _convertProxyMode(effectiveProxyMode);
+      final rustProxyMode = _convertProxyMode(proxyMode);
 
       // 发送下载请求到 Rust
       final downloadRequest = DownloadSubscriptionRequest(
@@ -105,7 +146,7 @@ class SubscriptionService {
         timeoutSeconds: Uint64(
           BigInt.from(ClashDefaults.subscriptionDownloadTimeout),
         ),
-        mixedPort: ClashPreferences.instance.getMixedPort(),
+        mixedPort: mixedPort,
       );
       downloadRequest.sendSignalToRust();
 
@@ -124,78 +165,38 @@ class SubscriptionService {
       // 解析订阅信息
       final info = _convertSubscriptionInfo(downloadResult.subscriptionInfo);
 
-      // 获取配置内容
-      String configContent = downloadResult.content;
+      // 获取配置内容并解析
+      final parsedConfigContent = await _parseSubscriptionContent(
+        downloadResult.content,
+      );
 
-      // 使用 ProxyParser 解析订阅内容（支持标准 YAML、Base64 编码、纯文本代理链接）
-      // 创建 Completer 等待解析结果
-      final parseCompleter = Completer<String>();
-      StreamSubscription? streamListener;
+      // 验证配置文件
+      _validateConfig(parsedConfigContent);
 
-      try {
-        // 订阅 Rust 信号流，只接收匹配的 request_id
-        StreamSubscription? listener;
-        listener = ParseSubscriptionResponse.rustSignalStream.listen((result) {
-          if (!parseCompleter.isCompleted &&
-              result.message.requestId == requestId) {
-            if (result.message.isSuccessful) {
-              parseCompleter.complete(result.message.parsedConfig);
-            } else {
-              parseCompleter.completeError(
-                Exception(result.message.errorMessage),
-              );
-            }
-            listener?.cancel(); // 收到响应后立即取消监听
-          }
-        });
-        streamListener = listener;
+      // 【重要】保存原始订阅文件，不应用任何覆写
+      // 覆写将在生成 runtime_config.yaml 时应用
+      final configPath = PathService.instance.getSubscriptionConfigPath(
+        subscription.id,
+      );
+      final configFile = File(configPath);
+      // 确保父目录存在
+      await configFile.parent.create(recursive: true);
+      await configFile.writeAsString(parsedConfigContent);
 
-        // 发送解析请求到 Rust
-        final parseRequest = ParseSubscriptionRequest(
-          requestId: requestId,
-          content: configContent,
-        );
-        parseRequest.sendSignalToRust();
+      Logger.debug('订阅已保存至：$configPath');
 
-        // 等待解析结果
-        final parsedConfigContent = await parseCompleter.future.timeout(
-          const Duration(seconds: 30),
-          onTimeout: () {
-            throw Exception('订阅解析超时');
-          },
-        );
-
-        // 验证配置文件
-        _validateConfig(parsedConfigContent);
-
-        // 【重要】保存原始订阅文件，不应用任何覆写
-        // 覆写将在生成 runtime_config.yaml 时应用
-        final configPath = PathService.instance.getSubscriptionConfigPath(
-          subscription.id,
-        );
-        final configFile = File(configPath);
-        // 确保父目录存在
-        await configFile.parent.create(recursive: true);
-        await configFile.writeAsString(parsedConfigContent);
-
-        Logger.debug('订阅已保存至：$configPath');
-
-        // 返回更新后的订阅
-        return subscription.copyWith(
-          lastUpdateTime: DateTime.now(),
-          info: info,
-          isUpdating: false,
-        );
-      } finally {
-        // 停止监听信号流（即使发生异常）
-        await streamListener?.cancel();
-      }
+      // 返回更新后的订阅
+      return subscription.copyWith(
+        lastUpdatedAt: DateTime.now(),
+        info: info,
+        isUpdating: false,
+      );
     } catch (e) {
       Logger.error('下载订阅失败：${subscription.name} - $e');
       rethrow;
     } finally {
       // 停止监听下载响应流
-      await downloadListener?.cancel();
+      await downloadSubscription?.cancel();
     }
   }
 
@@ -285,9 +286,8 @@ class SubscriptionService {
     return await configFile.readAsString();
   }
 
-  // 读取应用覆写后的订阅配置
-  // 这是提供给 Clash 核心使用的最终配置
-  // 注意：订阅文件已包含 DNS 和规则覆写，此方法仅用于兼容性读取
+  // 读取带覆写的订阅配置，供核心使用。
+  // 订阅文件已包含覆写，该方法仅用于兼容性读取。
   Future<String> readSubscriptionConfigWithOverrides(
     Subscription subscription,
   ) async {
@@ -400,8 +400,8 @@ class SubscriptionService {
         Logger.info('已将备份数据恢复到主文件');
 
         return subscriptions;
-      } catch (backupError) {
-        Logger.error('备份文件也损坏：$backupError');
+      } catch (e) {
+        Logger.error('备份文件也损坏：$e');
         Logger.error('订阅数据无法恢复，请检查文件：$listPath');
         return [];
       }
@@ -464,35 +464,8 @@ class SubscriptionService {
     Logger.info('本地订阅保存成功（已保存原始配置）：${subscription.name}');
   }
 
-  // 批量更新所有需要更新的订阅
-  Future<List<String>> autoUpdateSubscriptions(
-    List<Subscription> subscriptions,
-  ) async {
-    final errors = <String>[];
-
-    for (final subscription in subscriptions) {
-      if (!subscription.needsUpdate) {
-        Logger.info('订阅无需更新：${subscription.name}');
-        continue;
-      }
-
-      try {
-        await downloadSubscription(subscription);
-      } catch (e) {
-        final errorMsg = '${subscription.name}: $e';
-        errors.add(errorMsg);
-        Logger.error('自动更新订阅失败：$errorMsg');
-      }
-    }
-
-    return errors;
-  }
-
-  // 应用所有覆写（DNS 覆写 → 规则覆写）
-  // 确保规则覆写优先级高于 DNS 覆写
-  //
-  // 【重要】此方法用于在生成 runtime_config.yaml 时应用覆写
-  // 不会修改原始订阅文件
+  // 应用覆写（DNS 覆写 → 规则覆写），规则覆写优先级更高。
+  // 仅用于生成运行时配置，不修改原始订阅文件。
   Future<String> applyAllOverrides(
     String baseConfig,
     Subscription subscription,
@@ -514,14 +487,11 @@ class SubscriptionService {
         if (dnsService.configExists()) {
           Logger.info('应用 DNS 覆写到订阅：${subscription.name}');
           final dnsConfig = await dnsService.loadDnsConfig();
-          if (dnsConfig != null && _overrideApplicator != null) {
+          if (dnsConfig != null && _overrideService != null) {
             final dnsMap = dnsConfig.toMap();
             Logger.debug('DNS 配置：${dnsMap.keys.toList()}');
             // 将 DNS 配置作为 YAML 字符串应用
-            result = await _overrideApplicator!.applyYamlOverride(
-              result,
-              dnsMap,
-            );
+            result = await _overrideService!.applyYamlOverride(result, dnsMap);
             Logger.info('DNS 覆写应用成功');
           }
         } else {
@@ -534,13 +504,11 @@ class SubscriptionService {
       // 步骤 2：应用规则覆写（如果有）
       Logger.debug('检查规则覆写...');
       Logger.debug('- overrideIds 数量：${subscription.overrideIds.length}');
-      Logger.debug(
-        '- _overrideApplicator 是否为空: ${_overrideApplicator == null}',
-      );
+      Logger.debug('- _overrideService 是否为空: ${_overrideService == null}');
       Logger.debug('- _getOverridesByIds 是否为空：${_getOverridesByIds == null}');
 
       if (subscription.overrideIds.isNotEmpty &&
-          _overrideApplicator != null &&
+          _overrideService != null &&
           _getOverridesByIds != null) {
         Logger.info('准备应用规则覆写到订阅：${subscription.name}');
         Logger.debug('覆写 ID 列表：${subscription.overrideIds}');
@@ -557,7 +525,7 @@ class SubscriptionService {
             );
           }
 
-          result = await _overrideApplicator!.applyOverrides(result, overrides);
+          result = await _overrideService!.applyOverrides(result, overrides);
           Logger.info('规则覆写应用成功：${overrides.length} 个覆写');
         } else {
           Logger.warning('overrideIds 非空，但未获取到任何覆写配置');

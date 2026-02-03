@@ -73,8 +73,10 @@ impl IpcClient {
             }
         }
 
-        // last_error 必定存在，因为循环至少执行一次且没有成功返回
-        Err(last_error.expect("last_error 必定存在：循环至少执行一次"))
+        match last_error {
+            Some(e) => Err(e),
+            None => Err(IpcError::Other("IPC 通信失败".to_string())),
+        }
     }
 
     // 尝试发送命令（单次）

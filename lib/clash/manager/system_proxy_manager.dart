@@ -1,6 +1,6 @@
-import 'package:stelliberty/clash/utils/system_proxy.dart';
-import 'package:stelliberty/clash/storage/preferences.dart';
-import 'package:stelliberty/utils/logger.dart';
+import 'package:stelliberty/services/system_proxy_service.dart';
+import 'package:stelliberty/storage/clash_preferences.dart';
+import 'package:stelliberty/services/log_print_service.dart';
 
 // Clash 系统代理管理器
 // 负责系统代理的启用和禁用
@@ -9,8 +9,16 @@ class SystemProxyManager {
   final int Function() _getHttpPort;
   final Function() _notifyListeners;
 
-  bool _systemProxyEnabled = false;
-  bool get isSystemProxyEnabled => _systemProxyEnabled;
+  // 状态变化回调
+  Function(bool)? _onSystemProxyStateChanged;
+
+  // 设置状态变化回调
+  void setOnSystemProxyStateChanged(Function(bool)? handler) {
+    _onSystemProxyStateChanged = handler;
+  }
+
+  bool _isSystemProxyEnabled = false;
+  bool get isSystemProxyEnabled => _isSystemProxyEnabled;
 
   // 标记当前实例是否真正启用过系统代理（用于多实例场景）
   bool _hasEnabledSystemProxy = false;
@@ -18,10 +26,10 @@ class SystemProxyManager {
   SystemProxyManager({
     required bool Function() isCoreRunning,
     required int Function() getHttpPort,
-    required Function() notifyListeners,
+    Function()? notifyListeners,
   }) : _isCoreRunning = isCoreRunning,
        _getHttpPort = getHttpPort,
-       _notifyListeners = notifyListeners;
+       _notifyListeners = notifyListeners ?? (() {});
 
   // 重启系统代理（先禁用再启用，应用当前配置）
   Future<void> restartSystemProxy() async {
@@ -33,9 +41,9 @@ class SystemProxyManager {
     try {
       final prefs = ClashPreferences.instance;
       final proxyHost = prefs.getProxyHost();
-      final usePacMode = prefs.getSystemProxyPacMode();
+      final shouldUsePacMode = prefs.getSystemProxyPacMode();
       final bypassRules = prefs.getCurrentBypassRules();
-      final bypassList = SystemProxy.parseBypassRules(bypassRules);
+      final bypasses = SystemProxy.parseBypassRules(bypassRules);
       final pacScript = prefs.getSystemProxyPacScript();
 
       await SystemProxy.disable();
@@ -43,13 +51,13 @@ class SystemProxyManager {
       await SystemProxy.enable(
         host: proxyHost,
         port: _getHttpPort(),
-        bypassDomains: bypassList,
-        usePacMode: usePacMode,
+        bypassDomains: bypasses,
+        usePacMode: shouldUsePacMode,
         pacScript: pacScript,
       );
 
       _hasEnabledSystemProxy = true;
-      if (usePacMode) {
+      if (shouldUsePacMode) {
         Logger.info('系统代理已更新 (PAC 模式)');
       } else {
         Logger.info('系统代理已更新：$proxyHost:${_getHttpPort()}');
@@ -69,21 +77,22 @@ class SystemProxyManager {
     try {
       final prefs = ClashPreferences.instance;
       final proxyHost = prefs.getProxyHost();
-      final usePacMode = prefs.getSystemProxyPacMode();
+      final shouldUsePacMode = prefs.getSystemProxyPacMode();
       final bypassRules = prefs.getCurrentBypassRules();
-      final bypassList = SystemProxy.parseBypassRules(bypassRules);
+      final bypasses = SystemProxy.parseBypassRules(bypassRules);
       final pacScript = prefs.getSystemProxyPacScript();
 
       await SystemProxy.enable(
         host: proxyHost,
         port: _getHttpPort(),
-        bypassDomains: bypassList,
-        usePacMode: usePacMode,
+        bypassDomains: bypasses,
+        usePacMode: shouldUsePacMode,
         pacScript: pacScript,
       );
 
-      _systemProxyEnabled = true;
+      _isSystemProxyEnabled = true;
       _hasEnabledSystemProxy = true;
+      _onSystemProxyStateChanged?.call(true);
       _notifyListeners();
       return true;
     } catch (e) {
@@ -97,8 +106,9 @@ class SystemProxyManager {
     // 如果当前实例从未启用过系统代理，跳过禁用操作（多实例场景保护）
     if (!_hasEnabledSystemProxy) {
       Logger.debug('当前实例未启用过系统代理，跳过禁用操作');
-      if (_systemProxyEnabled) {
-        _systemProxyEnabled = false;
+      if (_isSystemProxyEnabled) {
+        _isSystemProxyEnabled = false;
+        _onSystemProxyStateChanged?.call(false);
         _notifyListeners();
       }
       return true;
@@ -106,8 +116,9 @@ class SystemProxyManager {
 
     try {
       await SystemProxy.disable();
-      _systemProxyEnabled = false;
+      _isSystemProxyEnabled = false;
       _hasEnabledSystemProxy = false;
+      _onSystemProxyStateChanged?.call(false);
       _notifyListeners();
       return true;
     } catch (e) {

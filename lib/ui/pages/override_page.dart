@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:stelliberty/clash/providers/override_provider.dart';
-import 'package:stelliberty/clash/data/override_model.dart';
+import 'package:stelliberty/clash/model/override_model.dart';
 import 'package:stelliberty/providers/content_provider.dart';
 import 'package:stelliberty/i18n/i18n.dart';
 import 'package:stelliberty/ui/widgets/file_editor_dialog.dart';
@@ -9,8 +9,9 @@ import 'package:stelliberty/ui/widgets/override/override_dialog.dart';
 import 'package:stelliberty/ui/widgets/override/override_card.dart';
 import 'package:stelliberty/ui/widgets/modern_toast.dart';
 import 'package:stelliberty/ui/widgets/confirm_dialog.dart';
-import 'package:stelliberty/utils/logger.dart';
+import 'package:stelliberty/services/log_print_service.dart';
 import 'package:stelliberty/ui/widgets/modern_tooltip.dart';
+import 'package:stelliberty/ui/common/modern_top_toolbar.dart';
 
 import 'package:stelliberty/ui/constants/spacing.dart';
 
@@ -22,10 +23,18 @@ class OverridePage extends StatefulWidget {
 }
 
 class _OverridePageState extends State<OverridePage> {
+  final ScrollController _scrollController = ScrollController();
+
   @override
   void initState() {
     super.initState();
     Logger.info('初始化 OverridePage');
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
   }
 
   @override
@@ -61,49 +70,17 @@ class _OverridePageState extends State<OverridePage> {
                   );
                 },
               ),
-              const SizedBox(width: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 6,
-                ),
-                decoration: BoxDecoration(
-                  color: colorScheme.primaryContainer,
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.rule,
-                      size: 16,
-                      color: colorScheme.onPrimaryContainer,
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      translate.kOverride.count.replaceAll(
-                        '{count}',
-                        provider.overrides.length.toString(),
-                      ),
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: colorScheme.onPrimaryContainer,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
               const Spacer(),
               FilledButton.icon(
                 onPressed: _showAddOverrideDialog,
                 icon: const Icon(Icons.add_circle, size: 18),
-                label: Text(translate.kOverride.addOverride),
+                label: Text(translate.kOverride.add_override),
                 style: FilledButton.styleFrom(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 16,
                     vertical: 10,
                   ),
+                  shape: modernTopToolbarButtonShape(),
                   textStyle: const TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w600,
@@ -131,13 +108,14 @@ class _OverridePageState extends State<OverridePage> {
                   label: Text(
                     provider.isBatchUpdatingOverrides
                         ? translate.kOverride.updating
-                        : translate.kOverride.updateAll,
+                        : translate.kOverride.update_all,
                   ),
                   style: FilledButton.styleFrom(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 16,
                       vertical: 10,
                     ),
+                    shape: modernTopToolbarButtonShape(),
                     textStyle: const TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w600,
@@ -152,8 +130,6 @@ class _OverridePageState extends State<OverridePage> {
   }
 
   Widget _buildContent() {
-    final scrollController = ScrollController();
-
     return Padding(
       padding: SpacingConstants.scrollbarPadding,
       child: Consumer<OverrideProvider>(
@@ -170,12 +146,12 @@ class _OverridePageState extends State<OverridePage> {
                   Icon(Icons.rule, size: 64, color: Colors.grey[400]),
                   const SizedBox(height: 16),
                   Text(
-                    translate.kOverride.emptyTitle,
+                    translate.kOverride.empty_title,
                     style: TextStyle(fontSize: 16, color: Colors.grey[600]),
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    translate.kOverride.emptyHint,
+                    translate.kOverride.empty_hint,
                     style: TextStyle(fontSize: 12, color: Colors.grey[500]),
                   ),
                 ],
@@ -184,9 +160,9 @@ class _OverridePageState extends State<OverridePage> {
           }
 
           return Scrollbar(
-            controller: scrollController,
+            controller: _scrollController,
             child: GridView.builder(
-              controller: scrollController,
+              controller: _scrollController,
               padding: const EdgeInsets.all(16),
               gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount: 2,
@@ -230,8 +206,7 @@ class _OverridePageState extends State<OverridePage> {
     if (result == null || !mounted) return;
 
     ModernToast.success(
-      context,
-      translate.kOverride.addSuccess.replaceAll('{name}', result.name),
+      translate.kOverride.add_success.replaceAll('{name}', result.name),
     );
   }
 
@@ -271,10 +246,10 @@ class _OverridePageState extends State<OverridePage> {
 
   Future<void> _deleteOverride(OverrideConfig override) async {
     final trans = context.translate;
-    final confirmed = await showConfirmDialog(
+    final isConfirmed = await showConfirmDialog(
       context: context,
-      title: translate.kOverride.confirmDelete,
-      message: translate.kOverride.confirmDeleteMessage.replaceAll(
+      title: translate.kOverride.confirm_delete,
+      message: translate.kOverride.confirm_delete_message.replaceAll(
         '{name}',
         override.name,
       ),
@@ -282,7 +257,7 @@ class _OverridePageState extends State<OverridePage> {
       isDanger: true,
     );
 
-    if (confirmed != true || !mounted) return;
+    if (isConfirmed != true || !mounted) return;
 
     await context.read<OverrideProvider>().deleteOverride(override.id);
   }
@@ -296,13 +271,12 @@ class _OverridePageState extends State<OverridePage> {
     if (!context.mounted) return;
 
     if (errors.isEmpty) {
-      ModernToast.success(context, translate.kOverride.updateAllSuccess);
+      ModernToast.success(translate.kOverride.update_all_success);
       return;
     }
 
     ModernToast.warning(
-      context,
-      translate.kOverride.updatePartialFailed.replaceAll(
+      translate.kOverride.update_partial_failed.replaceAll(
         '{errors}',
         errors.join('\n'),
       ),

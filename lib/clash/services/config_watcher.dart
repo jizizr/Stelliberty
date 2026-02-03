@@ -1,6 +1,6 @@
 import 'dart:io';
 import 'dart:async';
-import 'package:stelliberty/utils/logger.dart';
+import 'package:stelliberty/services/log_print_service.dart';
 
 // 配置文件监听服务
 // 监听配置文件变化并触发重载回调
@@ -8,7 +8,7 @@ class ConfigWatcher {
   File? _configFile;
   StreamSubscription<FileSystemEvent>? _watchSubscription;
   Timer? _debounceTimer;
-  DateTime? _lastModified;
+  DateTime? _lastModifiedAt;
 
   // 暂停标志：为 true 时忽略文件变化事件
   bool _isPaused = false;
@@ -39,7 +39,7 @@ class ConfigWatcher {
   // 更新最后修改时间
   Future<void> _updateLastModified() async {
     if (_configFile != null && await _configFile!.exists()) {
-      _lastModified = await _configFile!.lastModified();
+      _lastModifiedAt = await _configFile!.lastModified();
     }
   }
 
@@ -54,7 +54,7 @@ class ConfigWatcher {
       }
 
       // 记录初始修改时间
-      _lastModified = await _configFile!.lastModified();
+      _lastModifiedAt = await _configFile!.lastModified();
       Logger.info('开始监听配置文件：$configPath');
 
       // 监听配置文件所在目录
@@ -96,10 +96,10 @@ class ConfigWatcher {
       return;
     }
 
-    // 取消之前的定时器
+    // 取消定时器
     _debounceTimer?.cancel();
 
-    // 设置新的防抖定时器
+    // 设置防抖定时器
     _debounceTimer = Timer(Duration(milliseconds: debounceMs), () async {
       try {
         // 检查文件是否真的被修改（通过修改时间判断）
@@ -109,13 +109,13 @@ class ConfigWatcher {
         }
 
         final currentModified = await _configFile!.lastModified();
-        if (_lastModified != null &&
-            currentModified.isAtSameMomentAs(_lastModified!)) {
+        if (_lastModifiedAt != null &&
+            currentModified.isAtSameMomentAs(_lastModifiedAt!)) {
           // 修改时间没变，可能是误触发
           return;
         }
 
-        _lastModified = currentModified;
+        _lastModifiedAt = currentModified;
         Logger.info('检测到配置文件变化，准备重载…');
 
         // 触发重载回调

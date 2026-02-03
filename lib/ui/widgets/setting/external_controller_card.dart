@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:stelliberty/clash/providers/clash_provider.dart';
-import 'package:stelliberty/clash/storage/preferences.dart';
+import 'package:stelliberty/storage/clash_preferences.dart';
 import 'package:stelliberty/ui/common/modern_feature_card.dart';
 import 'package:stelliberty/ui/common/modern_switch.dart';
 import 'package:stelliberty/ui/common/modern_text_field.dart';
-import 'package:stelliberty/utils/logger.dart';
+import 'package:stelliberty/services/log_print_service.dart';
 import 'package:stelliberty/ui/widgets/modern_toast.dart';
 import 'package:stelliberty/i18n/i18n.dart';
 
@@ -65,13 +65,13 @@ class _ExternalControllerCardState extends State<ExternalControllerCard> {
     final secret = _secretController.text.trim();
 
     if (address.isEmpty) {
-      setState(() => _addressError = trans.externalController.addressError);
+      setState(() => _addressError = trans.external_controller.address_error);
       return;
     }
 
     if (!_validateAddress(address)) {
       setState(
-        () => _addressError = trans.externalController.addressFormatError,
+        () => _addressError = trans.external_controller.address_format_error,
       );
       return;
     }
@@ -84,14 +84,13 @@ class _ExternalControllerCardState extends State<ExternalControllerCard> {
       await prefs.setExternalControllerSecret(secret);
 
       if (mounted) {
-        ModernToast.success(context, trans.externalController.saveSuccess);
+        ModernToast.success(trans.external_controller.save_success);
       }
     } catch (e) {
       Logger.error('保存外部控制器配置失败: $e');
       if (mounted) {
         ModernToast.error(
-          context,
-          trans.externalController.saveFailed.replaceAll(
+          trans.external_controller.save_failed.replaceAll(
             '{error}',
             e.toString(),
           ),
@@ -118,29 +117,30 @@ class _ExternalControllerCardState extends State<ExternalControllerCard> {
         children: [
           // 标题区域
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              Row(
-                children: [
-                  const Icon(Icons.settings_remote_rounded),
-                  const SizedBox(
-                    width: ModernFeatureCardSpacing.featureIconToTextSpacing,
-                  ),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        trans.externalController.title,
-                        style: Theme.of(context).textTheme.titleMedium,
-                      ),
-                      Text(
-                        trans.externalController.description,
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                    ],
-                  ),
-                ],
+              const Icon(Icons.settings_remote_rounded),
+              const SizedBox(
+                width: ModernFeatureCardSpacing.featureIconToTextSpacing,
               ),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      trans.external_controller.title,
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    Text(
+                      trans.external_controller.description,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
               ModernSwitch(
                 value: _isEnabled,
                 onChanged: (value) async {
@@ -153,7 +153,7 @@ class _ExternalControllerCardState extends State<ExternalControllerCard> {
                     value,
                   );
                   if (!mounted) return;
-                  clashProvider.configService.setExternalController(_isEnabled);
+                  clashProvider.setExternalController(_isEnabled);
                 },
               ),
             ],
@@ -163,8 +163,8 @@ class _ExternalControllerCardState extends State<ExternalControllerCard> {
           ModernTextField(
             controller: _addressController,
             keyboardType: TextInputType.text,
-            labelText: trans.externalController.addressLabel,
-            hintText: trans.externalController.addressHint,
+            labelText: trans.external_controller.address_label,
+            hintText: trans.external_controller.address_hint,
             errorText: _addressError,
             minLines: 1,
           ),
@@ -173,8 +173,8 @@ class _ExternalControllerCardState extends State<ExternalControllerCard> {
           ModernTextField(
             controller: _secretController,
             keyboardType: TextInputType.text,
-            labelText: trans.externalController.secretLabel,
-            hintText: trans.externalController.secretHint,
+            labelText: trans.external_controller.secret_label,
+            hintText: trans.external_controller.secret_hint,
             errorText: _secretError,
             shouldObscureText: true,
             minLines: 1,
@@ -195,7 +195,7 @@ class _ExternalControllerCardState extends State<ExternalControllerCard> {
                     : const Icon(Icons.save, size: 18),
                 label: Text(
                   _isSaving
-                      ? trans.externalController.saving
+                      ? trans.external_controller.saving
                       : trans.common.save,
                 ),
               ),

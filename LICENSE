@@ -42,10 +42,12 @@ This project incorporates open-source software components. We are grateful to al
 - `window_manager` - Desktop window management
 - `tray_manager` - System tray integration
 - `screen_retriever` - Screen information retrieval
+- `hotkey_manager` - Global hotkey management
 - `bitsdojo_window` - Window customization
 - `rinf` - Flutter ↔ Rust interop framework
 - `shared_preferences` - Local key-value storage
 - `tuple` - Tuple data structures
+- `synchronized` - Synchronization helpers
 - `meta` - Metadata annotations
 - `slang` - Internationalization framework
 - `slang_flutter` - Slang Flutter integration
@@ -63,6 +65,10 @@ This project incorporates open-source software components. We are grateful to al
 - `reorderable_grid_view` - Drag-sortable grid view
 - `intl` - Internationalization utilities
 - `gpt_markdown` - Markdown rendering
+- `cached_network_image` - Network image caching
+- `flutter_cache_manager` - Cache manager for files
+- `open_filex` - Open files with system handlers
+- `qr_flutter` - QR code rendering
 
 #### Development Dependencies
 - `flutter_lints` - Recommended lints for Flutter
@@ -133,6 +139,7 @@ Full license text: https://www.apache.org/licenses/LICENSE-2.0
 - `serde` - Serialization framework (with derive)
 - `serde_json` - JSON serialization
 - `serde_yaml_ng` - YAML serialization
+- `rquickjs` - JavaScript engine
 - `anyhow` - Error handling
 - `thiserror` - Error derive macros
 
@@ -150,11 +157,11 @@ Full license text: https://www.apache.org/licenses/LICENSE-2.0
 - `urlencoding` - URL encoding
 
 #### System Integration
-- `command-group` - Process group management
 - `network-interface` - Network interface info
 - `sysinfo` - System information
 - `dirs` - Standard directory paths
 - `auto-launch` - Auto-start functionality
+- `crossterm` - Terminal input/output
 
 #### Utilities
 - `log` - Logging facade
@@ -165,7 +172,6 @@ Full license text: https://www.apache.org/licenses/LICENSE-2.0
 - `regex` - Regular expressions
 - `base64` - Base64 encoding
 - `encoding_rs` - Text encoding conversion
-- `messages` - Message passing
 - `webbrowser` - Web browser integration
 - `zip` - ZIP archive support
 - `flate2` - Compression library
@@ -174,16 +180,14 @@ Full license text: https://www.apache.org/licenses/LICENSE-2.0
 
 #### Windows (MIT/Apache-2.0)
 - `windows` - Windows API bindings
-- `windows-sys` - Windows system bindings
-- `winapi` - Windows API (legacy)
 - `windows-service` - Windows service framework
+
+#### Android (MIT)
+- `android_logger` - Android logging
 
 #### Unix/Linux (MIT)
 - `nix` - Unix system API
-
-### BSD-3-Clause License
-
-- `boa_engine` - ECMAScript (JavaScript) engine
+- `libc` - C standard library bindings
 
 ---
 
@@ -262,7 +266,7 @@ We extend our sincere gratitude to all open-source contributors and maintainers.
 
 | Field | Value |
 |-------|-------|
-| **Last Updated** | 2025-12-22 |
+| **Last Updated** | 2026-01-23 |
 | **License Version** | 1.0 |
 | **Total Dependencies** | 70+ packages |
 | **Primary Licenses** | MIT, Apache-2.0, BSD-3-Clause |

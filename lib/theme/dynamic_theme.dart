@@ -8,21 +8,16 @@ import 'package:stelliberty/providers/window_effect_provider.dart';
 import 'package:stelliberty/ui/widgets/modern_toast.dart';
 import 'package:stelliberty/i18n/i18n.dart';
 
-// 动态主题应用根组件,监听主题状态变更并重建 MaterialApp
-// 将主题传播到整个组件树
+// 动态主题应用根组件
 class DynamicThemeApp extends StatelessWidget {
-  // 应用程序主入口组件
   final Widget home;
 
   const DynamicThemeApp({super.key, required this.home});
 
-  // 基于响应式主题状态构建 MaterialApp
-  // 作为主题状态与 UI 之间的桥梁,确保视觉主题实时更新
   @override
   Widget build(BuildContext context) {
     return Consumer2<ThemeProvider, WindowEffectProvider>(
       builder: (context, themeProvider, windowEffectProvider, _) {
-        // 使用 SystemThemeBuilder 获取系统强调色
         return SystemThemeBuilder(
           builder: (context, accent) {
             return MaterialApp(
@@ -31,33 +26,22 @@ class DynamicThemeApp extends StatelessWidget {
               supportedLocales: AppLocaleUtils.supportedLocales,
               localizationsDelegates: GlobalMaterialLocalizations.delegates,
               debugShowCheckedModeBanner: false,
-              theme: ThemeData(
-                colorScheme: themeProvider.lightColorScheme,
-                scaffoldBackgroundColor:
-                    windowEffectProvider.windowEffectBackgroundColor,
-                useMaterial3: true,
-                textTheme: GoogleFonts.notoSansScTextTheme(
-                  ThemeData.light().textTheme,
-                ),
+              theme: _buildThemeData(
+                themeProvider.lightColorScheme,
+                windowEffectProvider.windowEffectBackgroundColor,
               ),
-              darkTheme: ThemeData(
-                colorScheme: themeProvider.darkColorScheme,
-                scaffoldBackgroundColor:
-                    windowEffectProvider.windowEffectBackgroundColor,
-                useMaterial3: true,
-                textTheme: GoogleFonts.notoSansScTextTheme(
-                  ThemeData.dark().textTheme,
-                ),
+              darkTheme: _buildThemeData(
+                themeProvider.darkColorScheme,
+                windowEffectProvider.windowEffectBackgroundColor,
               ),
               themeMode: themeProvider.themeMode.toThemeMode(),
               home: Builder(
                 builder: (context) {
-                  // 此 context 位于 MaterialApp 内部,可获取正确的主题亮度
-                  WidgetsBinding.instance.addPostFrameCallback((_) {
-                    final brightness = Theme.of(context).brightness;
-                    themeProvider.updateBrightness(brightness);
-                    windowEffectProvider.updateBrightness(brightness);
-                  });
+                  _scheduleBrightnessUpdate(
+                    context,
+                    themeProvider,
+                    windowEffectProvider,
+                  );
                   return home;
                 },
               ),
@@ -66,5 +50,33 @@ class DynamicThemeApp extends StatelessWidget {
         );
       },
     );
+  }
+
+  ThemeData _buildThemeData(
+    ColorScheme colorScheme,
+    Color? scaffoldBackgroundColor,
+  ) {
+    return ThemeData(
+      colorScheme: colorScheme,
+      scaffoldBackgroundColor: scaffoldBackgroundColor,
+      useMaterial3: true,
+      textTheme: GoogleFonts.notoSansScTextTheme(
+        colorScheme.brightness == Brightness.dark
+            ? ThemeData.dark().textTheme
+            : ThemeData.light().textTheme,
+      ),
+    );
+  }
+
+  void _scheduleBrightnessUpdate(
+    BuildContext context,
+    ThemeProvider themeProvider,
+    WindowEffectProvider windowEffectProvider,
+  ) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final brightness = Theme.of(context).brightness;
+      themeProvider.updateBrightness(brightness);
+      windowEffectProvider.updateBrightness(brightness);
+    });
   }
 }

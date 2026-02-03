@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
 
-// 统一的下拉按钮组件
-//
-// 提供一致的外观和交互效果，用于所有下拉菜单的触发按钮
-// 采用 Windows 11 风格的透明遮罩设计
+// 统一的下拉按钮组件：用于触发下拉菜单。
+// 提供一致的外观与交互反馈。
 class CustomDropdownButton extends StatelessWidget {
   final String text;
   final bool isHovering;

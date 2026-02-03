@@ -5,10 +5,10 @@ import 'package:stelliberty/ui/common/modern_dropdown_menu.dart';
 import 'package:stelliberty/ui/common/modern_text_field.dart';
 import 'package:stelliberty/ui/common/modern_switch.dart';
 import 'package:stelliberty/ui/widgets/modern_multiline_text_field.dart';
-import 'package:stelliberty/ui/notifiers/system_proxy_notifier.dart';
+import 'package:stelliberty/ui/viewmodels/system_proxy_viewmodel.dart';
 import 'package:stelliberty/ui/widgets/modern_toast.dart';
 import 'package:stelliberty/i18n/i18n.dart';
-import 'package:stelliberty/utils/logger.dart';
+import 'package:stelliberty/services/log_print_service.dart';
 
 // 系统代理配置卡片
 class SystemProxyCard extends StatefulWidget {
@@ -19,13 +19,13 @@ class SystemProxyCard extends StatefulWidget {
 }
 
 class _SystemProxyCardState extends State<SystemProxyCard> {
-  late SystemProxyNotifier _viewModel;
+  late SystemProxyViewModel _viewModel;
   bool _isSaving = false;
 
   @override
   void initState() {
     super.initState();
-    _viewModel = SystemProxyNotifier();
+    _viewModel = SystemProxyViewModel();
   }
 
   @override
@@ -37,13 +37,13 @@ class _SystemProxyCardState extends State<SystemProxyCard> {
   String _getBypassHelperText() {
     final trans = context.translate;
     if (Platform.isWindows) {
-      return trans.systemProxy.bypassHelper;
+      return trans.system_proxy.bypass_helper;
     } else if (Platform.isLinux) {
-      return trans.systemProxy.bypassHelperLinux;
+      return trans.system_proxy.bypass_helper_linux;
     } else if (Platform.isMacOS) {
-      return trans.systemProxy.bypassHelperMac;
+      return trans.system_proxy.bypass_helper_mac;
     } else {
-      return trans.systemProxy.bypassHelper;
+      return trans.system_proxy.bypass_helper;
     }
   }
 
@@ -58,14 +58,13 @@ class _SystemProxyCardState extends State<SystemProxyCard> {
       await _viewModel.saveConfig();
 
       if (mounted) {
-        ModernToast.success(context, trans.systemProxy.saveSuccess);
+        ModernToast.success(trans.system_proxy.save_success);
       }
     } catch (e) {
       Logger.error('保存系统代理配置失败: $e');
       if (mounted) {
         ModernToast.error(
-          context,
-          trans.systemProxy.saveFailed.replaceAll('{error}', e.toString()),
+          trans.system_proxy.save_failed.replaceAll('{error}', e.toString()),
         );
       }
     } finally {
@@ -102,7 +101,7 @@ class _SystemProxyCardState extends State<SystemProxyCard> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        trans.systemProxy.configTitle,
+                        trans.system_proxy.config_title,
                         style: Theme.of(context).textTheme.titleMedium,
                       ),
                     ],
@@ -191,9 +190,9 @@ class _SystemProxyCardState extends State<SystemProxyCard> {
         itemToString: (host) => host,
         child: ModernTextField(
           controller: _viewModel.proxyHostController,
-          labelText: trans.systemProxy.proxyHost,
-          hintText: trans.systemProxy.proxyHostHint,
-          helperText: trans.systemProxy.proxyHostHelper,
+          labelText: trans.system_proxy.proxy_host,
+          hintText: trans.system_proxy.proxy_host_hint,
+          helperText: trans.system_proxy.proxy_host_helper,
           shouldShowDropdownIcon: true,
           minLines: 1,
         ),
@@ -208,12 +207,12 @@ class _SystemProxyCardState extends State<SystemProxyCard> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  trans.systemProxy.pacMode,
+                  trans.system_proxy.pac_mode,
                   style: theme.textTheme.titleSmall,
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  trans.systemProxy.pacModeDesc,
+                  trans.system_proxy.pac_mode_desc,
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: theme.colorScheme.onSurfaceVariant,
                   ),
@@ -240,12 +239,12 @@ class _SystemProxyCardState extends State<SystemProxyCard> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    trans.systemProxy.useDefaultBypass,
+                    trans.system_proxy.use_default_bypass,
                     style: theme.textTheme.titleSmall,
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    trans.systemProxy.useDefaultBypassDesc,
+                    trans.system_proxy.use_default_bypass_desc,
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: theme.colorScheme.onSurfaceVariant,
                     ),
@@ -265,7 +264,7 @@ class _SystemProxyCardState extends State<SystemProxyCard> {
         // 绕过地址编辑器
         ModernMultilineTextField(
           controller: _viewModel.bypassController,
-          labelText: trans.systemProxy.bypassLabel,
+          labelText: trans.system_proxy.bypass_label,
           helperText: _getBypassHelperText(),
           height: 120,
           enabled: !_viewModel.useDefaultBypass,
@@ -280,14 +279,14 @@ class _SystemProxyCardState extends State<SystemProxyCard> {
       ] else ...[
         // PAC 脚本标签
         Text(
-          trans.systemProxy.pacScriptLabel,
+          trans.system_proxy.pac_script_label,
           style: theme.textTheme.titleSmall,
         ),
         const SizedBox(height: 8),
         // PAC 脚本编辑器
         ModernMultilineTextField(
           controller: _viewModel.pacScriptController,
-          helperText: trans.systemProxy.pacScriptHelper,
+          helperText: trans.system_proxy.pac_script_helper,
           height: 250,
           contentPadding: const EdgeInsets.only(
             left: 10,
@@ -302,7 +301,7 @@ class _SystemProxyCardState extends State<SystemProxyCard> {
         TextButton.icon(
           onPressed: _viewModel.restoreDefaultPacScript,
           icon: const Icon(Icons.restart_alt, size: 18),
-          label: Text(trans.clashFeatures.testUrl.restoreDefault),
+          label: Text(trans.clash_features.test_url.restore_default),
         ),
       ],
 
@@ -322,7 +321,7 @@ class _SystemProxyCardState extends State<SystemProxyCard> {
                   )
                 : const Icon(Icons.save, size: 18),
             label: Text(
-              _isSaving ? trans.systemProxy.saving : trans.common.save,
+              _isSaving ? trans.system_proxy.saving : trans.common.save,
             ),
           ),
         ],

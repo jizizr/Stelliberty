@@ -1,39 +1,203 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter/widgets.dart';
-import 'package:stelliberty/clash/manager/manager.dart';
-import 'package:stelliberty/clash/data/clash_model.dart';
-import 'package:stelliberty/clash/data/traffic_data_model.dart';
-import 'package:stelliberty/clash/storage/preferences.dart';
+import 'package:stelliberty/clash/manager/clash_manager.dart';
+import 'package:stelliberty/clash/client/clash_core_client.dart';
+import 'package:stelliberty/clash/state/core_states.dart';
+import 'package:stelliberty/clash/state/config_states.dart';
+import 'package:stelliberty/clash/model/clash_model.dart';
+import 'package:stelliberty/clash/model/traffic_data_model.dart';
+import 'package:stelliberty/storage/clash_preferences.dart';
 import 'package:stelliberty/clash/config/clash_defaults.dart';
-import 'package:stelliberty/utils/logger.dart';
-import 'package:stelliberty/clash/utils/config_parser.dart';
+import 'package:stelliberty/services/log_print_service.dart';
+import 'package:stelliberty/clash/services/vpn_service.dart';
 import 'package:stelliberty/clash/services/config_watcher.dart';
-import 'package:stelliberty/clash/services/config_management_service.dart';
-import 'package:stelliberty/clash/services/delay_test_service.dart';
+import 'package:stelliberty/clash/state/access_control_states.dart';
 import 'package:stelliberty/src/bindings/signals/signals.dart' as signals;
 
-// Clash 状态 Provider
-// 管理 Clash 的运行状态、代理列表等
-//
-// 注意：使用 ClashManager 单例实例，确保全局只有一个 Clash 进程
+// Clash 状态管理：通过 ClashManager 单例维护全局核心状态。
+// 向 UI 暴露可观察状态与常用操作。
 class ClashProvider extends ChangeNotifier with WidgetsBindingObserver {
-  // 使用 ClashManager 单例实例
   ClashManager get _clashManager => ClashManager.instance;
 
-  // 配置管理服务
-  late final ConfigManagementService _configService;
-
-  // 公开 ClashManager 用于外部访问
+  // ClashManager 实例
   ClashManager get clashManager => _clashManager;
 
-  // 公开配置管理服务供 UI 层使用
-  ConfigManagementService get configService => _configService;
+  // 核心状态
+  CoreState _coreState = CoreState.stopped;
+  CoreState get coreState => _coreState;
+  DateTime? _coreStartedAt;
+  DateTime? get coreStartedAt => _coreStartedAt;
 
-  // 运行状态
-  bool get isCoreRunning => _clashManager.isCoreRunning;
+  String _coreVersion = 'Unknown';
+  String get coreVersion => _coreVersion;
 
-  // 当前出站模式
-  String get outboundMode => _clashManager.outboundMode;
+  String? _currentConfigPath;
+  String? get currentConfigPath => _currentConfigPath;
+
+  ClashStartMode? _currentStartMode;
+  ClashStartMode? get currentStartMode => _currentStartMode;
+
+  // 系统代理状态
+  bool _isSystemProxyEnabled = false;
+  bool get isSystemProxyEnabled => _isSystemProxyEnabled;
+
+  void _updateSystemProxyState(bool enabled) {
+    if (_isSystemProxyEnabled == enabled) return;
+
+    _isSystemProxyEnabled = enabled;
+    Logger.debug('系统代理状态更新：$enabled');
+    notifyListeners();
+  }
+
+  // Android VPN 状态（仅 Android 使用）
+  bool _isAndroidVpnEnabled = false;
+  bool get isAndroidVpnEnabled => _isAndroidVpnEnabled;
+
+  DateTime? _androidVpnStartedAt;
+  DateTime? get androidVpnStartedAt => _androidVpnStartedAt;
+
+  // Android 核心状态（仅 Android 使用）
+  bool _isAndroidCoreRunning = false;
+  bool get isAndroidCoreRunning => _isAndroidCoreRunning;
+
+  DateTime? _androidCoreStartedAt;
+  DateTime? get androidCoreStartedAt => _androidCoreStartedAt;
+
+  void _updateAndroidVpnState(bool enabled) {
+    if (_isAndroidVpnEnabled == enabled) {
+      if (enabled && _androidVpnStartedAt == null) {
+        _androidVpnStartedAt = DateTime.now();
+        Logger.debug(
+          'Android VPN 启动时间补齐：${_androidVpnStartedAt!.toIso8601String()}',
+        );
+        notifyListeners();
+      }
+      return;
+    }
+
+    _isAndroidVpnEnabled = enabled;
+    if (enabled) {
+      _androidVpnStartedAt = DateTime.now();
+    } else {
+      _androidVpnStartedAt = null;
+    }
+    Logger.debug('Android VPN 状态更新：$enabled');
+    notifyListeners();
+  }
+
+  void _updateAndroidCoreState({
+    required bool isRunning,
+    required String version,
+    required DateTime? startedAt,
+  }) {
+    final resolvedStartedAt = isRunning ? startedAt : null;
+    final shouldNotify =
+        _isAndroidCoreRunning != isRunning ||
+        _androidCoreStartedAt != resolvedStartedAt ||
+        _coreVersion != version;
+
+    _isAndroidCoreRunning = isRunning;
+    _androidCoreStartedAt = resolvedStartedAt;
+    _coreVersion = version;
+
+    if (shouldNotify) {
+      notifyListeners();
+    }
+  }
+
+  // 配置状态
+  ConfigState _configState = const ConfigState();
+  ConfigState get configState => _configState;
+
+  // 从持久化刷新配置状态
+  void refreshConfigState() {
+    _configState = ConfigState.fromPreferences(ClashPreferences.instance);
+    Logger.debug('配置状态已从持久化刷新');
+    notifyListeners();
+  }
+
+  // 内部同步配置状态
+  void _syncConfigFromManager() {
+    _configState = ConfigState.fromPreferences(ClashPreferences.instance);
+    Logger.debug('配置状态已从持久化同步');
+  }
+
+  bool get isAllowLanEnabled => _configState.isAllowLanEnabled;
+  bool get isIpv6Enabled => _configState.isIpv6Enabled;
+  bool get isTcpConcurrentEnabled => _configState.isTcpConcurrentEnabled;
+  bool get isUnifiedDelayEnabled => _configState.isUnifiedDelayEnabled;
+  String get geodataLoader => _configState.geodataLoader;
+  String get findProcessMode => _configState.findProcessMode;
+  String get clashCoreLogLevel => _configState.clashCoreLogLevel;
+  String get externalController => _configState.externalController;
+  bool get isExternalControllerEnabled =>
+      _configState.isExternalControllerEnabled;
+  String get testUrl => _configState.testUrl;
+  String get outboundMode => _configState.outboundMode;
+  bool get isTunEnabled => _configState.isTunEnabled;
+  String get tunStack => _configState.tunStack;
+  String get tunDevice => _configState.tunDevice;
+  bool get isTunAutoRouteEnabled => _configState.isTunAutoRouteEnabled;
+  bool get isTunAutoRedirectEnabled => _configState.isTunAutoRedirectEnabled;
+  bool get isTunAutoDetectInterfaceEnabled =>
+      _configState.isTunAutoDetectInterfaceEnabled;
+  List<String> get tunDnsHijacks => _configState.tunDnsHijacks;
+  bool get isTunStrictRouteEnabled => _configState.isTunStrictRouteEnabled;
+  List<String> get tunRouteExcludeAddresses =>
+      _configState.tunRouteExcludeAddresses;
+  bool get isTunIcmpForwardingDisabled =>
+      _configState.isTunIcmpForwardingDisabled;
+  int get tunMtu => _configState.tunMtu;
+  int get mixedPort => _configState.mixedPort;
+  int? get socksPort => _configState.socksPort;
+  int? get httpPort => _configState.httpPort;
+
+  // 运行状态（基于 CoreState，Android 使用独立状态）
+  bool get isCoreRunning =>
+      Platform.isAndroid ? _isAndroidCoreRunning : _coreState.isRunning;
+  bool get isCoreRestarting => _coreState == CoreState.restarting;
+  bool get isCoreStarting => _coreState == CoreState.starting;
+  bool get isCoreStopping => _coreState == CoreState.stopping;
+
+  // 更新核心状态
+  void _updateCoreState(CoreState nextState) {
+    if (_coreState == nextState) return;
+
+    final wasRunning = _coreState.isRunning;
+    _coreState = nextState;
+
+    if (!wasRunning && nextState.isRunning) {
+      _coreStartedAt = DateTime.now();
+    } else if (wasRunning && !nextState.isRunning) {
+      _coreStartedAt = null;
+    }
+
+    // 核心启动成功后，刷新配置状态
+    if (nextState == CoreState.running) {
+      _syncConfigFromManager();
+    }
+
+    notifyListeners();
+  }
+
+  // 更新核心版本
+  void _updateCoreVersion(String version) {
+    if (_coreVersion == version) return;
+
+    _coreVersion = version;
+    notifyListeners();
+  }
+
+  // 更新当前配置路径
+  void _updateCurrentConfigPath(String? configPath) {
+    if (_currentConfigPath == configPath) return;
+
+    _currentConfigPath = configPath;
+    notifyListeners();
+  }
+
+  // 其他状态
 
   // 流量数据流（转发自 ClashManager）
   Stream<TrafficData>? get trafficStream => _clashManager.trafficStream;
@@ -45,16 +209,18 @@ class ClashProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   // 可见的代理组列表（缓存）
   List<ProxyGroup>? _cachedProxyGroups;
+  // 缓存对应的出站模式，避免模式切换后复用旧列表
+  String? _cachedProxyGroupsMode;
 
   // 可见的代理组列表（根据出站模式过滤）
   List<ProxyGroup> get proxyGroups {
+    final outboundMode = _configState.outboundMode;
     // 如果缓存存在，直接返回
-    if (_cachedProxyGroups != null) {
+    if (_cachedProxyGroups != null && _cachedProxyGroupsMode == outboundMode) {
       return _cachedProxyGroups!;
     }
 
-    // 获取当前出站模式
-    final outboundMode = _clashManager.outboundMode;
+    _cachedProxyGroupsMode = outboundMode;
 
     // 根据模式过滤代理组
     _cachedProxyGroups = switch (outboundMode) {
@@ -76,6 +242,7 @@ class ClashProvider extends ChangeNotifier with WidgetsBindingObserver {
   // 清除缓存（在数据变化时调用）
   void _invalidateCache() {
     _cachedProxyGroups = null;
+    _cachedProxyGroupsMode = null;
   }
 
   // 所有代理节点
@@ -101,7 +268,7 @@ class ClashProvider extends ChangeNotifier with WidgetsBindingObserver {
   bool get isBatchTestingDelay => _isBatchTestingDelay;
 
   // UI 更新节流：记录上次通知时间
-  DateTime? _lastNotifyTime;
+  DateTime? _lastNotifiedAt;
   // UI 更新节流间隔（毫秒）
   static const int _notifyThrottleMs = 100;
 
@@ -110,10 +277,14 @@ class ClashProvider extends ChangeNotifier with WidgetsBindingObserver {
   // 延迟值保留时长（5 分钟）
   static const Duration _delayRetentionDuration = Duration(minutes: 5);
 
-  // selectedMap 内存缓存：记录每个代理组当前选中的节点
-  final Map<String, String> _selectedMap = {};
+  // 批量延迟测试信号订阅（防止泄漏）
+  StreamSubscription? _progressSubscription;
+  StreamSubscription? _completeSubscription;
 
-  Map<String, String> get selectedMap => _selectedMap;
+  // selections 内存缓存：记录每个代理组当前选中的节点
+  final Map<String, String> _selections = {};
+
+  Map<String, String> get selections => _selections;
 
   String? _selectedGroupName;
   String? get selectedGroupName => _selectedGroupName;
@@ -148,12 +319,9 @@ class ClashProvider extends ChangeNotifier with WidgetsBindingObserver {
         lowerType == 'fallback';
   }
 
-  // 检查是否为 IPC 未就绪错误
-  // 这类错误在 Clash 启动期间或系统唤醒后是正常的临时状态
+  // 判断 IPC 未就绪错误（启动期间或系统唤醒后的短暂状态）。
   static bool _isIpcNotReadyError(String errorMessage) {
-    // Windows: os error 2 (系统找不到指定的文件)
-    // Linux: os error 111 (ECONNREFUSED)
-    // macOS: os error 61 (ECONNREFUSED)
+    // Windows：os error 2；Linux：os error 111；macOS：os error 61。
     return errorMessage.contains('os error 2') ||
         errorMessage.contains('os error 111') ||
         errorMessage.contains('os error 61') ||
@@ -164,95 +332,175 @@ class ClashProvider extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   ClashProvider() {
-    // 初始化服务类
-    _configService = ConfigManagementService(_clashManager);
+    // 初始同步配置状态（从 ConfigManager 拉取）
+    _syncConfigFromManager();
 
-    // 监听 ClashManager 的变化
-    _clashManager.addListener(_onClashManagerChanged);
+    // 注入核心运行状态回调（统一两端状态来源）
+    _clashManager.setCoreRunningProvider(() => isCoreRunning);
+
+    // 设置状态变化回调（从各个 Manager 同步状态到 Provider）
+    _clashManager.setStateChangeCallbacks(
+      onCoreStateChanged: _updateCoreState,
+      onCoreVersionChanged: _updateCoreVersion,
+      onConfigPathChanged: _updateCurrentConfigPath,
+      onStartModeChanged: (mode) {
+        if (_currentStartMode != mode) {
+          _currentStartMode = mode;
+          notifyListeners();
+        }
+      },
+      onSystemProxyStateChanged: _updateSystemProxyState,
+      onConfigChanged: refreshConfigState,
+    );
+
+    // Provider 在调用 Manager 方法后手动通知
 
     // 注册应用生命周期监听
     WidgetsBinding.instance.addObserver(this);
   }
 
-  // 初始化（加载配置文件中的代理信息）
+  // 初始化
   Future<void> initialize(String? configPath) async {
-    if (configPath == null || configPath.isEmpty) {
-      Logger.info('没有可用的配置文件，ClashProvider 初始化完成（空状态）');
-      return;
+    if (Platform.isAndroid) {
+      await refreshAndroidVpnState();
+      await _initializeAndroidCore(configPath);
     }
-
-    Logger.info('ClashProvider 初始化：加载配置文件 $configPath');
-    await _loadProxiesFromConfig(configPath);
+    Logger.info('ClashProvider 初始化完成');
   }
 
-  // 从配置文件加载代理信息（用于未启动时显示）
-  // [configPath] 配置文件路径
-  // [restoreSelections] 是否恢复已保存的节点选择（默认 true）
-  Future<void> _loadProxiesFromConfig([
-    String? configPath,
-    bool restoreSelections = true,
-  ]) async {
-    if (configPath == null || configPath.isEmpty) {
-      Logger.warning('未提供配置文件路径，跳过加载');
-      return;
-    }
-
-    Logger.debug('开始从配置文件加载代理信息: $configPath');
+  // 刷新 Android VPN 状态
+  Future<void> refreshAndroidVpnState() async {
+    if (!Platform.isAndroid) return;
 
     try {
-      // 从文件系统加载配置文件
-      final config = await ConfigParser.loadConfigFromFile(configPath);
-      final parsedConfig = ConfigParser.parseConfig(config);
-
-      // 更新代理节点和代理组
-      _proxyNodes = parsedConfig.proxyNodes;
-      _proxyNodesUpdateCount++;
-      _allProxyGroups = parsedConfig.proxyGroups;
-      _invalidateCache();
-
-      // 恢复已保存的节点选择（如果需要）
-      if (restoreSelections) {
-        await _restoreProxySelections();
-      }
-
-      // 默认选中第一个可见的代理组
-      if (_selectedGroupName == null && proxyGroups.isNotEmpty) {
-        _selectedGroupName = proxyGroups.first.name;
-      }
-
-      // 清除之前的错误信息（成功加载后应该清除错误状态）
-      _errorMessage = null;
-
-      Logger.debug(
-        '从配置文件加载了 ${_allProxyGroups.length} 个代理组和 ${_proxyNodes.length} 个代理节点',
-      );
-      notifyListeners();
+      final enabled = await VpnService.getVpnState();
+      _updateAndroidVpnState(enabled);
     } catch (e) {
-      final errorMsg = e.toString();
-
-      // 检查是否为 IPC 相关错误（正常情况下不应该发生，因为这是从文件加载）
-      final isIpcError = _isIpcNotReadyError(errorMsg);
-
-      // 从配置文件加载时的 IPC 错误不应该向 UI 传递（这不是用户配置文件的问题）
-      if (!isIpcError) {
-        _errorMessage = '从配置文件加载代理信息失败：$e';
-        notifyListeners();
-      }
-      Logger.error('从配置文件加载代理信息失败：$e');
+      Logger.error('获取 Android VPN 状态失败：$e');
     }
   }
 
-  // 公共方法：从订阅配置文件加载代理信息（用于预览模式）
-  // 预览模式下不恢复节点选择，因为 Clash 还未加载该配置
-  Future<void> loadProxiesFromSubscription(String configPath) async {
-    await _loadProxiesFromConfig(configPath, false);
+  Future<void> _initializeAndroidCore(String? configPath) async {
+    try {
+      final result = await VpnService.initCore(configPath: configPath);
+      final isSuccessful = result?['isSuccessful'] == true;
+
+      final rawVersion = result?['version'];
+      final version = rawVersion is String && rawVersion.trim().isNotEmpty
+          ? rawVersion.trim()
+          : 'Unknown';
+
+      final rawStartedAtMs = result?['startedAtMs'];
+      final startedAt = rawStartedAtMs is int
+          ? DateTime.fromMillisecondsSinceEpoch(rawStartedAtMs)
+          : null;
+
+      _updateAndroidCoreState(
+        isRunning: isSuccessful,
+        version: version,
+        startedAt: startedAt,
+      );
+
+      if (isSuccessful) {
+        // 启动日志监控（通过 Manager 协调）
+        await _clashManager.startLogMonitoring();
+
+        // 设置 JniCoreClient 的配置路径（用于 getConfig 等方法）
+        if (configPath != null) {
+          ClashCoreClient.setConfigPath(configPath);
+        }
+        // 从核心加载代理列表
+        await loadProxies();
+      }
+
+      Logger.info(
+        'Android 核心初始化结果：success=$isSuccessful version=$version startedAt=${startedAt?.toIso8601String() ?? "null"}',
+      );
+    } catch (e) {
+      Logger.error('初始化 Android 核心失败：$e');
+      _updateAndroidCoreState(
+        isRunning: false,
+        version: 'Unknown',
+        startedAt: null,
+      );
+    }
   }
 
-  // ClashManager 状态变化时触发
-  void _onClashManagerChanged() {
-    // 清除缓存，因为模式可能已变化
-    _invalidateCache();
-    notifyListeners();
+  // 启动 Android VPN（可选传入订阅配置路径，空则使用内置最小配置）
+  Future<bool> startAndroidVpn({
+    required String? configPath,
+    AccessControlConfig? accessControl,
+  }) async {
+    if (!Platform.isAndroid) return false;
+
+    try {
+      Logger.info('启动 Android VPN');
+      final requested = await VpnService.startVpn(
+        configPath: configPath,
+        accessControl: accessControl,
+      );
+      if (!requested) {
+        _updateAndroidVpnState(false);
+        return false;
+      }
+
+      final isRunning = await _waitForAndroidVpnState(
+        expectedEnabled: true,
+        timeout: const Duration(seconds: 10),
+      );
+      _updateAndroidVpnState(isRunning);
+      if (isRunning) {
+        await _initializeAndroidCore(configPath);
+        // 启动后从核心加载代理列表
+        Logger.info('Android VPN 已启动，从核心加载代理列表');
+        await loadProxies();
+      }
+      return isRunning;
+    } catch (e) {
+      Logger.error('启动 Android VPN 失败：$e');
+      return false;
+    }
+  }
+
+  // 停止 Android VPN
+  Future<bool> stopAndroidVpn() async {
+    if (!Platform.isAndroid) return false;
+
+    try {
+      Logger.info('停止 Android VPN');
+
+      final requested = await VpnService.stopVpn();
+      if (!requested) {
+        return false;
+      }
+
+      final isStopped = await _waitForAndroidVpnState(
+        expectedEnabled: false,
+        timeout: const Duration(seconds: 10),
+      );
+      _updateAndroidVpnState(!isStopped);
+      return isStopped;
+    } catch (e) {
+      Logger.error('停止 Android VPN 失败：$e');
+      return false;
+    }
+  }
+
+  Future<bool> _waitForAndroidVpnState({
+    required bool expectedEnabled,
+    required Duration timeout,
+  }) async {
+    final stopwatch = Stopwatch()..start();
+
+    while (stopwatch.elapsed < timeout) {
+      final enabled = await VpnService.getVpnState();
+      if (enabled == expectedEnabled) {
+        return true;
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+    }
+
+    return false;
   }
 
   // 应用生命周期状态变化时触发
@@ -262,8 +510,13 @@ class ClashProvider extends ChangeNotifier with WidgetsBindingObserver {
 
     // 当应用从后台恢复时，刷新代理状态以同步外部控制器的节点切换
     if (state == AppLifecycleState.resumed) {
+      if (Platform.isAndroid) {
+        unawaited(refreshAndroidVpnState());
+      }
       Logger.debug('应用恢复，刷新代理数据（全局）');
       if (isCoreRunning) {
+        // 刷新配置状态
+        refreshConfigState();
         // 刷新代理状态以同步外部控制器的节点切换
         refreshProxiesFromClash();
       }
@@ -302,11 +555,17 @@ class ClashProvider extends ChangeNotifier with WidgetsBindingObserver {
         Logger.info('Clash 已启动，从 API 重新加载代理列表');
         await loadProxies();
 
-        // 如果启用了配置重载且指定了配置文件路径，启动配置文件监听
+        // 获取实际使用的配置路径（可能因回退而与传入的 configPath 不同）
+        // 通过回调已经同步到 _currentConfigPath
+        final actualConfigPath = _currentConfigPath;
+
+        // 如果启用了配置重载且实际使用了配置文件（非默认配置），启动配置文件监听
         if (_isConfigReloadEnabled &&
-            configPath != null &&
-            configPath.isNotEmpty) {
-          await _startConfigWatcher(configPath);
+            actualConfigPath != null &&
+            actualConfigPath.isNotEmpty) {
+          await _startConfigWatcher(actualConfigPath);
+        } else if (actualConfigPath == null) {
+          Logger.info('核心使用默认配置启动，跳过配置文件监听');
         }
       } else {
         Logger.error('Clash 启动失败');
@@ -314,6 +573,62 @@ class ClashProvider extends ChangeNotifier with WidgetsBindingObserver {
       return success;
     } catch (e) {
       _errorMessage = '启动 Clash 失败：$e';
+      Logger.error(_errorMessage!);
+      return false;
+    }
+  }
+
+  // 重启 Clash 核心（保持当前配置）
+  // 自动保存当前配置路径并在重启后恢复
+  Future<bool> restart() async {
+    _errorMessage = null;
+
+    // 保存当前配置路径（必须在 stop 前获取）
+    final currentConfigPath = _currentConfigPath;
+
+    try {
+      // 先停止配置文件监听
+      await _stopConfigWatcher();
+
+      final stopSuccess = await _clashManager.stopCore();
+      if (!stopSuccess) {
+        _errorMessage = '停止 Clash 失败';
+        Logger.error(_errorMessage!);
+        return false;
+      }
+
+      // 等待端口完全释放
+      await Future.delayed(const Duration(milliseconds: 300));
+
+      // 获取覆写配置
+      final overrides = _clashManager.getOverrides();
+
+      // 使用保存的配置路径重新启动
+      final success = await _clashManager.startCore(
+        configPath: currentConfigPath,
+        overrides: overrides,
+      );
+
+      if (success) {
+        Logger.info('Clash 已重启');
+        await loadProxies();
+
+        // 获取实际使用的配置路径（通过回调已同步到 _currentConfigPath）
+        final actualConfigPath = _currentConfigPath;
+
+        // 如果启用了配置重载且实际使用了配置文件，启动配置文件监听
+        if (_isConfigReloadEnabled &&
+            actualConfigPath != null &&
+            actualConfigPath.isNotEmpty) {
+          await _startConfigWatcher(actualConfigPath);
+        }
+      } else {
+        Logger.error('Clash 重启失败');
+      }
+
+      return success;
+    } catch (e) {
+      _errorMessage = '重启 Clash 失败：$e';
       Logger.error(_errorMessage!);
       return false;
     }
@@ -330,8 +645,8 @@ class ClashProvider extends ChangeNotifier with WidgetsBindingObserver {
 
       final success = await _clashManager.stopCore();
 
-      // 停止后不需要重新加载配置文件
-      // 本地状态已经是最新的，保持不变即可
+      // 停止后无需重新加载配置文件
+      // 本地状态保持不变
 
       return success;
     } catch (e) {
@@ -390,7 +705,7 @@ class ClashProvider extends ChangeNotifier with WidgetsBindingObserver {
       return _loadProxiesCompleter!.future;
     }
 
-    // 创建新的 Completer
+    // 创建 Completer
     _loadProxiesCompleter = Completer<void>();
 
     try {
@@ -451,17 +766,17 @@ class ClashProvider extends ChangeNotifier with WidgetsBindingObserver {
 
       // 添加重试逻辑，避免因 Clash API 繁忙导致超时
       Map<String, dynamic>? proxies;
-      int attemptNumber = 0;
+      int attemptCount = 0;
       const maxRetries = 2;
 
-      while (attemptNumber <= maxRetries) {
-        attemptNumber++;
+      while (attemptCount <= maxRetries) {
+        attemptCount++;
         try {
           proxies = await _clashManager.getProxies();
           break; // 成功则跳出循环
         } catch (e) {
           final errorMsg = e.toString();
-          final isLastAttempt = attemptNumber > maxRetries;
+          final isLastAttempt = attemptCount > maxRetries;
 
           // 检查是否为 IPC 未就绪错误（启动时的正常情况）
           final isIpcNotReady = _isIpcNotReadyError(errorMsg);
@@ -469,18 +784,18 @@ class ClashProvider extends ChangeNotifier with WidgetsBindingObserver {
           if (!isLastAttempt) {
             // 还有重试机会
             if (isIpcNotReady) {
-              Logger.debug('IPC 尚未就绪（第 $attemptNumber 次尝试），1秒后重试');
+              Logger.debug('IPC 尚未就绪（第 $attemptCount 次尝试），1 秒后重试');
             } else {
-              Logger.warning('获取代理数据失败（第 $attemptNumber 次尝试），1秒后重试：$e');
+              Logger.warning('获取代理数据失败（第 $attemptCount 次尝试），1 秒后重试：$e');
             }
             await Future.delayed(const Duration(seconds: 1));
           } else {
             // 最后一次尝试失败
             if (isIpcNotReady) {
-              Logger.debug('IPC 仍未就绪，稍后自动重试（不显示错误）');
+              Logger.debug('IPC仍未就绪，稍后自动重试（不显示错误）');
               return; // 静默失败，不设置 errorMessage
             } else {
-              Logger.error('获取代理数据失败，已尝试 $attemptNumber 次：$e');
+              Logger.error('获取代理数据失败，已尝试 $attemptCount 次：$e');
               rethrow; // 真正的错误才抛出
             }
           }
@@ -493,7 +808,7 @@ class ClashProvider extends ChangeNotifier with WidgetsBindingObserver {
 
       apiStopwatch.stop();
       Logger.debug(
-        '从 Clash API 获取代理数据完成：${proxies.length} 项（耗时：${apiStopwatch.elapsedMilliseconds}ms，尝试次数：$attemptNumber）',
+        '从 Clash API 获取代理数据完成：${proxies.length} 项（耗时：${apiStopwatch.elapsedMilliseconds}ms，尝试次数：$attemptCount）',
       );
 
       // 【性能监控】解析节点耗时
@@ -565,10 +880,6 @@ class ClashProvider extends ChangeNotifier with WidgetsBindingObserver {
         _selectedGroupName = proxyGroups.first.name;
       }
 
-      Logger.info(
-        '加载完成: ${_allProxyGroups.length} 个代理组（${proxyGroups.length} 可见），${_proxyNodes.length} 个节点',
-      );
-
       // 【性能监控】同步选择耗时
       final syncStopwatch = Stopwatch()..start();
       await _syncProxyGroupSelections();
@@ -579,7 +890,9 @@ class ClashProvider extends ChangeNotifier with WidgetsBindingObserver {
       Logger.error(_errorMessage!);
     } finally {
       totalStopwatch.stop();
-      Logger.info('加载代理列表完成（总耗时：${totalStopwatch.elapsedMilliseconds}ms）');
+      Logger.info(
+        '加载完成: ${_allProxyGroups.length} 个代理组（${proxyGroups.length} 可见），${_proxyNodes.length} 个节点（耗时：${totalStopwatch.elapsedMilliseconds}ms）',
+      );
     }
   }
 
@@ -603,17 +916,17 @@ class ClashProvider extends ChangeNotifier with WidgetsBindingObserver {
       // 从 Clash API 获取代理数据
       final apiStopwatch = Stopwatch()..start();
       Map<String, dynamic>? proxies;
-      int attemptNumber = 0;
+      int attemptCount = 0;
       const maxRetries = 2;
 
-      while (attemptNumber <= maxRetries) {
-        attemptNumber++;
+      while (attemptCount <= maxRetries) {
+        attemptCount++;
         try {
           proxies = await _clashManager.getProxies();
           break;
         } catch (e) {
           final errorMsg = e.toString();
-          final isLastAttempt = attemptNumber > maxRetries;
+          final isLastAttempt = attemptCount > maxRetries;
 
           // 检查是否为 IPC 未就绪或连接失效错误
           final isIpcNotReady = _isIpcNotReadyError(errorMsg);
@@ -621,9 +934,9 @@ class ClashProvider extends ChangeNotifier with WidgetsBindingObserver {
           if (!isLastAttempt) {
             // 还有重试机会
             if (isIpcNotReady) {
-              Logger.debug('IPC 连接失效（第 $attemptNumber 次尝试），1秒后重试');
+              Logger.debug('IPC 连接失效（第 $attemptCount 次尝试），1 秒后重试');
             } else {
-              Logger.warning('获取代理数据失败（第 $attemptNumber 次尝试），1秒后重试：$e');
+              Logger.warning('获取代理数据失败（第 $attemptCount 次尝试），1 秒后重试：$e');
             }
             await Future.delayed(const Duration(seconds: 1));
           } else {
@@ -632,7 +945,7 @@ class ClashProvider extends ChangeNotifier with WidgetsBindingObserver {
               Logger.debug('IPC 连接仍失效，稍后自动重试（不显示错误）');
               return; // 静默失败，不设置 errorMessage
             } else {
-              Logger.error('获取代理数据失败，已尝试 $attemptNumber 次：$e');
+              Logger.error('获取代理数据失败，已尝试 $attemptCount 次：$e');
               rethrow;
             }
           }
@@ -645,20 +958,22 @@ class ClashProvider extends ChangeNotifier with WidgetsBindingObserver {
 
       apiStopwatch.stop();
       Logger.debug(
-        '从 Clash API 获取代理数据完成：${proxies.length} 项（耗时：${apiStopwatch.elapsedMilliseconds}ms，尝试次数：$attemptNumber）',
+        '从 Clash API 获取代理数据完成：${proxies.length} 项（耗时：${apiStopwatch.elapsedMilliseconds}ms，尝试次数：$attemptCount）',
       );
 
       // 解析节点
       final parseStopwatch = Stopwatch()..start();
-      final oldProxyNodes = _proxyNodes; // 保存旧节点数据
+      final previousProxyNodes = _proxyNodes; // 保存旧节点数据
       _proxyNodes = {};
       proxies.forEach((name, data) {
         final node = ProxyNode.fromJson(name, data);
 
         // 保留旧节点的延迟值和过期定时器
-        final oldNode = oldProxyNodes[name];
-        if (oldNode != null && oldNode.delay != null && oldNode.delay! != 0) {
-          _proxyNodes[name] = node.copyWith(delay: oldNode.delay);
+        final previousNode = previousProxyNodes[name];
+        if (previousNode != null &&
+            previousNode.delay != null &&
+            previousNode.delay! != 0) {
+          _proxyNodes[name] = node.copyWith(delay: previousNode.delay);
           // 注意：定时器中使用节点名查找，因此不需要重新创建定时器
         } else {
           _proxyNodes[name] = node;
@@ -755,7 +1070,7 @@ class ClashProvider extends ChangeNotifier with WidgetsBindingObserver {
     }
 
     int savedCount = 0;
-    _selectedMap.clear();
+    _selections.clear();
 
     for (final group in _allProxyGroups) {
       if (!_isSelectableGroupType(group.type)) {
@@ -769,9 +1084,8 @@ class ClashProvider extends ChangeNotifier with WidgetsBindingObserver {
           group.name,
           group.now!,
         );
-        _selectedMap[group.name] = group.now!;
+        _selections[group.name] = group.now!;
         savedCount++;
-        Logger.debug('保存节点选择: ${group.name} -> ${group.now}');
       }
     }
 
@@ -801,7 +1115,7 @@ class ClashProvider extends ChangeNotifier with WidgetsBindingObserver {
     Logger.debug('本地状态已更新：$groupName -> $proxyName');
 
     // 更新 selectedMap 缓存
-    _selectedMap[groupName] = proxyName;
+    _selections[groupName] = proxyName;
 
     // 保存节点选择到持久化存储
     final currentSubscriptionId = ClashPreferences.instance
@@ -852,7 +1166,7 @@ class ClashProvider extends ChangeNotifier with WidgetsBindingObserver {
     int restoredCount = 0;
     int defaultCount = 0;
 
-    _selectedMap.clear();
+    _selections.clear();
 
     for (int i = 0; i < _allProxyGroups.length; i++) {
       final group = _allProxyGroups[i];
@@ -886,7 +1200,6 @@ class ClashProvider extends ChangeNotifier with WidgetsBindingObserver {
         defaultCount++;
       } else if (selected != null) {
         restoredCount++;
-        Logger.debug('恢复节点选择: ${group.name} -> $selected');
       }
 
       // 更新代理组的 now 字段
@@ -896,7 +1209,7 @@ class ClashProvider extends ChangeNotifier with WidgetsBindingObserver {
 
       // 同时更新 selectedMap
       if (selected != null) {
-        _selectedMap[group.name] = selected;
+        _selections[group.name] = selected;
       }
     }
 
@@ -921,10 +1234,10 @@ class ClashProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   // 启动配置文件监听
   Future<void> _startConfigWatcher(String configPath) async {
-    // 先停止旧的监听器
+    // 停止监听器
     await _stopConfigWatcher();
 
-    // 创建新的监听器
+    // 创建监听器
     _configWatcher = ConfigWatcher(
       onReload: () async {
         Logger.info('检测到配置文件变化，重新生成运行时配置并重载…');
@@ -949,7 +1262,7 @@ class ClashProvider extends ChangeNotifier with WidgetsBindingObserver {
           Logger.error('配置重载失败，跳过代理列表更新');
         }
       },
-      debounceMs: 1000, // 1秒防抖
+      debounceMs: 1000, // 1 秒防抖
     );
 
     await _configWatcher!.watch(configPath);
@@ -987,22 +1300,19 @@ class ClashProvider extends ChangeNotifier with WidgetsBindingObserver {
     String? testUrl,
     bool notify = true,
   ]) async {
-    final delay = await DelayTestService.testProxyDelay(
+    final node = _proxyNodes[proxyName];
+    if (node == null) {
+      Logger.warning('代理节点不存在：$proxyName');
+      return -1;
+    }
+
+    final delay = await _clashManager.testProxyDelayViaRust(
       proxyName,
-      _proxyNodes,
-      _allProxyGroups,
-      _selectedMap,
       testUrl: testUrl,
     );
 
     if (notify) {
-      // 在最新的 _proxyNodes 上更新延迟值
-      final node = _proxyNodes[proxyName];
-      if (node != null) {
-        _proxyNodes[proxyName] = node.copyWith(delay: delay);
-      }
-
-      // 创建新的 Map 实例以触发 UI 更新
+      _proxyNodes[proxyName] = node.copyWith(delay: delay);
       _proxyNodes = Map<String, ProxyNode>.from(_proxyNodes);
       _proxyNodesUpdateCount++;
       notifyListeners();
@@ -1033,18 +1343,15 @@ class ClashProvider extends ChangeNotifier with WidgetsBindingObserver {
     _isBatchTestingDelay = true;
     _testingNodes.clear();
     _testingNodes.addAll(proxyNames);
-    _lastNotifyTime = null; // 重置节流计时器
+    _lastNotifiedAt = null; // 重置节流计时器
     notifyListeners();
 
     // 标记是否有待通知的更新
     bool hasPendingUpdates = false;
 
     try {
-      await DelayTestService.testGroupDelays(
-        groupName,
-        _proxyNodes,
-        _allProxyGroups,
-        _selectedMap,
+      await _clashManager.testGroupDelays(
+        proxyNames,
         testUrl: testUrl,
         onNodeStart: (nodeName) {
           // 节点开始测试时保持在 testingNodes 中
@@ -1064,14 +1371,14 @@ class ClashProvider extends ChangeNotifier with WidgetsBindingObserver {
           // 节流通知 UI 更新（每 100ms 最多一次）
           final now = DateTime.now();
           if (hasPendingUpdates &&
-              (_lastNotifyTime == null ||
-                  now.difference(_lastNotifyTime!).inMilliseconds >=
+              (_lastNotifiedAt == null ||
+                  now.difference(_lastNotifiedAt!).inMilliseconds >=
                       _notifyThrottleMs)) {
             // 仅在有更新时才创建新 Map（触发 Selector 重建）
             _proxyNodes = Map<String, ProxyNode>.from(_proxyNodes);
             _proxyNodesUpdateCount++;
             notifyListeners();
-            _lastNotifyTime = now;
+            _lastNotifiedAt = now;
             hasPendingUpdates = false; // 清除待更新标记
           }
         },
@@ -1084,7 +1391,7 @@ class ClashProvider extends ChangeNotifier with WidgetsBindingObserver {
       }
       _testingNodes.clear();
       _isBatchTestingDelay = false;
-      _lastNotifyTime = null;
+      _lastNotifiedAt = null;
       notifyListeners();
     }
   }
@@ -1116,7 +1423,7 @@ class ClashProvider extends ChangeNotifier with WidgetsBindingObserver {
     _isBatchTestingDelay = true;
     _testingNodes.clear();
     _testingNodes.addAll(allProxyNames);
-    _lastNotifyTime = null; // 重置节流计时器
+    _lastNotifiedAt = null; // 重置节流计时器
     notifyListeners();
 
     // 标记是否有待通知的更新
@@ -1124,25 +1431,24 @@ class ClashProvider extends ChangeNotifier with WidgetsBindingObserver {
 
     try {
       // 使用 Rust 层批量测试
-      final proxyNamesList = allProxyNames.toList();
+      final proxyNames = allProxyNames.toList();
 
-      // 使用动态并发数
-      final concurrency = ClashDefaults.dynamicDelayTestConcurrency;
+      // 使用延迟测试并发数
+      final concurrency = ClashDefaults.delayTestConcurrency;
       final timeoutMs = ClashDefaults.proxyDelayTestTimeout;
       final url = testUrl ?? ClashDefaults.defaultTestUrl;
 
-      Logger.info(
-        '开始批量测试所有节点延迟，共 ${proxyNamesList.length} 个节点，并发数：$concurrency',
-      );
+      Logger.info('开始批量测试所有节点延迟，共 ${proxyNames.length} 个节点，并发数：$concurrency');
 
-      // 订阅 Rust 层进度信号
-      StreamSubscription? progressSubscription;
-      StreamSubscription? completeSubscription;
+      // 取消旧订阅（防止泄漏）
+      await _progressSubscription?.cancel();
+      await _completeSubscription?.cancel();
+
       final completer = Completer<void>();
 
       try {
         // 订阅进度信号（流式更新）
-        progressSubscription = signals.DelayTestProgress.rustSignalStream
+        _progressSubscription = signals.DelayTestProgress.rustSignalStream
             .listen((result) {
               final nodeName = result.message.nodeName;
               final delayMs = result.message.delayMs;
@@ -1155,10 +1461,10 @@ class ClashProvider extends ChangeNotifier with WidgetsBindingObserver {
 
                 // 如果延迟测试完成（无论成功或超时），设置 5 分钟过期定时器
                 if (delayMs != 0) {
-                  // 取消该节点之前的过期定时器（如果有）
+                  // 取消过期定时器
                   _delayExpireTimers[nodeName]?.cancel();
 
-                  // 设置新的过期定时器（5 分钟后清空延迟值）
+                  // 设置过期定时器（5 分钟后清空延迟值）
                   _delayExpireTimers[nodeName] = Timer(
                     _delayRetentionDuration,
                     () {
@@ -1184,20 +1490,20 @@ class ClashProvider extends ChangeNotifier with WidgetsBindingObserver {
               // 节流通知 UI 更新（每 100ms 最多一次）
               final now = DateTime.now();
               if (hasPendingUpdates &&
-                  (_lastNotifyTime == null ||
-                      now.difference(_lastNotifyTime!).inMilliseconds >=
+                  (_lastNotifiedAt == null ||
+                      now.difference(_lastNotifiedAt!).inMilliseconds >=
                           _notifyThrottleMs)) {
                 // 仅在有更新时才创建新 Map（触发 Selector 重建）
                 _proxyNodes = Map<String, ProxyNode>.from(_proxyNodes);
                 _proxyNodesUpdateCount++;
                 notifyListeners();
-                _lastNotifyTime = now;
+                _lastNotifiedAt = now;
                 hasPendingUpdates = false;
               }
             });
 
         // 订阅完成信号
-        completeSubscription = signals.BatchDelayTestComplete.rustSignalStream
+        _completeSubscription = signals.BatchDelayTestComplete.rustSignalStream
             .listen((result) {
               final message = result.message;
               if (message.isSuccessful) {
@@ -1217,15 +1523,15 @@ class ClashProvider extends ChangeNotifier with WidgetsBindingObserver {
 
         // 发送批量测试请求到 Rust 层
         signals.BatchDelayTestRequest(
-          nodeNames: proxyNamesList,
+          nodeNames: proxyNames,
           testUrl: url,
           timeoutMs: timeoutMs,
           concurrency: concurrency,
         ).sendSignalToRust();
 
-        // 等待测试完成（最多等待：节点数 × 单个超时 + 10秒缓冲）
+        // 等待测试完成（最多等待：节点数 × 单个超时 + 10 秒缓冲）
         final maxWaitTime = Duration(
-          milliseconds: (proxyNamesList.length * timeoutMs) + 10000,
+          milliseconds: (proxyNames.length * timeoutMs) + 10000,
         );
         await completer.future.timeout(
           maxWaitTime,
@@ -1235,8 +1541,10 @@ class ClashProvider extends ChangeNotifier with WidgetsBindingObserver {
         );
       } finally {
         // 取消订阅
-        await progressSubscription?.cancel();
-        await completeSubscription?.cancel();
+        await _progressSubscription?.cancel();
+        await _completeSubscription?.cancel();
+        _progressSubscription = null;
+        _completeSubscription = null;
       }
     } finally {
       // 确保最后一次更新（包含所有节点的最终结果）
@@ -1246,7 +1554,7 @@ class ClashProvider extends ChangeNotifier with WidgetsBindingObserver {
       }
       _testingNodes.clear();
       _isBatchTestingDelay = false;
-      _lastNotifyTime = null;
+      _lastNotifiedAt = null;
       notifyListeners();
     }
   }
@@ -1296,24 +1604,24 @@ class ClashProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   // ========== 系统代理和 TUN 模式控制 ==========
 
-  /// 获取 TUN 模式状态
-  bool get isTunEnabled => _clashManager.isTunEnabled;
-
-  /// 切换 TUN 模式
+  // 切换 TUN 模式
   Future<bool> setTunMode(bool enabled) async {
     try {
       Logger.info('切换虚拟网卡模式：${enabled ? "启用" : "禁用"}');
-      return await _clashManager.setTunEnabled(enabled);
+      final success = await _clashManager.setTunEnabled(enabled);
+      if (success) {
+        // 主动从 Manager 同步配置状态
+        _syncConfigFromManager();
+        notifyListeners();
+      }
+      return success;
     } catch (e) {
       Logger.error('切换虚拟网卡模式失败：$e');
       return false;
     }
   }
 
-  // 获取系统代理状态（代理 ClashManager）
-  bool get isSystemProxyEnabled => _clashManager.isSystemProxyEnabled;
-
-  /// 启用系统代理
+  // 启用系统代理
   Future<void> enableSystemProxy() async {
     try {
       Logger.info('启用系统代理');
@@ -1324,7 +1632,7 @@ class ClashProvider extends ChangeNotifier with WidgetsBindingObserver {
     }
   }
 
-  /// 禁用系统代理
+  // 禁用系统代理
   Future<void> disableSystemProxy() async {
     try {
       Logger.info('禁用系统代理');
@@ -1335,19 +1643,155 @@ class ClashProvider extends ChangeNotifier with WidgetsBindingObserver {
     }
   }
 
+  // ========== 配置管理方法 ==========
+
+  Future<bool> setOutboundMode(String outboundMode) async {
+    try {
+      final success = await _clashManager.setOutboundMode(outboundMode);
+      if (success) {
+        _syncConfigFromManager();
+        _invalidateCache();
+        notifyListeners();
+      }
+      return success;
+    } catch (e) {
+      Logger.error('切换出站模式失败：$e');
+      return false;
+    }
+  }
+
+  Future<bool> setAllowLan(bool enabled) async {
+    final success = await _clashManager.setAllowLan(enabled);
+    if (success) {
+      _syncConfigFromManager();
+      notifyListeners();
+    }
+    return success;
+  }
+
+  Future<bool> setIpv6(bool enabled) async {
+    final success = await _clashManager.setIpv6(enabled);
+    if (success) {
+      _syncConfigFromManager();
+      notifyListeners();
+    }
+    return success;
+  }
+
+  Future<bool> setTcpConcurrent(bool enabled) async {
+    final success = await _clashManager.setTcpConcurrent(enabled);
+    if (success) {
+      _syncConfigFromManager();
+      notifyListeners();
+    }
+    return success;
+  }
+
+  Future<bool> setUnifiedDelay(bool enabled) async {
+    final success = await _clashManager.setUnifiedDelay(enabled);
+    if (success) {
+      _syncConfigFromManager();
+      notifyListeners();
+    }
+    return success;
+  }
+
+  Future<bool> setGeodataLoader(String mode) async {
+    final success = await _clashManager.setGeodataLoader(mode);
+    if (success) {
+      _syncConfigFromManager();
+      notifyListeners();
+    }
+    return success;
+  }
+
+  Future<bool> setFindProcessMode(String mode) async {
+    final success = await _clashManager.setFindProcessMode(mode);
+    if (success) {
+      _syncConfigFromManager();
+      notifyListeners();
+    }
+    return success;
+  }
+
+  Future<bool> setClashCoreLogLevel(String level) async {
+    final success = await _clashManager.setClashCoreLogLevel(level);
+    if (success) {
+      _syncConfigFromManager();
+      notifyListeners();
+    }
+    return success;
+  }
+
+  Future<bool> setExternalController(bool enabled) async {
+    final success = await _clashManager.setExternalController(enabled);
+    if (success) {
+      _syncConfigFromManager();
+      notifyListeners();
+    }
+    return success;
+  }
+
+  Future<bool> setKeepAlive(bool enabled) async {
+    return await _clashManager.setKeepAlive(enabled);
+  }
+
+  Future<bool> setTestUrl(String url) async {
+    final success = await _clashManager.setTestUrl(url);
+    if (success) {
+      _syncConfigFromManager();
+      notifyListeners();
+    }
+    return success;
+  }
+
+  Future<bool> setMixedPort(int port) async {
+    final success = await _clashManager.setMixedPort(port);
+    if (success) {
+      _syncConfigFromManager();
+      notifyListeners();
+    }
+    return success;
+  }
+
+  Future<bool> setSocksPort(int? port) async {
+    final success = await _clashManager.setSocksPort(port);
+    if (success) {
+      _syncConfigFromManager();
+      notifyListeners();
+    }
+    return success;
+  }
+
+  Future<bool> setHttpPort(int? port) async {
+    final success = await _clashManager.setHttpPort(port);
+    if (success) {
+      _syncConfigFromManager();
+      notifyListeners();
+    }
+    return success;
+  }
+
   @override
   void dispose() {
     _stopConfigWatcher();
-    _clashManager.removeListener(_onClashManagerChanged);
 
     // 移除应用生命周期监听
     WidgetsBinding.instance.removeObserver(this);
+
+    // 停止日志监控（Android，通过 Manager 协调）
+    if (Platform.isAndroid) {
+      _clashManager.stopLogMonitoring();
+    }
 
     // 清理所有延迟过期定时器
     for (final timer in _delayExpireTimers.values) {
       timer.cancel();
     }
     _delayExpireTimers.clear();
+
+    _progressSubscription?.cancel();
+    _completeSubscription?.cancel();
 
     super.dispose();
   }

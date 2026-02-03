@@ -1,12 +1,7 @@
 import 'package:flutter/material.dart';
 
-// 现代化的多行文本输入框组件
-//
-// 专门用于编辑多行文本内容，如代理绕过规则、PAC 脚本等
-// 特点：
-// - 完全控制滚动条右侧间距（独立于文字间距）
-// - 等宽字体显示
-// - 与 ModernTextField 风格统一
+// 多行文本输入组件：用于编辑较长文本（如规则、脚本）。
+// 支持独立滚动条间距与等宽字体显示。
 class ModernMultilineTextField extends StatefulWidget {
   final TextEditingController? controller;
   final String? labelText;

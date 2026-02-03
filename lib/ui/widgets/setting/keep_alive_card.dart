@@ -2,14 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:stelliberty/i18n/i18n.dart';
-import 'package:stelliberty/clash/manager/manager.dart';
+import 'package:stelliberty/clash/manager/clash_manager.dart';
 import 'package:stelliberty/clash/providers/clash_provider.dart';
-import 'package:stelliberty/clash/storage/preferences.dart';
+import 'package:stelliberty/storage/clash_preferences.dart';
 import 'package:stelliberty/ui/common/modern_feature_card.dart';
 import 'package:stelliberty/ui/common/modern_text_field.dart';
 import 'package:stelliberty/ui/common/modern_switch.dart';
 import 'package:stelliberty/ui/widgets/modern_toast.dart';
-import 'package:stelliberty/utils/logger.dart';
+import 'package:stelliberty/services/log_print_service.dart';
 
 // TCP 保持活动配置卡片
 class KeepAliveCard extends StatefulWidget {
@@ -48,7 +48,7 @@ class _KeepAliveCardState extends State<KeepAliveCard> {
     final interval = int.tryParse(_keepAliveIntervalController.text);
     if (interval == null || interval <= 0) {
       if (mounted) {
-        ModernToast.error(context, trans.clashFeatures.keepAlive.intervalError);
+        ModernToast.error(trans.clash_features.keep_alive.interval_error);
       }
       return;
     }
@@ -58,17 +58,16 @@ class _KeepAliveCardState extends State<KeepAliveCard> {
     try {
       final clashProvider = Provider.of<ClashProvider>(context, listen: false);
       await ClashPreferences.instance.setKeepAliveInterval(interval);
-      clashProvider.configService.setKeepAlive(_keepAliveEnabled);
+      clashProvider.setKeepAlive(_keepAliveEnabled);
 
       if (mounted) {
-        ModernToast.success(context, trans.clashFeatures.keepAlive.saveSuccess);
+        ModernToast.success(trans.clash_features.keep_alive.save_success);
       }
     } catch (e) {
       Logger.error('保存 TCP 保持活动配置失败: $e');
       if (mounted) {
         ModernToast.error(
-          context,
-          trans.clashFeatures.keepAlive.saveFailed.replaceAll(
+          trans.clash_features.keep_alive.save_failed.replaceAll(
             '{error}',
             e.toString(),
           ),
@@ -95,30 +94,32 @@ class _KeepAliveCardState extends State<KeepAliveCard> {
         children: [
           // 开关行
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              // 左侧图标和标题
-              Row(
-                children: [
-                  const Icon(Icons.timer_outlined),
-                  const SizedBox(
-                    width: ModernFeatureCardSpacing.featureIconToTextSpacing,
-                  ),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        trans.clashFeatures.keepAlive.title,
-                        style: theme.textTheme.titleMedium,
-                      ),
-                      Text(
-                        trans.clashFeatures.keepAlive.subtitle,
-                        style: theme.textTheme.bodySmall,
-                      ),
-                    ],
-                  ),
-                ],
+              // 左侧图标
+              const Icon(Icons.timer_outlined),
+              const SizedBox(
+                width: ModernFeatureCardSpacing.featureIconToTextSpacing,
               ),
+              // 中间标题和描述
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      trans.clash_features.keep_alive.title,
+                      style: theme.textTheme.titleMedium,
+                    ),
+                    Text(
+                      trans.clash_features.keep_alive.subtitle,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodySmall,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
               // 右侧开关
               ModernSwitch(
                 value: _keepAliveEnabled,
@@ -130,7 +131,7 @@ class _KeepAliveCardState extends State<KeepAliveCard> {
                   );
                   await ClashPreferences.instance.setKeepAliveEnabled(value);
                   if (!mounted) return;
-                  clashProvider.configService.setKeepAlive(_keepAliveEnabled);
+                  clashProvider.setKeepAlive(_keepAliveEnabled);
                 },
               ),
             ],
@@ -144,7 +145,7 @@ class _KeepAliveCardState extends State<KeepAliveCard> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                trans.clashFeatures.keepAlive.intervalLabel,
+                trans.clash_features.keep_alive.interval_label,
                 style: theme.textTheme.titleSmall,
               ),
               Row(
@@ -164,7 +165,7 @@ class _KeepAliveCardState extends State<KeepAliveCard> {
                   ),
                   const SizedBox(width: 8),
                   Text(
-                    trans.clashFeatures.keepAlive.intervalUnit,
+                    trans.clash_features.keep_alive.interval_unit,
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: theme.colorScheme.onSurface.withAlpha(150),
                     ),
@@ -189,7 +190,7 @@ class _KeepAliveCardState extends State<KeepAliveCard> {
                     : const Icon(Icons.save, size: 18),
                 label: Text(
                   _isSaving
-                      ? trans.clashFeatures.keepAlive.saving
+                      ? trans.clash_features.keep_alive.saving
                       : trans.common.save,
                 ),
               ),

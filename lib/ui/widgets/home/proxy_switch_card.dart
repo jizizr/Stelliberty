@@ -1,12 +1,15 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:stelliberty/clash/providers/access_control_provider.dart';
 import 'package:stelliberty/clash/providers/clash_provider.dart';
+import 'package:stelliberty/clash/providers/subscription_provider.dart';
 import 'package:stelliberty/ui/widgets/home/base_card.dart';
 import 'package:stelliberty/i18n/i18n.dart';
 
-// 系统代理卡片
-//
-// 提供系统代理开关功能
+// 系统代理卡片：提供系统代理开关能力。
+// 同步状态到核心与界面。
 class ProxySwitchCard extends StatelessWidget {
   const ProxySwitchCard({super.key});
 
@@ -31,6 +34,98 @@ class ProxySwitchCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final trans = context.translate;
 
+    if (Platform.isAndroid) {
+      return Consumer3<
+        ClashProvider,
+        SubscriptionProvider,
+        AccessControlProvider
+      >(
+        builder:
+            (
+              context,
+              clashProvider,
+              subscriptionProvider,
+              accessControlProvider,
+              child,
+            ) {
+              final isVpnEnabled = clashProvider.isAndroidVpnEnabled;
+              final configPath = subscriptionProvider
+                  .getSubscriptionConfigPath();
+              final accessControl = accessControlProvider.config;
+
+              return BaseCard(
+                icon: Icons.vpn_lock,
+                title: trans.home.vpn_mode_switch,
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 8,
+                      height: 8,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: isVpnEnabled ? Colors.green : Colors.grey,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Flexible(
+                      child: Text(
+                        isVpnEnabled
+                            ? trans.home.vpn_enabled
+                            : trans.home.vpn_disabled,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: isVpnEnabled ? Colors.green : Colors.grey,
+                          fontSize: 13,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    ElevatedButton(
+                      onPressed: () async {
+                        if (isVpnEnabled) {
+                          await clashProvider.stopAndroidVpn();
+                        } else {
+                          await clashProvider.startAndroidVpn(
+                            configPath: configPath,
+                            accessControl: accessControl,
+                          );
+                        }
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: isVpnEnabled
+                            ? Colors.red.shade400
+                            : _getStartButtonColor(context),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        minimumSize: const Size(double.infinity, 48),
+                      ),
+                      child: Text(
+                        isVpnEnabled
+                            ? trans.home.disable_vpn
+                            : trans.home.enable_vpn,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w500,
+                          fontSize: 15,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+      );
+    }
+
     return Selector<ClashProvider, ({bool isCoreRunning, bool isProxyEnabled})>(
       selector: (_, provider) => (
         isCoreRunning: provider.isCoreRunning,
@@ -42,7 +137,7 @@ class ProxySwitchCard extends StatelessWidget {
 
         return BaseCard(
           icon: Icons.shield_outlined,
-          title: trans.proxy.proxyControl,
+          title: trans.proxy.proxy_control,
           trailing: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -55,11 +150,14 @@ class ProxySwitchCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 6),
-              Text(
-                isProxyEnabled ? trans.proxy.running : trans.proxy.stopped,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: isProxyEnabled ? Colors.green : Colors.grey,
-                  fontSize: 13,
+              Flexible(
+                child: Text(
+                  isProxyEnabled ? trans.proxy.running : trans.proxy.stopped,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: isProxyEnabled ? Colors.green : Colors.grey,
+                    fontSize: 13,
+                  ),
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
             ],
@@ -94,8 +192,8 @@ class ProxySwitchCard extends StatelessWidget {
                 ),
                 child: Text(
                   isProxyEnabled
-                      ? trans.proxy.stopProxy
-                      : trans.proxy.startProxy,
+                      ? trans.proxy.stop_proxy
+                      : trans.proxy.start_proxy,
                   style: const TextStyle(
                     fontWeight: FontWeight.w500,
                     fontSize: 15,

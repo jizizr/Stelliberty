@@ -85,26 +85,25 @@ class UwpLoopbackState extends ChangeNotifier {
 
       // **关键修复**：先建立所有订阅，再发送请求，消除竞态窗口
       // 监听应用信息流
-      final appStreamListener = AppContainerInfo.rustSignalStream.listen((
+      final appInfoSubscription = AppContainerInfo.rustSignalStream.listen((
         signal,
       ) {
         apps.add(UwpApp.fromRust(signal.message));
       });
 
       // 监听完成信号
-      final completeListener = AppContainersComplete.rustSignalStream.listen((
-        _,
-      ) {
-        // 等待一小段时间确保所有消息都已入队并处理
-        Future.delayed(const Duration(milliseconds: 50)).then((_) {
-          if (!completer.isCompleted) {
-            completer.complete();
-          }
-        });
-      });
+      final completeSubscription = AppContainersComplete.rustSignalStream
+          .listen((_) {
+            // 等待一小段时间确保所有消息都已入队并处理
+            Future.delayed(const Duration(milliseconds: 50)).then((_) {
+              if (!completer.isCompleted) {
+                completer.complete();
+              }
+            });
+          });
 
       // 等待列表初始化信号的订阅
-      final listListener = AppContainersList.rustSignalStream.listen((_) {
+      final listSubscription = AppContainersList.rustSignalStream.listen((_) {
         // 初始化信号，不需要处理
       });
 
@@ -115,9 +114,9 @@ class UwpLoopbackState extends ChangeNotifier {
         // 等待完成信号或超时
         await completer.future.timeout(const Duration(seconds: 10));
       } finally {
-        await appStreamListener.cancel();
-        await completeListener.cancel();
-        await listListener.cancel();
+        await appInfoSubscription.cancel();
+        await completeSubscription.cancel();
+        await listSubscription.cancel();
       }
 
       _apps = apps;
@@ -196,13 +195,13 @@ class _UwpLoopbackDialogState extends State<UwpLoopbackDialog> {
     final trans = context.translate;
 
     return ModernDialog(
-      title: trans.uwpLoopback.dialogTitle,
+      title: trans.uwp_loopback.dialog_title,
       titleIcon: Icons.apps,
-      maxWidth: screenSize.width - 400, // 特殊尺寸：左右各200px间距
+      maxWidth: screenSize.width - 400, // 特殊尺寸：左右各200px 间距
       maxHeightRatio:
-          (screenSize.height - 100) / screenSize.height, // 上下各50px间距
+          (screenSize.height - 100) / screenSize.height, // 上下各50px 间距
       searchController: _searchController,
-      searchHint: trans.uwpLoopback.searchPlaceholder,
+      searchHint: trans.uwp_loopback.search_placeholder,
       onSearchChanged: (value) {
         setState(() {
           // 搜索状态由 ModernDialog 管理，这里只需要触发重建
@@ -211,12 +210,12 @@ class _UwpLoopbackDialogState extends State<UwpLoopbackDialog> {
       content: _buildContent(),
       actionsLeftButtons: [
         DialogActionButton(
-          label: trans.uwpLoopback.enableAll,
+          label: trans.uwp_loopback.enable_all,
           icon: Icons.check_box,
           onPressed: () => context.read<UwpLoopbackState>().selectAll(),
         ),
         DialogActionButton(
-          label: trans.uwpLoopback.invertSelection,
+          label: trans.uwp_loopback.invert_selection,
           icon: Icons.swap_horiz,
           onPressed: () => context.read<UwpLoopbackState>().invertSelection(),
         ),
@@ -298,7 +297,7 @@ class _UwpLoopbackDialogState extends State<UwpLoopbackDialog> {
                 Icon(Icons.search_off, size: 64, color: Colors.grey[400]),
                 const SizedBox(height: 16),
                 Text(
-                  trans.uwpLoopback.noApps,
+                  trans.uwp_loopback.no_apps,
                   style: TextStyle(fontSize: 16, color: Colors.grey[600]),
                 ),
               ],
@@ -464,7 +463,7 @@ class _UwpLoopbackDialogState extends State<UwpLoopbackDialog> {
       if (result.message.isSuccessful) {
         // 成功，显示提示并关闭对话框
         if (mounted) {
-          ModernToast.success(context, trans.uwpLoopback.saveSuccess);
+          ModernToast.success(trans.uwp_loopback.save_success);
           Navigator.of(context).pop();
         }
       } else {
@@ -475,22 +474,22 @@ class _UwpLoopbackDialogState extends State<UwpLoopbackDialog> {
           });
 
           final errorMsg = result.message.errorMessage ?? '';
-          final t = trans.uwpLoopback;
+          final t = trans.uwp_loopback;
           String userFriendlyMsg;
 
           if (errorMsg.contains('权限不足') ||
               errorMsg.contains('ERROR_ACCESS_DENIED')) {
-            userFriendlyMsg = t.errorPermissionDenied;
+            userFriendlyMsg = t.error_permission_denied;
           } else if (errorMsg.contains('参数无效') ||
               errorMsg.contains('ERROR_INVALID_PARAMETER')) {
-            userFriendlyMsg = t.errorInvalidParameter;
+            userFriendlyMsg = t.error_invalid_parameter;
           } else if (errorMsg.contains('系统限制') || errorMsg.contains('E_FAIL')) {
-            userFriendlyMsg = t.errorSystemRestriction;
+            userFriendlyMsg = t.error_system_restriction;
           } else {
-            userFriendlyMsg = t.saveFailed;
+            userFriendlyMsg = t.save_failed;
           }
 
-          ModernToast.error(context, userFriendlyMsg);
+          ModernToast.error(userFriendlyMsg);
         }
       }
     } catch (e) {
@@ -499,8 +498,7 @@ class _UwpLoopbackDialogState extends State<UwpLoopbackDialog> {
           _isSaving = false;
         });
         ModernToast.error(
-          context,
-          trans.uwpLoopback.applyFailed.replaceAll('{error}', e.toString()),
+          trans.uwp_loopback.apply_failed.replaceAll('{error}', e.toString()),
         );
       }
     }

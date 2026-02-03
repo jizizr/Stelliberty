@@ -1,11 +1,10 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart' as flutter_provider;
-import 'package:stelliberty/clash/data/provider_model.dart';
-import 'package:stelliberty/clash/manager/manager.dart';
+import 'package:stelliberty/clash/model/provider_model.dart';
+import 'package:stelliberty/clash/manager/clash_manager.dart';
 import 'package:stelliberty/clash/services/geo_service.dart';
 import 'package:stelliberty/i18n/i18n.dart';
-import 'package:stelliberty/utils/logger.dart';
+import 'package:stelliberty/services/log_print_service.dart';
 import 'package:stelliberty/ui/widgets/modern_toast.dart';
 import 'package:stelliberty/ui/widgets/subscription/subscription_info_widget.dart';
 import 'package:stelliberty/ui/common/modern_dialog.dart';
@@ -39,6 +38,7 @@ class _ProviderViewerDialogState extends State<ProviderViewerDialog> {
   bool _isLoading = true;
   String? _errorMessage;
   bool _isSyncingAll = false;
+  bool _hasLoadedProviders = false;
 
   // 搜索相关
   final TextEditingController _searchController = TextEditingController();
@@ -47,8 +47,17 @@ class _ProviderViewerDialogState extends State<ProviderViewerDialog> {
   @override
   void initState() {
     super.initState();
-    _loadProviders();
     _searchController.addListener(_onSearchChanged);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // 只在第一次调用时加载，避免重复加载
+    if (!_hasLoadedProviders) {
+      _hasLoadedProviders = true;
+      _loadProviders();
+    }
   }
 
   @override
@@ -77,29 +86,32 @@ class _ProviderViewerDialogState extends State<ProviderViewerDialog> {
     }).toList();
   }
 
-  // 通用的 Provider 过滤方法
+  // 解析并过滤 Provider 数据
   void _addFilteredProviders(
     Map<String, dynamic> providersData,
     List<Provider> providers,
-    String providerTypeLabel,
+    ProviderType providerType,
   ) {
+    final isProxy = providerType == ProviderType.proxy;
+    final providerTypeLabel = isProxy ? '代理提供者' : '规则提供者';
     providersData.forEach((name, data) {
       if (data is Map<String, dynamic>) {
         final vehicleType = data['vehicleType'];
         if (vehicleType == 'HTTP' || vehicleType == 'File') {
-          // 根据类型获取数量用于日志
-          final count = providerTypeLabel.contains('代理')
+          final count = isProxy
               ? ((data['proxies'] is List)
                     ? (data['proxies'] as List).length
                     : 0)
-              : (data['ruleCount'] ?? 0);
-          final countLabel = providerTypeLabel.contains('代理') ? '节点' : '规则';
+              : ((data['ruleCount'] as num?)?.toInt() ?? 0);
+          final countLabel = isProxy ? '节点' : '规则';
           Logger.debug(
             '✓ $providerTypeLabel：$name ($vehicleType，$count $countLabel)',
           );
-          providers.add(Provider.fromClashApi(name, data));
+          providers.add(
+            Provider.fromClashApi(name, data, providerType: providerType),
+          );
         } else {
-          final skipLabel = providerTypeLabel.contains('代理') ? '代理组' : '规则项';
+          final skipLabel = isProxy ? '代理组' : '规则项';
           Logger.debug('✗ 跳过$skipLabel：$name ($vehicleType)');
         }
       }
@@ -115,23 +127,20 @@ class _ProviderViewerDialogState extends State<ProviderViewerDialog> {
     });
 
     try {
-      final clashManager = flutter_provider.Provider.of<ClashManager>(
-        context,
-        listen: false,
-      );
-      final apiClient = clashManager.apiClient;
+      final clashManager = ClashManager.instance;
+      final coreClient = clashManager.coreClient;
 
-      if (apiClient == null) {
+      if (coreClient == null) {
         setState(() {
-          _errorMessage = trans.provider.clashNotRunning;
+          _errorMessage = trans.provider.clash_not_running;
           _isLoading = false;
         });
         return;
       }
 
       // 获取代理 providers 和规则 providers
-      final proxyProvidersData = await apiClient.getProviders();
-      final ruleProvidersData = await apiClient.getRuleProviders();
+      final proxyProvidersData = await coreClient.getProviders();
+      final ruleProvidersData = await coreClient.getRuleProviders();
 
       Logger.debug(
         '加载提供者：代理提供者 ${proxyProvidersData.length} 个，规则提供者 ${ruleProvidersData.length} 个',
@@ -140,10 +149,10 @@ class _ProviderViewerDialogState extends State<ProviderViewerDialog> {
       final providers = <Provider>[];
 
       // 解析代理 providers
-      _addFilteredProviders(proxyProvidersData, providers, '代理提供者');
+      _addFilteredProviders(proxyProvidersData, providers, ProviderType.proxy);
 
       // 解析规则 providers
-      _addFilteredProviders(ruleProvidersData, providers, '规则提供者');
+      _addFilteredProviders(ruleProvidersData, providers, ProviderType.rule);
 
       Logger.debug(
         '过滤完成：共 ${providers.length} 个提供者 (代理 ${providers.where((p) => p.type == ProviderType.proxy).length}，规则 ${providers.where((p) => p.type == ProviderType.rule).length})',
@@ -155,7 +164,7 @@ class _ProviderViewerDialogState extends State<ProviderViewerDialog> {
       });
     } catch (e) {
       setState(() {
-        _errorMessage = trans.provider.loadingFailed.replaceAll(
+        _errorMessage = trans.provider.loading_failed.replaceAll(
           '{error}',
           e.toString(),
         );
@@ -173,15 +182,12 @@ class _ProviderViewerDialogState extends State<ProviderViewerDialog> {
       return;
     }
 
-    final clashManager = flutter_provider.Provider.of<ClashManager>(
-      context,
-      listen: false,
-    );
-    final apiClient = clashManager.apiClient;
+    final clashManager = ClashManager.instance;
+    final coreClient = clashManager.coreClient;
 
-    if (apiClient == null) {
+    if (coreClient == null) {
       if (mounted) {
-        ModernToast.error(context, trans.provider.clashNotRunning);
+        ModernToast.error(trans.provider.clash_not_running);
       }
       return;
     }
@@ -196,28 +202,29 @@ class _ProviderViewerDialogState extends State<ProviderViewerDialog> {
         final updatingCount = _providers.where((p) => p.isUpdating).length;
         if (updatingCount > 0) {
           ModernToast.info(
-            context,
-            trans.provider.allSyncInProgress.replaceAll(
+            trans.provider.all_sync_in_progress.replaceAll(
               '{count}',
               updatingCount.toString(),
             ),
           );
         } else {
-          ModernToast.info(context, trans.provider.noProvidersToSync);
+          ModernToast.info(trans.provider.no_providers_to_sync);
         }
       }
       return;
     }
 
-    Logger.info('开始同步 ${httpProviders.length} 个提供者（分批处理，避免超时）');
+    Logger.info('开始同步 ${httpProviders.length} 个提供者（分批处理）');
+
+    // 构建需要同步的名称集合（O(1) 查找）
+    final httpProviderNames = httpProviders.map((p) => p.name).toSet();
 
     // 设置"同步全部"状态
     setState(() {
       _isSyncingAll = true;
-      // 将所有要同步的 providers 标记为 isUpdating
       for (var i = 0; i < _providers.length; i++) {
         final provider = _providers[i];
-        if (httpProviders.any((p) => p.name == provider.name)) {
+        if (httpProviderNames.contains(provider.name)) {
           _providers[i] = provider.copyWith(isUpdating: true);
         }
       }
@@ -234,9 +241,9 @@ class _ProviderViewerDialogState extends State<ProviderViewerDialog> {
         batch.map((provider) async {
           try {
             if (provider.type == ProviderType.proxy) {
-              await apiClient.updateProvider(provider.name);
+              await coreClient.updateProvider(provider.name);
             } else {
-              await apiClient.updateRuleProvider(provider.name);
+              await coreClient.updateRuleProvider(provider.name);
             }
             Logger.info('同步成功: ${provider.name}');
             return (provider.name, true, null);
@@ -256,7 +263,7 @@ class _ProviderViewerDialogState extends State<ProviderViewerDialog> {
     }
 
     // 统计结果
-    final isSuccessfulCount = allResults.where((r) => r.$2).length;
+    final successCount = allResults.where((r) => r.$2).length;
     final failedResults = allResults.where((r) => !r.$2).toList();
 
     // 如果有失败的，等待更长时间让 Clash 完成处理
@@ -275,18 +282,16 @@ class _ProviderViewerDialogState extends State<ProviderViewerDialog> {
     if (mounted) {
       if (failedResults.isEmpty) {
         ModernToast.success(
-          context,
-          trans.provider.allSyncComplete
-              .replaceAll('{success}', isSuccessfulCount.toString())
+          trans.provider.all_sync_complete
+              .replaceAll('{success}', successCount.toString())
               .replaceAll('{total}', httpProviders.length.toString()),
         );
       } else {
         final failedNames = failedResults.map((r) => r.$1).join('，');
         ModernToast.error(
-          context,
-          trans.provider.partialSyncFailed
+          trans.provider.partial_sync_failed
               .replaceAll('{names}', failedNames)
-              .replaceAll('{success}', isSuccessfulCount.toString())
+              .replaceAll('{success}', successCount.toString())
               .replaceAll('{failed}', failedResults.length.toString()),
         );
       }
@@ -310,7 +315,7 @@ class _ProviderViewerDialogState extends State<ProviderViewerDialog> {
       final platformFile = result.files.first;
       if (platformFile.path == null || provider.path == null) {
         if (mounted) {
-          ModernToast.error(context, trans.provider.pathNotAvailable);
+          ModernToast.error(trans.provider.path_not_available);
         }
         return;
       }
@@ -332,8 +337,7 @@ class _ProviderViewerDialogState extends State<ProviderViewerDialog> {
 
       if (mounted) {
         ModernToast.success(
-          context,
-          trans.provider.uploadSuccess.replaceAll('{name}', provider.name),
+          trans.provider.upload_success.replaceAll('{name}', provider.name),
         );
       }
 
@@ -344,8 +348,7 @@ class _ProviderViewerDialogState extends State<ProviderViewerDialog> {
       Logger.error('上传提供者失败: $e');
       if (mounted) {
         ModernToast.error(
-          context,
-          trans.provider.uploadFailed.replaceAll('{error}', e.toString()),
+          trans.provider.upload_failed.replaceAll('{error}', e.toString()),
         );
       }
     }
@@ -362,7 +365,7 @@ class _ProviderViewerDialogState extends State<ProviderViewerDialog> {
     if (_isSyncingAll) {
       Logger.warning('同步全部操作正在进行中，忽略单个同步请求：${provider.name}');
       if (mounted) {
-        ModernToast.info(context, trans.provider.syncAllInProgress);
+        ModernToast.info(trans.provider.sync_all_in_progress);
       }
       return;
     }
@@ -373,41 +376,42 @@ class _ProviderViewerDialogState extends State<ProviderViewerDialog> {
       return;
     }
 
-    // 1. 查找索引（只查一次）
-    final index = _providers.indexWhere((p) => p.name == provider.name);
-    if (index == -1) {
-      Logger.warning('同步失败：找不到提供者 ${provider.name}');
-      return;
+    final providerName = provider.name;
+
+    // 辅助函数：通过名称查找并更新 provider
+    void updateProviderByName(Provider updatedProvider) {
+      final idx = _providers.indexWhere((p) => p.name == providerName);
+      if (idx != -1) {
+        _providers[idx] = updatedProvider;
+      }
     }
 
-    // 2. 开始同步：设置 isUpdating
+    // 开始同步：设置 isUpdating
     setState(() {
-      _providers[index] = provider.copyWith(isUpdating: true);
+      updateProviderByName(provider.copyWith(isUpdating: true));
     });
 
-    // 3. 执行同步并计算最终状态
+    // 执行同步
     final syncResult = await _executeSyncOperation(provider);
 
-    // 4. 结束同步：更新最终状态
+    // 结束同步：更新最终状态
     setState(() {
-      _providers[index] = syncResult.updatedProvider;
+      updateProviderByName(syncResult.updatedProvider);
     });
 
-    // 5. 显示结果反馈
+    // 显示结果反馈
     if (mounted) {
       if (syncResult.isSuccessful) {
         ModernToast.success(
-          context,
-          trans.provider.syncSuccess.replaceAll('{name}', provider.name),
+          trans.provider.sync_success.replaceAll('{name}', provider.name),
         );
       } else {
         ModernToast.error(
-          context,
-          trans.provider.syncFailed
+          trans.provider.sync_failed
               .replaceAll('{name}', provider.name)
               .replaceAll(
                 '{error}',
-                syncResult.errorMessage ?? trans.provider.unknownError,
+                syncResult.errorMessage ?? trans.provider.unknown_error,
               ),
         );
       }
@@ -433,7 +437,7 @@ class _ProviderViewerDialogState extends State<ProviderViewerDialog> {
       content: _buildContent(),
       actionsLeftButtons: [
         DialogActionButton(
-          label: trans.provider.syncAll,
+          label: trans.provider.sync_all,
           icon: Icons.sync,
           onPressed: _isSyncingAll ? null : _syncAll,
           isLoading: _isSyncingAll,
@@ -495,7 +499,7 @@ class _ProviderViewerDialogState extends State<ProviderViewerDialog> {
             const Icon(Icons.cloud_off, size: 64, color: Colors.grey),
             const SizedBox(height: 16),
             Text(
-              trans.provider.emptyTitle,
+              trans.provider.empty_title,
               style: const TextStyle(fontSize: 16, color: Colors.grey),
             ),
           ],
@@ -516,7 +520,7 @@ class _ProviderViewerDialogState extends State<ProviderViewerDialog> {
       children: [
         if (proxyProviders.isNotEmpty) ...[
           Text(
-            trans.provider.proxyProviders,
+            trans.provider.proxy_providers,
             style: Theme.of(
               context,
             ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
@@ -527,7 +531,7 @@ class _ProviderViewerDialogState extends State<ProviderViewerDialog> {
         ],
         if (ruleProviders.isNotEmpty) ...[
           Text(
-            trans.provider.ruleProviders,
+            trans.provider.rule_providers,
             style: Theme.of(
               context,
             ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
@@ -722,16 +726,13 @@ class _ProviderViewerDialogState extends State<ProviderViewerDialog> {
     );
   }
 
-  // 执行同步操作（纯逻辑，无副作用）
+  // 执行同步操作
   Future<_SyncResult> _executeSyncOperation(Provider provider) async {
     try {
-      final clashManager = flutter_provider.Provider.of<ClashManager>(
-        context,
-        listen: false,
-      );
-      final apiClient = clashManager.apiClient;
+      final clashManager = ClashManager.instance;
+      final coreClient = clashManager.coreClient;
 
-      if (apiClient == null) {
+      if (coreClient == null) {
         return _SyncResult(
           updatedProvider: provider.copyWith(isUpdating: false),
           isSuccessful: false,
@@ -741,21 +742,25 @@ class _ProviderViewerDialogState extends State<ProviderViewerDialog> {
 
       // 执行同步
       if (provider.type == ProviderType.proxy) {
-        await apiClient.updateProvider(provider.name);
+        await coreClient.updateProvider(provider.name);
       } else {
-        await apiClient.updateRuleProvider(provider.name);
+        await coreClient.updateRuleProvider(provider.name);
       }
 
       await Future.delayed(_syncDelay);
 
       // 获取更新数据
       final updatedData = await (provider.type == ProviderType.proxy
-          ? apiClient.getProvider(provider.name)
-          : apiClient.getRuleProvider(provider.name));
+          ? coreClient.getProvider(provider.name)
+          : coreClient.getRuleProvider(provider.name));
 
       if (updatedData != null) {
         return _SyncResult(
-          updatedProvider: Provider.fromClashApi(provider.name, updatedData),
+          updatedProvider: Provider.fromClashApi(
+            provider.name,
+            updatedData,
+            providerType: provider.type,
+          ),
           isSuccessful: true,
         );
       } else {

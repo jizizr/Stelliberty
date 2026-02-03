@@ -1,12 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:stelliberty/clash/data/log_message_model.dart';
+import 'package:stelliberty/clash/model/log_message_model.dart';
 
-/// 日志卡片组件 - 与代理节点卡片风格一致
-///
-/// 设计特点：
-/// - 采用半透明背景 + 混色效果
-/// - 与代理节点卡片风格保持一致
-/// - 移除 BackdropFilter 避免渲染闪烁
+// 日志卡片组件：与代理节点卡片保持一致的样式。
+// 使用半透明背景与混色效果，并避免渲染闪烁。
 class LogCard extends StatelessWidget {
   final ClashLogMessage log;
 
@@ -125,7 +121,7 @@ class LogCard extends StatelessWidget {
     );
   }
 
-  /// 获取日志级别颜色
+  // 获取日志级别对应的颜色。
   Color _getLogLevelColor(ClashLogLevel level) {
     switch (level) {
       case ClashLogLevel.error:

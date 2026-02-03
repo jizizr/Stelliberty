@@ -1,12 +1,11 @@
 import 'dart:io';
 import 'package:yaml/yaml.dart';
-import 'package:stelliberty/clash/data/dns_config_model.dart';
+import 'package:stelliberty/clash/model/dns_config_model.dart';
 import 'package:stelliberty/services/path_service.dart';
-import 'package:stelliberty/utils/logger.dart';
+import 'package:stelliberty/services/log_print_service.dart';
 
-// DNS 配置服务
-//
-// 负责管理独立的 DNS 配置文件，不影响用户订阅配置
+// DNS 配置服务：管理独立 DNS 配置文件。
+// 通过运行时合并生效，不修改订阅文件。
 class DnsService {
   static final DnsService _instance = DnsService._internal();
   static DnsService get instance => _instance;
@@ -88,10 +87,8 @@ class DnsService {
     }
   }
 
-  // 将 DNS 配置合并到订阅配置中
-  //
-  // 这个函数会读取订阅配置和 DNS 配置，然后合并生成运行时配置
-  // 不会修改原始订阅文件
+  // 将 DNS 配置合并到订阅配置中并生成运行时配置。
+  // 不会修改原始订阅文件。
   Future<Map<String, dynamic>?> mergeDnsConfigToProfile(
     String profilePath, {
     bool enableDns = true,

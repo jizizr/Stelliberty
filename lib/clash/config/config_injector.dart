@@ -1,42 +1,66 @@
 import 'dart:io';
 import 'package:path/path.dart' as path;
-import 'package:stelliberty/clash/storage/preferences.dart';
+import 'package:stelliberty/storage/clash_preferences.dart';
+import 'package:stelliberty/clash/services/dns_service.dart';
 import 'package:stelliberty/clash/services/geo_service.dart';
-import 'package:stelliberty/utils/logger.dart';
+import 'package:stelliberty/services/log_print_service.dart';
 import 'package:stelliberty/src/bindings/signals/signals.dart';
 
-// Clash 配置文件注入器，负责将用户配置参数注入到 Clash 配置文件中
-//
-// 设计原则：
-// - 订阅文件（subscriptions/*.yaml）永不修改
-// - 生成临时运行时配置文件（runtime_config.yaml）
-// - Clash 加载临时配置文件
+// 运行时配置生成结果
+class GeneratedRuntimeConfig {
+  final String runtimeConfigPath;
+  final String configContent;
+
+  const GeneratedRuntimeConfig({
+    required this.runtimeConfigPath,
+    required this.configContent,
+  });
+}
+
+// Clash 配置注入器
+// 生成运行时配置文件（runtime_config.yaml），不修改订阅源文件
 class ConfigInjector {
-  // 获取默认配置内容
-  // 包含 Clash 核心必需的基础字段（Rust 端不会注入这些）
+  // 默认配置内容
   static String getDefaultConfigContent() {
     return 'proxies: []\nproxy-groups: []\nrules: []';
   }
 
-  // 注入用户自定义配置参数到配置文件
-  //
-  // 新架构：所有 YAML 处理在 Rust 端完成，避免 Dart 重复解析
-  // - 从配置文件或配置内容读取基础配置
-  // - 调用 Rust 端统一生成运行时配置（覆写 + 参数注入）
-  // - 写入 runtime_config.yaml
-  // - 返回 runtime_config.yaml 路径
-  //
-  // 参数：
-  // - configPath: 配置文件路径（可选）
-  // - configContent: 配置内容（可选，优先使用）
-  // - overrides: 覆写列表
-  //
-  // 返回值：runtime_config.yaml 的绝对路径
-  static Future<String?> injectCustomConfigParams({
+  // 读取基础配置内容（优先级：configContent > configPath > 默认）。
+  static Future<String> _resolveBaseConfigContent({
+    required String? configPath,
+    required String? configContent,
+  }) async {
+    if (configContent != null && configContent.isNotEmpty) {
+      return configContent;
+    }
+
+    if (configPath == null || configPath.isEmpty) {
+      Logger.info('使用默认配置启动核心');
+      return getDefaultConfigContent();
+    }
+
+    final configFile = File(configPath);
+    if (!await configFile.exists()) {
+      Logger.warning('配置文件不存在：$configPath');
+      return getDefaultConfigContent();
+    }
+
+    try {
+      return await configFile.readAsString();
+    } catch (e) {
+      Logger.error('读取配置失败：$e');
+      return getDefaultConfigContent();
+    }
+  }
+
+  // 注入运行时参数，生成 runtime_config.yaml
+  static Future<GeneratedRuntimeConfig?> generateRuntimeConfig({
     String? configPath,
     String? configContent,
     List<OverrideConfig> overrides = const [],
-    required int httpPort,
+    required int mixedPort,
+    required int? socksPort,
+    required int? httpPort,
     required bool isIpv6Enabled,
     required bool isTunEnabled,
     required String tunStack,
@@ -44,9 +68,9 @@ class ConfigInjector {
     required bool isTunAutoRouteEnabled,
     required bool isTunAutoRedirectEnabled,
     required bool isTunAutoDetectInterfaceEnabled,
-    required List<String> tunDnsHijack,
+    required List<String> tunDnsHijacks,
     required bool isTunStrictRouteEnabled,
-    required List<String> tunRouteExcludeAddress,
+    required List<String> tunRouteExcludeAddresses,
     required bool isTunIcmpForwardingDisabled,
     required int tunMtu,
     required bool isAllowLanEnabled,
@@ -60,38 +84,35 @@ class ConfigInjector {
     required String outboundMode,
   }) async {
     try {
-      // 1. 获取配置内容（优先级：configContent > configPath > 默认配置）
-      String content;
-      if (configContent != null && configContent.isNotEmpty) {
-        content = configContent;
-      } else if (configPath != null && configPath.isNotEmpty) {
-        final configFile = File(configPath);
-        if (!await configFile.exists()) {
-          Logger.warning('订阅配置文件不存在：$configPath');
-          return null;
-        }
-
-        try {
-          content = await configFile.readAsString();
-        } catch (e) {
-          Logger.error('读取配置文件失败：$configPath - $e');
-          return null;
-        }
-      } else {
-        // 使用默认配置
-        Logger.info('未提供配置路径，使用默认配置启动核心');
-        content = getDefaultConfigContent();
-      }
+      // 1. 读取基础配置内容
+      final content = await _resolveBaseConfigContent(
+        configPath: configPath,
+        configContent: configContent,
+      );
 
       // 2. 构建运行时参数
-      final isKeepAliveEnabled = ClashPreferences.instance
-          .getKeepAliveEnabled();
+      final prefs = ClashPreferences.instance;
+      final isKeepAliveEnabled = prefs.getKeepAliveEnabled();
       final keepAliveInterval = isKeepAliveEnabled
-          ? ClashPreferences.instance.getKeepAliveInterval()
+          ? prefs.getKeepAliveInterval()
           : null;
 
+      // 读取 DNS 覆写
+      final isDnsOverrideEnabled = prefs.getDnsOverrideEnabled();
+      String? dnsOverrideContent;
+      if (isDnsOverrideEnabled && DnsService.instance.configExists()) {
+        try {
+          final dnsConfigPath = DnsService.instance.getConfigPath();
+          dnsOverrideContent = await File(dnsConfigPath).readAsString();
+        } catch (e) {
+          Logger.error('读取 DNS 覆写失败：$e');
+        }
+      }
+
       final params = RuntimeConfigParams(
-        httpPort: httpPort,
+        mixedPort: mixedPort,
+        socksPort: socksPort ?? 0,
+        httpPort: httpPort ?? 0,
         isIpv6Enabled: isIpv6Enabled,
         isAllowLanEnabled: isAllowLanEnabled,
         isTcpConcurrentEnabled: isTcpConcurrentEnabled,
@@ -103,9 +124,9 @@ class ConfigInjector {
         isTunAutoRouteEnabled: isTunAutoRouteEnabled,
         isTunAutoRedirectEnabled: isTunAutoRedirectEnabled,
         isTunAutoDetectInterfaceEnabled: isTunAutoDetectInterfaceEnabled,
-        tunDnsHijack: tunDnsHijack,
+        tunDnsHijacks: tunDnsHijacks,
         isTunStrictRouteEnabled: isTunStrictRouteEnabled,
-        tunRouteExcludeAddress: tunRouteExcludeAddress,
+        tunRouteExcludeAddresses: tunRouteExcludeAddresses,
         isTunIcmpForwardingDisabled: isTunIcmpForwardingDisabled,
         tunMtu: tunMtu,
         geodataLoader: geodataLoader,
@@ -115,9 +136,11 @@ class ConfigInjector {
         externalControllerSecret: externalControllerSecret,
         isKeepAliveEnabled: isKeepAliveEnabled,
         keepAliveInterval: keepAliveInterval,
+        isDnsOverrideEnabled: isDnsOverrideEnabled,
+        dnsOverrideContent: dnsOverrideContent,
       );
 
-      // 3. 调用 Rust 统一处理（覆写 + 参数注入 + YAML 序列化）
+      // 3. 调用 Rust 处理
       final request = GenerateRuntimeConfigRequest(
         baseConfigContent: content,
         overrides: overrides,
@@ -126,34 +149,34 @@ class ConfigInjector {
 
       request.sendSignalToRust();
 
-      // 【性能优化】降低超时时间到 5 秒（正常情况下 Rust 处理很快）
       final response = await GenerateRuntimeConfigResponse
           .rustSignalStream
           .first
           .timeout(
             const Duration(seconds: 5),
             onTimeout: () {
-              throw Exception('Rust 配置生成超时（5秒）');
+              throw Exception('Rust 配置生成超时');
             },
           );
 
       if (!response.message.isSuccessful) {
-        Logger.error('Rust 配置生成失败：${response.message.errorMessage}');
+        Logger.error('配置生成失败：${response.message.errorMessage}');
         return null;
       }
 
       // 4. 写入 runtime_config.yaml
+      final resultConfig = response.message.resultConfig;
       final geoDataDir = await GeoService.getGeoDataDir();
       final runtimeConfigPath = path.join(geoDataDir, 'runtime_config.yaml');
-      await File(
-        runtimeConfigPath,
-      ).writeAsString(response.message.resultConfig);
+      await File(runtimeConfigPath).writeAsString(resultConfig);
 
-      Logger.info(
-        '运行时配置已生成 (${(response.message.resultConfig.length / 1024).toStringAsFixed(1)}KB，虚拟网卡：${isTunEnabled ? "启用" : "禁用"})',
+      final sizeKb = (resultConfig.length / 1024).toStringAsFixed(1);
+      Logger.info('运行时配置已生成（${sizeKb}KB）');
+
+      return GeneratedRuntimeConfig(
+        runtimeConfigPath: runtimeConfigPath,
+        configContent: resultConfig,
       );
-
-      return runtimeConfigPath;
     } catch (e) {
       Logger.error('生成运行时配置失败：$e');
       return null;

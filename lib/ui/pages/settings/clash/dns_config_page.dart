@@ -4,7 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:stelliberty/providers/content_provider.dart';
 import 'package:stelliberty/i18n/i18n.dart';
 import 'package:stelliberty/ui/widgets/setting/dns_config_card.dart';
-import 'package:stelliberty/utils/logger.dart';
+import 'package:stelliberty/services/log_print_service.dart';
 
 class DnsConfigPage extends StatefulWidget {
   const DnsConfigPage({super.key});
@@ -49,7 +49,7 @@ class _DnsConfigPageState extends State<DnsConfigPage> {
               ),
               const SizedBox(width: 8),
               Text(
-                trans.clashFeatures.dnsConfig.pageTitle,
+                trans.clash_features.dns_config.page_title,
                 style: theme.textTheme.titleLarge,
               ),
             ],

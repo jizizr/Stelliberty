@@ -1,17 +1,17 @@
-import 'package:stelliberty/clash/network/api_client.dart';
-import 'package:stelliberty/clash/data/connection_model.dart';
-import 'package:stelliberty/utils/logger.dart';
+import 'package:stelliberty/clash/client/clash_core_client.dart';
+import 'package:stelliberty/clash/model/connection_model.dart';
+import 'package:stelliberty/services/log_print_service.dart';
 
 // Clash 连接管理器
 // 负责连接的查询和关闭
 class ConnectionManager {
-  final ClashApiClient _apiClient;
+  final ClashCoreClient _coreClient;
   final bool Function() _isCoreRunning;
 
   ConnectionManager({
-    required ClashApiClient apiClient,
+    required ClashCoreClient coreClient,
     required bool Function() isCoreRunning,
-  }) : _apiClient = apiClient,
+  }) : _coreClient = coreClient,
        _isCoreRunning = isCoreRunning;
 
   // 获取当前所有连接
@@ -22,7 +22,7 @@ class ConnectionManager {
     }
 
     try {
-      return await _apiClient.getConnections();
+      return await _coreClient.getConnections();
     } catch (e) {
       Logger.error('获取连接列表失败：$e');
       return [];
@@ -37,7 +37,7 @@ class ConnectionManager {
     }
 
     try {
-      return await _apiClient.closeConnection(connectionId);
+      return await _coreClient.closeConnection(connectionId);
     } catch (e) {
       Logger.error('关闭连接失败：$e');
       return false;
@@ -52,7 +52,7 @@ class ConnectionManager {
     }
 
     try {
-      return await _apiClient.closeAllConnections();
+      return await _coreClient.closeAllConnections();
     } catch (e) {
       Logger.error('关闭所有连接失败：$e');
       return false;

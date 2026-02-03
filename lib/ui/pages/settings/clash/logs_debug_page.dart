@@ -5,7 +5,7 @@ import 'package:stelliberty/providers/content_provider.dart';
 import 'package:stelliberty/i18n/i18n.dart';
 import 'package:stelliberty/ui/widgets/setting/log_level_card.dart';
 import 'package:stelliberty/ui/widgets/setting/test_url_card.dart';
-import 'package:stelliberty/utils/logger.dart';
+import 'package:stelliberty/services/log_print_service.dart';
 
 class LogsDebugPage extends StatefulWidget {
   const LogsDebugPage({super.key});
@@ -50,7 +50,7 @@ class _LogsDebugPageState extends State<LogsDebugPage> {
               ),
               const SizedBox(width: 8),
               Text(
-                trans.clashFeatures.logsDebug.pageTitle,
+                trans.clash_features.logs_debug.page_title,
                 style: theme.textTheme.titleLarge,
               ),
             ],
