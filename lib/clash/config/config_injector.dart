@@ -1,9 +1,8 @@
 import 'dart:io';
-import 'package:path/path.dart' as path;
 import 'package:stelliberty/storage/clash_preferences.dart';
 import 'package:stelliberty/clash/services/dns_service.dart';
-import 'package:stelliberty/clash/services/geo_service.dart';
 import 'package:stelliberty/services/log_print_service.dart';
+import 'package:stelliberty/services/path_service.dart';
 import 'package:stelliberty/src/bindings/signals/signals.dart';
 
 // 运行时配置生成结果
@@ -166,8 +165,7 @@ class ConfigInjector {
 
       // 4. 写入 runtime_config.yaml
       final resultConfig = response.message.resultConfig;
-      final geoDataDir = await GeoService.getGeoDataDir();
-      final runtimeConfigPath = path.join(geoDataDir, 'runtime_config.yaml');
+      final runtimeConfigPath = PathService.instance.getRuntimeConfigPath();
       await File(runtimeConfigPath).writeAsString(resultConfig);
 
       final sizeKb = (resultConfig.length / 1024).toStringAsFixed(1);

@@ -67,7 +67,7 @@ Future<void> main(List<String> args) async {
   }
 
   final projectRoot = p.dirname(p.dirname(Platform.script.toFilePath()));
-  final coreAssetDir = p.join(projectRoot, 'assets', 'clash-core');
+  final coreAssetDir = p.join(projectRoot, 'assets', 'clash');
 
   // 提前检测代理配置（只输出一次）
   final testUrl = Uri.parse('https://github.com');
@@ -113,10 +113,9 @@ Future<void> main(List<String> args) async {
       await downloadAndroidCoreSo(targetDir: androidAbiDir);
       log('✅ Android 核心准备完成。');
 
-      // Step 3: 下载 GeoIP 数据
+      // Step 3: 下载 GeoIP 数据（与核心同目录）
       log('▶️  [3/6] 正在下载最新的 GeoIP 数据文件...');
-      final geoDataDir = p.join(coreAssetDir, 'data');
-      await downloadGeoData(targetDir: geoDataDir);
+      await downloadGeoData(targetDir: coreAssetDir);
       log('✅ GeoIP 数据下载完成。');
 
       // Android 跳过 Step 4-6，但创建空文件夹满足 pubspec.yaml 要求
@@ -140,10 +139,9 @@ Future<void> main(List<String> args) async {
       );
       log('✅ 核心准备完成。');
 
-      // Step 3: 下载 GeoIP 数据
+      // Step 3: 下载 GeoIP 数据（与核心同目录）
       log('▶️  [3/6] 正在下载最新的 GeoIP 数据文件...');
-      final geoDataDir = p.join(coreAssetDir, 'data');
-      await downloadGeoData(targetDir: geoDataDir);
+      await downloadGeoData(targetDir: coreAssetDir);
       log('✅ GeoIP 数据下载完成。');
 
       // Step 4: 编译 Stelliberty Service

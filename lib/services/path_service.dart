@@ -76,12 +76,16 @@ class PathService {
   String get devPreferencesFilePath => _devPreferencesFilePathCache;
 
   // Clash 核心基础目录路径（缓存）
-  // 路径：{exeDir}/data/flutter_assets/assets/clash-core
+  // 路径：{exeDir}/data/flutter_assets/assets/clash
   String get clashCoreBasePath => _clashCoreBasePathCache;
 
-  // Clash 核心数据目录路径（缓存），存储 GeoIP、GeoSite、runtime_config.yaml 等
-  // 路径：{exeDir}/data/flutter_assets/assets/clash-core/data
+  // Clash 核心数据目录路径（缓存），存储 GeoIP、GeoSite 等
+  // 路径：{exeDir}/data/flutter_assets/assets/clash
   String get clashCoreDataPath => _clashCoreDataPathCache;
+
+  // 运行时目录路径（缓存），存储 runtime_config.yaml
+  late final String _runtimeDirCache;
+  String get runtimeDir => _runtimeDirCache;
 
   // 获取指定订阅的配置文件路径
   String getSubscriptionConfigPath(String subscriptionId) {
@@ -100,7 +104,7 @@ class PathService {
 
   // 获取 runtime_config.yaml 路径
   String getRuntimeConfigPath() {
-    return path.join(clashCoreDataPath, 'runtime_config.yaml');
+    return path.join(runtimeDir, 'runtime_config.yaml');
   }
 
   // 初始化服务，应用启动时调用一次，创建必要的数据目录
@@ -137,11 +141,12 @@ class PathService {
 
     // Clash 核心路径
     if (PlatformHelper.isMobile) {
-      // 移动端：Geodata 由 Go 核心内置，使用应用数据目录下的 clash-core
+      // 移动端：Geodata 由 Go 核心内置，使用应用数据目录下的 clash
       // Go 核心会在初始化时自动解压 Geodata 到 homeDir
       final appDir = await getApplicationSupportDirectory();
-      _clashCoreBasePathCache = path.join(appDir.path, 'clash-core');
+      _clashCoreBasePathCache = path.join(appDir.path, 'clash');
       _clashCoreDataPathCache = _clashCoreBasePathCache;
+      _runtimeDirCache = path.join(appDir.path, 'runtime');
     } else {
       // 桌面端：基于可执行文件目录
       final exeDir = path.dirname(Platform.resolvedExecutable);
@@ -150,9 +155,10 @@ class PathService {
         'data',
         'flutter_assets',
         'assets',
-        'clash-core',
+        'clash',
       );
-      _clashCoreDataPathCache = path.join(_clashCoreBasePathCache, 'data');
+      _clashCoreDataPathCache = _clashCoreBasePathCache;
+      _runtimeDirCache = path.join(exeDir, 'data', 'runtime');
     }
 
     // 创建所有必要的目录
@@ -166,6 +172,7 @@ class PathService {
       _subscriptionsDirCache,
       _overridesDirCache,
       _imageCacheDirCache,
+      _runtimeDirCache,
     ];
 
     for (final dirPath in directories) {

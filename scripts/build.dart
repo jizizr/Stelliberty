@@ -235,6 +235,20 @@ String? _getAndroidExpectedAbiLabel(String androidArch) {
   }
 }
 
+// 获取 Android 目标 ABI（用于 Gradle abiFilters）
+String? _getAndroidTargetAbi(String androidArch) {
+  switch (androidArch) {
+    case 'arm64':
+      return 'arm64-v8a';
+    case 'x64':
+      return 'x86_64';
+    case 'all':
+      return null;
+    default:
+      return null;
+  }
+}
+
 List<String> getAndroidBuildExtraArgs({
   required String androidArch,
   required bool shouldSplitPerAbi,
@@ -270,12 +284,31 @@ Future<void> runFlutterBuild({
   required String platform,
   required bool isRelease,
   List<String> extraArgs = const [],
+  String? androidTargetAbi,
 }) async {
   final flutterCmd = await resolveFlutterCmd();
   final mode = isRelease ? 'release' : 'debug';
 
   final buildTypeLabel = isRelease ? 'Release' : 'Debug';
   log('▶️  正在构建 $platform $buildTypeLabel 版本...');
+
+  // 处理 Android 目标架构的 Gradle 属性
+  if (platform == 'android' || platform == 'apk') {
+    final gradlePropsPath = p.join(projectRoot, 'android', 'gradle.properties');
+    final gradleProps = File(gradlePropsPath);
+    final lines = await gradleProps.readAsLines();
+
+    // 移除旧的 targetAbi 属性
+    final filteredLines = lines.where((l) => !l.startsWith('targetAbi=')).toList();
+
+    // 如果指定了目标架构，添加 targetAbi 属性
+    if (androidTargetAbi != null) {
+      filteredLines.add('targetAbi=$androidTargetAbi');
+      log('📝 设置 Gradle targetAbi=$androidTargetAbi');
+    }
+
+    await gradleProps.writeAsString(filteredLines.join('\n'));
+  }
 
   // 构建命令
   final buildCommand = ['build', platform, '--$mode', ...extraArgs];
@@ -526,8 +559,8 @@ set -e
 
 # 设置可执行权限
 chmod +x /opt/$appNameLower/$appNameLower
-if [ -f /opt/$appNameLower/lib/clash-core ]; then
-    chmod +x /opt/$appNameLower/lib/clash-core
+if [ -f /opt/$appNameLower/data/flutter_assets/assets/clash/clash-core ]; then
+    chmod +x /opt/$appNameLower/data/flutter_assets/assets/clash/clash-core
 fi
 
 # 创建符号链接
@@ -719,8 +752,8 @@ ln -sf /opt/%{name}/%{name} %{buildroot}/usr/local/bin/%{name}
 
 %post
 chmod +x /opt/%{name}/%{name}
-if [ -f /opt/%{name}/lib/clash-core ]; then
-    chmod +x /opt/%{name}/lib/clash-core
+if [ -f /opt/%{name}/data/flutter_assets/assets/clash/clash-core ]; then
+    chmod +x /opt/%{name}/data/flutter_assets/assets/clash/clash-core
 fi
 update-desktop-database /usr/share/applications || true
 
@@ -1084,6 +1117,7 @@ Future<void> main(List<String> args) async {
 
     // 步骤 4: 构建 Release
     if (shouldBuildRelease) {
+      final androidTargetAbi = isAndroid ? _getAndroidTargetAbi(androidArch) : null;
       await runFlutterBuild(
         projectRoot: projectRoot,
         platform: platform,
@@ -1094,6 +1128,7 @@ Future<void> main(List<String> args) async {
                 shouldSplitPerAbi: shouldSplitPerAbi,
               )
             : const [],
+        androidTargetAbi: androidTargetAbi,
       );
 
       if (needZipPack) {
@@ -1204,6 +1239,7 @@ Future<void> main(List<String> args) async {
 
     // 步骤 5: 构建 Debug
     if (shouldBuildDebug) {
+      final androidTargetAbi = isAndroid ? _getAndroidTargetAbi(androidArch) : null;
       await runFlutterBuild(
         projectRoot: projectRoot,
         platform: platform,
@@ -1214,6 +1250,7 @@ Future<void> main(List<String> args) async {
                 shouldSplitPerAbi: shouldSplitPerAbi,
               )
             : const [],
+        androidTargetAbi: androidTargetAbi,
       );
 
       if (needZipPack) {

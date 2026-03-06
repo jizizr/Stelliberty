@@ -65,7 +65,7 @@ class IpcApiTest {
       final runtimeConfigPath = generatedConfig.runtimeConfigPath;
 
       // 使用项目目录下的 clash-core（不使用构建后的副本）
-      const execPath = 'assets/clash-core/clash-core';
+      const execPath = 'assets/clash/clash-core';
       if (!await File(execPath).exists()) {
         throw Exception('Clash 核心不存在：$execPath（请先运行 prebuild.dart）');
       }

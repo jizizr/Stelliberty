@@ -210,7 +210,7 @@ class OverrideTest {
     }
 
     // 开发模式下直接使用 assets 目录中的数据
-    final geoDataDir = path.join('assets', 'clash-core', 'data');
+    final geoDataDir = path.join('assets', 'clash');
 
     // 验证数据目录存在
     if (!Directory(geoDataDir).existsSync()) {
@@ -270,13 +270,13 @@ class OverrideTest {
     // 获取可执行文件所在目录
     final exeDir = path.dirname(Platform.resolvedExecutable);
 
-    // 构建 flutter_assets/assets/clash-core 路径
+    // 构建 flutter_assets/assets/clash 路径
     final executablePath = path.join(
       exeDir,
       'data',
       'flutter_assets',
       'assets',
-      'clash-core',
+      'clash',
       fileName,
     );
 
@@ -287,7 +287,7 @@ class OverrideTest {
     }
 
     // 开发模式下的备用路径（直接在 assets 目录）
-    final devPath = path.join('assets', 'clash-core', fileName);
+    final devPath = path.join('assets', 'clash', fileName);
     if (File(devPath).existsSync()) {
       return devPath;
     }

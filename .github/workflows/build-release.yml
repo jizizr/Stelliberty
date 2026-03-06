@@ -273,12 +273,12 @@ jobs:
           - platform: linux
             os: ubuntu-24.04-arm
             arch: arm64
-          - platform: android
-            os: ubuntu-latest
-            arch: x64
-          - platform: android
-            os: ubuntu-latest
-            arch: arm64
+          # - platform: android
+          #   os: ubuntu-latest
+          #   arch: x64
+          # - platform: android
+          #   os: ubuntu-latest
+          #   arch: arm64
     runs-on: ${{ matrix.os }}
 
     steps:
@@ -349,6 +349,18 @@ jobs:
 
       - name: 生成多语言文件
         run: dart run slang
+
+      - name: 配置 Android 签名
+        if: matrix.platform == 'android' && env.ANDROID_KEYSTORE_BASE64 != ''
+        shell: bash
+        run: |
+          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > ${{ runner.temp }}/release.jks
+          echo "ANDROID_KEYSTORE_PATH=${{ runner.temp }}/release.jks" >> $GITHUB_ENV
+          echo "ANDROID_KEYSTORE_PASSWORD=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}" >> $GITHUB_ENV
+          echo "ANDROID_KEY_ALIAS=${{ secrets.ANDROID_KEY_ALIAS }}" >> $GITHUB_ENV
+          echo "ANDROID_KEY_PASSWORD=${{ secrets.ANDROID_KEY_PASSWORD }}" >> $GITHUB_ENV
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
 
       - name: 运行构建脚本
         shell: bash
@@ -465,14 +477,6 @@ jobs:
             | **Mihomo 核心** | `${{ needs.prepare.outputs.mihomo_version }}` |
 
             ${{ steps.decode_changelog.outputs.changelog }}
-
-            ---
-
-            ## 📱 Android 版本说明
-
-            > ⚠️ **注意**：Android 版本始终处于不稳定状态，建议仅用于体验和测试。
-            >
-            > 如遇问题，请在 [Issues](https://github.com/${{ github.repository }}/issues) 中反馈。
 
             ---
 

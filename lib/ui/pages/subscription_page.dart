@@ -1,12 +1,11 @@
 import 'dart:io';
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:path/path.dart' as path;
 import 'package:provider/provider.dart';
 import 'package:reorderable_grid_view/reorderable_grid_view.dart';
 import 'package:stelliberty/clash/providers/subscription_provider.dart';
 import 'package:stelliberty/clash/model/subscription_model.dart';
-import 'package:stelliberty/clash/services/geo_service.dart';
+import 'package:stelliberty/services/path_service.dart';
 import 'package:stelliberty/ui/widgets/subscription/subscription_card.dart';
 import 'package:stelliberty/ui/widgets/subscription/subscription_dialog.dart';
 import 'package:stelliberty/ui/widgets/override/override_selector_dialog.dart';
@@ -644,8 +643,7 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
       Logger.debug('订阅名称：${latestSubscription.name}');
 
       // 读取运行时配置文件（runtime_config.yaml）
-      final geoDataDir = await GeoService.getGeoDataDir();
-      final runtimeConfigPath = path.join(geoDataDir, 'runtime_config.yaml');
+      final runtimeConfigPath = PathService.instance.getRuntimeConfigPath();
       final runtimeConfigFile = File(runtimeConfigPath);
 
       // 检查运行时配置文件是否存在

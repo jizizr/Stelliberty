@@ -22,9 +22,8 @@ fun findRustlsPlatformVerifierProject(): String {
     return File(manifestPath.parentFile, "maven").path
 }
 
-val shouldSplitPerAbi: Boolean =
-    (project.findProperty("split-per-abi")?.toString() == "true") ||
-        (project.findProperty("splitPerAbi")?.toString() == "true")
+// 目标架构（由构建脚本通过 gradle.properties 传入）
+val targetAbi = project.findProperty("targetAbi")?.toString()
 
 android {
     namespace = "io.github.stelliberty"
@@ -36,25 +35,27 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
+    signingConfigs {
+        if (System.getenv("ANDROID_KEYSTORE_PATH") != null) {
+            create("release") {
+                storeFile = file(System.getenv("ANDROID_KEYSTORE_PATH")!!)
+                storePassword = System.getenv("ANDROID_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("ANDROID_KEY_ALIAS")
+                keyPassword = System.getenv("ANDROID_KEY_PASSWORD")
+            }
+        }
+    }
+
     defaultConfig {
         applicationId = "io.github.stelliberty"
-        // You can update the following values to match your application needs.
-        // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
 
-        if (!shouldSplitPerAbi) {
-            ndk {
-                abiFilters.clear()
-                abiFilters += listOf("x86_64", "arm64-v8a")
-            }
-        }
-
+        // CMake 编译 JNI 桥接库
         externalNativeBuild {
             cmake {
-                // 编译 JNI 桥接库（clash_core_bridge），用于加载预编译核心 so 并注入回调。
                 cppFlags += "-std=c++17"
             }
         }
@@ -66,15 +67,6 @@ android {
         }
     }
 
-    splits {
-        abi {
-            isEnable = shouldSplitPerAbi
-            reset()
-            include("x86_64", "arm64-v8a")
-            isUniversalApk = false
-        }
-    }
-
     // 添加预编译的核心 so 文件路径
     sourceSets {
         getByName("main") {
@@ -83,11 +75,22 @@ android {
         }
     }
 
+    // 根据 targetAbi 排除不需要的架构 SO 文件
+    if (targetAbi != null) {
+        packagingOptions {
+            jniLibs {
+                val allAbis = listOf("arm64-v8a", "armeabi-v7a", "x86_64")
+                excludes += allAbis.filter { it != targetAbi }.map { abi -> "lib/$abi/*" }
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.findByName("release")
+                ?: signingConfigs.getByName("debug")
 
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),

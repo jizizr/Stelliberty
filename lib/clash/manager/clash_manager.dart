@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:ui';
 import 'package:stelliberty/clash/client/clash_core_client.dart';
 import 'package:stelliberty/clash/services/process_service.dart';
@@ -27,6 +28,8 @@ class ClashManager {
 
   late final ClashCoreClient _coreClient;
   final ProcessService _processService = ProcessService();
+
+  // 监控服务
   final TrafficMonitor _trafficMonitor = TrafficMonitor.instance;
   final ClashLogService _logService = ClashLogService.instance;
 
@@ -38,9 +41,6 @@ class ClashManager {
 
   // 配置重载防抖定时器
   Timer? _configReloadDebounceTimer;
-
-  // 首次启动标记
-  static bool _isFirstStartAfterAppLaunch = true;
 
   // 核心运行状态回调（由 Provider 注入，统一两端状态来源）
   bool Function()? _coreRunningProvider;
@@ -131,13 +131,6 @@ class ClashManager {
     _lifecycleManager = LifecycleManager(
       processService: _processService,
       coreClient: _coreClient,
-      trafficMonitor: _trafficMonitor,
-    );
-
-    // 设置日志监控回调，由 ClashManager 统一管理
-    _lifecycleManager.setLogMonitoringCallbacks(
-      onStart: () => _logService.startMonitoring(),
-      onStop: () => _logService.stopMonitoring(),
     );
 
     _proxyManager = ProxyManager(
@@ -184,13 +177,42 @@ class ClashManager {
     Function(bool)? onSystemProxyStateChanged,
     VoidCallback? onConfigChanged,
   }) {
-    _lifecycleManager.setOnCoreStateChanged(onCoreStateChanged);
+    // 包装核心状态回调，在状态变化时管理监控服务
+    _lifecycleManager.setOnCoreStateChanged((state) {
+      _handleCoreStateChanged(state);
+      onCoreStateChanged?.call(state);
+    });
     _lifecycleManager.setOnCoreVersionChanged(onCoreVersionChanged);
     _lifecycleManager.setOnConfigPathChanged(onConfigPathChanged);
     _lifecycleManager.setOnStartModeChanged(onStartModeChanged);
     _systemProxyManager.setOnSystemProxyStateChanged(onSystemProxyStateChanged);
     _onConfigChanged = onConfigChanged;
     Logger.debug('已设置状态变化回调到各个 Manager');
+  }
+
+  // 处理核心状态变化，统一管理监控服务
+  void _handleCoreStateChanged(CoreState state) {
+    if (Platform.isAndroid) return; // Android 端监控由 ClashProvider 管理
+
+    if (state == CoreState.running) {
+      _startAllMonitoringServices();
+    } else if (state == CoreState.stopped) {
+      _stopAllMonitoringServices();
+    }
+  }
+
+  // 启动所有监控服务（桌面端）
+  void _startAllMonitoringServices() {
+    Logger.info('核心已启动，启动所有监控服务');
+    _trafficMonitor.startMonitoring();
+    _logService.startMonitoring();
+  }
+
+  // 停止所有监控服务（桌面端）
+  void _stopAllMonitoringServices() {
+    Logger.info('核心已停止，停止所有监控服务');
+    _trafficMonitor.stopMonitoring();
+    _logService.stopMonitoring();
   }
 
   Future<bool> startCore({
@@ -231,16 +253,6 @@ class ClashManager {
       socksPort: prefs.getSocksPort(),
       httpPort: prefs.getHttpPort(),
     );
-
-    // 懒惰模式：仅在应用首次启动核心时自动开启系统代理
-    if (success && _isFirstStartAfterAppLaunch) {
-      final prefs = ClashPreferences.instance;
-      if (prefs.getLazyMode()) {
-        Logger.info('懒惰模式已启用，自动开启系统代理（应用首次启动）');
-        unawaited(enableSystemProxy());
-      }
-      _isFirstStartAfterAppLaunch = false;
-    }
 
     return success;
   }

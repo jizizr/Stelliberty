@@ -148,7 +148,7 @@ Future<void> downloadAndSetupCore({
         final sizeInMB = (coreFileBytes.length / (1024 * 1024)).toStringAsFixed(
           2,
         );
-        log('✅ 核心已放置 assets/clash-core: $targetExeName ($sizeInMB MB)');
+        log('✅ 核心已放置 assets/clash: $targetExeName ($sizeInMB MB)');
         return; // 成功，直接返回
       } catch (e) {
         client.close();

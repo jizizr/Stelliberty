@@ -108,7 +108,7 @@ app.*.map.json
 # 项目特定文件
 # ============================================================
 # Clash Core 可执行文件和数据文件（由 prebuild.dart 自动下载）
-/assets/clash-core/
+/assets/clash/
 
 # Stelliberty Service 可执行文件（由 prebuild.dart 自动编译）
 /assets/service/

@@ -23,6 +23,9 @@ class ClashProvider extends ChangeNotifier with WidgetsBindingObserver {
   // ClashManager 实例
   ClashManager get clashManager => _clashManager;
 
+  // 应用首次启动标记（用于懒惰模式）
+  bool _isFirstStartAfterAppLaunch = true;
+
   // 核心状态
   CoreState _coreState = CoreState.stopped;
   CoreState get coreState => _coreState;
@@ -310,13 +313,16 @@ class ClashProvider extends ChangeNotifier with WidgetsBindingObserver {
   bool _isConfigReloadEnabled = true;
   bool get isConfigReloadEnabled => _isConfigReloadEnabled;
 
-  // 判断代理组类型是否支持手动选择
+  // 判断代理组类型是否支持手动选择（仅 selector/select）
   static bool _isSelectableGroupType(String type) {
     final lowerType = type.toLowerCase();
-    return lowerType == 'selector' ||
-        lowerType == 'select' ||
-        lowerType == 'urltest' ||
-        lowerType == 'fallback';
+    return lowerType == 'selector' || lowerType == 'select';
+  }
+
+  // 判断代理组类型是否为自动选择（urltest/fallback，由核心决策）
+  static bool _isAutoSelectGroupType(String type) {
+    final lowerType = type.toLowerCase();
+    return lowerType == 'urltest' || lowerType == 'fallback';
   }
 
   // 判断 IPC 未就绪错误（启动期间或系统唤醒后的短暂状态）。
@@ -551,6 +557,15 @@ class ClashProvider extends ChangeNotifier with WidgetsBindingObserver {
       );
 
       if (success) {
+        // 懒惰模式：仅在应用首次启动核心时自动开启系统代理
+        if (_isFirstStartAfterAppLaunch) {
+          if (ClashPreferences.instance.getLazyMode()) {
+            Logger.info('懒惰模式已启用，自动开启系统代理（应用首次启动）');
+            unawaited(_clashManager.enableSystemProxy());
+          }
+          _isFirstStartAfterAppLaunch = false;
+        }
+
         // 启动后必须从 API 重新加载代理列表
         Logger.info('Clash 已启动，从 API 重新加载代理列表');
         await loadProxies();
@@ -1170,6 +1185,14 @@ class ClashProvider extends ChangeNotifier with WidgetsBindingObserver {
 
     for (int i = 0; i < _allProxyGroups.length; i++) {
       final group = _allProxyGroups[i];
+
+      // 自动选择类型直接信任核心的 now 值，不从持久化恢复
+      if (_isAutoSelectGroupType(group.type)) {
+        if (group.now != null && group.now!.isNotEmpty) {
+          _selections[group.name] = group.now!;
+        }
+        continue;
+      }
 
       if (!_isSelectableGroupType(group.type)) {
         continue;

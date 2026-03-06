@@ -64,5 +64,5 @@ jobs:
         shell: bash
         run: |
           # 创建 assets 目录避免警告
-          mkdir -p assets/icons assets/clash-core/data assets/service
+          mkdir -p assets/icons assets/clash assets/service
           flutter analyze

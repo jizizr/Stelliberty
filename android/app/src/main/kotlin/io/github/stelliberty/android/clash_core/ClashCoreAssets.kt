@@ -11,7 +11,7 @@ object ClashCoreAssets {
     private const val logTag = "clash_core_assets"
 
     // 地理数据文件基础路径（Flutter assets）
-    private const val geoDataAssetBasePath = "flutter_assets/assets/clash-core/data"
+    private const val geoDataAssetBasePath = "flutter_assets/assets/clash"
 
     // 地理数据文件列表
     private val geoDataFiles =

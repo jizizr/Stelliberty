@@ -207,7 +207,7 @@ class ModernFeatureLayoutCard extends StatelessWidget {
                         ModernFeatureCardSpacing.auxiliaryIconToControlSpacing,
                   ),
                 ],
-                if (trailing != null) trailing!,
+                ?trailing,
               ],
             ),
         ],

@@ -223,8 +223,8 @@ set -e
 
 # 设置可执行权限
 chmod +x /opt/$appNameLower/$appNameLower
-if [ -f /opt/$appNameLower/lib/clash-core ]; then
-    chmod +x /opt/$appNameLower/lib/clash-core
+if [ -f /opt/$appNameLower/data/flutter_assets/assets/clash/clash-core ]; then
+    chmod +x /opt/$appNameLower/data/flutter_assets/assets/clash/clash-core
 fi
 
 # 创建符号链接
@@ -416,8 +416,8 @@ ln -sf /opt/%{name}/%{name} %{buildroot}/usr/local/bin/%{name}
 
 %post
 chmod +x /opt/%{name}/%{name}
-if [ -f /opt/%{name}/lib/clash-core ]; then
-    chmod +x /opt/%{name}/lib/clash-core
+if [ -f /opt/%{name}/data/flutter_assets/assets/clash/clash-core ]; then
+    chmod +x /opt/%{name}/data/flutter_assets/assets/clash/clash-core
 fi
 update-desktop-database /usr/share/applications || true
 

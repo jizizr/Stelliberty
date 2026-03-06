@@ -1,6 +1,7 @@
 // Clash 进程管理：负责启动、停止与状态维护。
 // 适用于非服务模式的直接进程控制。
 
+use crate::molecules::clash_network;
 use once_cell::sync::Lazy;
 use rinf::{DartSignal, RustSignal};
 use serde::{Deserialize, Serialize};
@@ -299,8 +300,11 @@ impl StartClashProcess {
 
 // 处理停止 Clash 进程的请求
 impl StopClashProcess {
-    pub fn handle(&self) {
+    pub async fn handle(&self) {
         log::info!("收到停止 Clash 进程请求");
+
+        // 先清理网络资源（断开所有 WebSocket 连接）
+        clash_network::cleanup_all_network_resources().await;
 
         let mut manager = PROCESS_MANAGER.lock().unwrap_or_else(|e| {
             log::error!("获取进程管理器锁失败：{}", e);
@@ -401,20 +405,7 @@ pub fn init() {
     spawn(async {
         let receiver = StopClashProcess::get_dart_signal_receiver();
         while let Some(dart_signal) = receiver.recv().await {
-            let message = dart_signal.message;
-            if let Err(e) = tokio::task::spawn_blocking(move || {
-                message.handle();
-            })
-            .await
-            {
-                log::error!("停止进程的任务执行失败（可能线程池耗尽）：{}", e);
-                ClashProcessResult {
-                    is_successful: false,
-                    error_message: Some(format!("任务执行失败：{}", e)),
-                    pid: None,
-                }
-                .send_signal_to_dart();
-            }
+            dart_signal.message.handle().await;
         }
     });
 }

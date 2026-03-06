@@ -4,7 +4,6 @@ import 'package:stelliberty/clash/services/process_service.dart';
 import 'package:stelliberty/clash/manager/process_manager.dart';
 import 'package:stelliberty/clash/config/config_injector.dart';
 import 'package:stelliberty/clash/config/clash_defaults.dart';
-import 'package:stelliberty/clash/services/traffic_monitor.dart';
 import 'package:stelliberty/clash/services/geo_service.dart';
 import 'package:stelliberty/clash/manager/service_manager.dart';
 import 'package:stelliberty/storage/clash_preferences.dart';
@@ -14,17 +13,12 @@ import 'package:stelliberty/src/bindings/signals/signals.dart';
 import 'package:stelliberty/services/log_print_service.dart';
 
 // Clash 生命周期管理器
-// 负责 Clash 核心的启动、停止、重启
+// 仅负责核心进程的启动、停止、重启，监控服务由 ClashManager 管理
 class LifecycleManager {
   final ProcessService _processService;
   late final ProcessManager _processManager;
   final ClashCoreClient _coreClient;
-  final TrafficMonitor _trafficMonitor;
   final Function() _notifyListeners;
-
-  // 日志监控回调（由 ClashManager 注入，统一管理）
-  Future<void> Function()? _onStartLogMonitoring;
-  Future<void> Function()? _onStopLogMonitoring;
 
   // 状态变化回调
   Function(CoreState)? _onCoreStateChanged;
@@ -32,7 +26,6 @@ class LifecycleManager {
   Function(String?)? _onConfigPathChanged;
   Function(ClashStartMode?)? _onStartModeChanged;
 
-  // 设置状态变化回调
   void setOnCoreStateChanged(Function(CoreState)? handler) {
     _onCoreStateChanged = handler;
   }
@@ -47,15 +40,6 @@ class LifecycleManager {
 
   void setOnStartModeChanged(Function(ClashStartMode?)? handler) {
     _onStartModeChanged = handler;
-  }
-
-  // 设置日志监控回调
-  void setLogMonitoringCallbacks({
-    Future<void> Function()? onStart,
-    Future<void> Function()? onStop,
-  }) {
-    _onStartLogMonitoring = onStart;
-    _onStopLogMonitoring = onStop;
   }
 
   // 核心状态（由 Manager 直接管理）
@@ -112,11 +96,9 @@ class LifecycleManager {
   LifecycleManager({
     required ProcessService processService,
     required ClashCoreClient coreClient,
-    required TrafficMonitor trafficMonitor,
     Function()? notifyListeners,
   }) : _processService = processService,
        _coreClient = coreClient,
-       _trafficMonitor = trafficMonitor,
        _notifyListeners = notifyListeners ?? (() {}) {
     _processManager = ProcessManager(service: _processService);
   }
@@ -589,23 +571,6 @@ class LifecycleManager {
         _onCoreVersionChanged?.call('Unknown');
       }
 
-      // 构建 API base URL
-      final baseUrl = externalController.isNotEmpty
-          ? 'http://$externalController'
-          : 'http://${ClashDefaults.apiHost}:${ClashDefaults.apiPort}';
-
-      try {
-        await _trafficMonitor.startMonitoring(baseUrl);
-      } catch (e) {
-        Logger.error('启动流量监控失败：$e');
-      }
-
-      try {
-        await _onStartLogMonitoring?.call();
-      } catch (e) {
-        Logger.error('启动日志服务失败：$e');
-      }
-
       // 标记为运行状态
       _updateCoreState(CoreState.running); // '核心启动成功');
 
@@ -808,21 +773,7 @@ class LifecycleManager {
     _updateCoreState(CoreState.stopping); // '开始停止核心');
 
     try {
-      // 先停止监控服务（优雅关闭 WebSocket 连接）
-      // 避免 Clash 核心停止后强制断开连接导致的错误日志
-      try {
-        await _trafficMonitor.stopMonitoring();
-      } catch (e) {
-        Logger.error('停止流量监控失败：$e');
-      }
-
-      try {
-        await _onStopLogMonitoring?.call();
-      } catch (e) {
-        Logger.error('停止日志服务失败：$e');
-      }
-
-      // 再停止 Clash 核心
+      // 停止 Clash 核心
       if (_currentStartMode == ClashStartMode.service) {
         Logger.info('使用服务模式停止核心');
         stopServiceHeartbeat(); // 停止心跳定时器

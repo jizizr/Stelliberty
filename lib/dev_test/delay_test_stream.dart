@@ -155,7 +155,7 @@ class DelayTestStream {
     }
 
     final fileName = Platform.isWindows ? 'clash-core.exe' : 'clash-core';
-    final execPath = path.join('assets', 'clash-core', fileName);
+    final execPath = path.join('assets', 'clash', fileName);
     final file = File(execPath);
     if (!await file.exists()) {
       throw Exception('Clash 核心不存在：$execPath');

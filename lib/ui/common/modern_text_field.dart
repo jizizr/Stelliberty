@@ -197,7 +197,7 @@ class _ModernTextFieldState extends State<ModernTextField> {
                       ),
                     ),
                   ),
-                  if (suffixWidget != null) suffixWidget,
+                  ?suffixWidget,
                 ],
               ),
             ),
